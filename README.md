@@ -19,7 +19,9 @@ npx skills@latest add imick-io/skills
 
 ## Skills
 
-My own skills plus the ones I use from [Matt Pocock](https://github.com/mattpocock/skills) (MIT, see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)).
+My own skills plus the ones I use from other authors, such as [Matt Pocock](https://github.com/mattpocock/skills) and [Cursor](https://github.com/cursor/plugins). The Source column says which is which; licenses are in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+<!-- skills:start -->
 
 ### Engineering
 
@@ -41,7 +43,7 @@ My own skills plus the ones I use from [Matt Pocock](https://github.com/mattpoco
 | [`review-work`](skills/engineering/review-work/SKILL.md) | iMick | Refactor-only review pass over a recent commit. |
 | [`setup-imick-skills`](skills/engineering/setup-imick-skills/SKILL.md) | Matt Pocock | Configure this repo for the engineering skills: set up its issue tracker, triage label vocabulary, and domain doc layout. |
 | [`tdd`](skills/engineering/tdd/SKILL.md) | Matt Pocock | Test-driven development. |
-| [`thermo-nuclear-code-quality-review`](skills/engineering/thermo-nuclear-code-quality-review/SKILL.md) | iMick | Run an extremely strict maintainability review for abstraction quality, giant files, and spaghetti-condition growth. |
+| [`thermo-nuclear-code-quality-review`](skills/engineering/thermo-nuclear-code-quality-review/SKILL.md) | Cursor | Run an extremely strict maintainability review for abstraction quality, giant files, and spaghetti-condition growth. |
 | [`to-spec`](skills/engineering/to-spec/SKILL.md) | Matt Pocock | Turn the current conversation into a spec and publish it to the project issue tracker: no interview, just synthesis of what you've already discussed. |
 | [`to-tickets`](skills/engineering/to-tickets/SKILL.md) | Matt Pocock | Break a plan, spec, or the current conversation into a set of tracer-bullet tickets, each declaring its blocking edges, published to the configured tracker (edges as text in one file per ticket locally, or native blocking links on a real tracker). |
 | [`triage`](skills/engineering/triage/SKILL.md) | Matt Pocock | Move issues and external PRs through a state machine of triage roles, categorise, verify, grill if needed, and write agent-ready briefs. |
@@ -68,6 +70,7 @@ My own skills plus the ones I use from [Matt Pocock](https://github.com/mattpoco
 | [`migrate-to-shoehorn`](skills/misc/migrate-to-shoehorn/SKILL.md) | Matt Pocock | Migrate test files from `as` type assertions to @total-typescript/shoehorn. |
 | [`scaffold-exercises`](skills/misc/scaffold-exercises/SKILL.md) | Matt Pocock | Create exercise directory structures with sections, problems, solutions, and explainers that pass linting. |
 | [`setup-pre-commit`](skills/misc/setup-pre-commit/SKILL.md) | Matt Pocock | Set up Husky pre-commit hooks with lint-staged (Prettier), type checking, and tests in the current repo. |
+| [`update-from-upstream`](skills/misc/update-from-upstream/SKILL.md) | iMick | Sync the skills in this repo with their upstream sources, merging upstream changes with local customizations; or `add <github-repo> <skill-path>` to import a skill from a new source. |
 
 ### In progress (not in the plugin)
 
@@ -83,11 +86,18 @@ My own skills plus the ones I use from [Matt Pocock](https://github.com/mattpoco
 | [`writing-fragments`](skills/in-progress/writing-fragments/SKILL.md) | Matt Pocock | Writing, explore: mine raw fragments, no structure yet. |
 | [`writing-shape`](skills/in-progress/writing-shape/SKILL.md) | Matt Pocock | Writing, exploit: shape raw material into an article, paragraph by paragraph. |
 
+<!-- skills:end -->
+
 ## Adding a skill
 
-1. Create `skills/<category>/<skill-name>/SKILL.md` with `name` and `description` frontmatter.
-2. Add its path to `skills` in [`.claude-plugin/plugin.json`](.claude-plugin/plugin.json) and a row to the table above.
-3. To use it locally before publishing: `ln -s "$PWD/skills/<category>/<skill-name>" ~/.claude/skills/<skill-name>`
+- **Your own**: create `skills/<category>/<skill-name>/SKILL.md` and add an entry with `"source": "own"` to [`sources.json`](sources.json).
+- **From another author**: run `/update-from-upstream add <github-repo> <skill-path>` from this repo.
+
+The tables above, [`plugin.json`](.claude-plugin/plugin.json) and [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) are generated from `sources.json`.
+
+## Updating from upstream
+
+Run `/update-from-upstream` from this repo. It pulls the latest from every source in [`sources.json`](sources.json), merges it with the local customizations, and only asks when the two collide.
 
 ## License
 
