@@ -5,7 +5,7 @@ description: Implements the approved plan from the same Claude Code session, exe
 
 # Implement the planned work
 
-The project's validation commands (typecheck, test) should have been provided to you — run `/setup-matt-pocock-skills` if not.
+The project's validation commands (typecheck, test) should have been provided to you — run `/setup-imick-skills` if not.
 
 ## Preconditions
 

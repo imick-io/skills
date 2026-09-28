@@ -7,7 +7,7 @@ description: Refactor-only review pass over a recent commit. Defaults to HEAD~1.
 
 `$ARGUMENTS` is optional: a commit hash. If passed, review `<hash>...HEAD`. Otherwise, review `HEAD~1...HEAD`.
 
-The project's validation commands (typecheck, test) and coding standards location should have been provided to you — run `/setup-matt-pocock-skills` if not.
+The project's validation commands (typecheck, test) and coding standards location should have been provided to you — run `/setup-imick-skills` if not.
 
 ## Workflow
 

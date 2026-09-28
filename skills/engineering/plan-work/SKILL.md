@@ -7,7 +7,7 @@ description: Read-only planning for an issue on the project issue tracker. Fetch
 
 `$ARGUMENTS` should be an issue reference (issue number, URL, or path) on the project issue tracker. If none is provided, stop and ask the user to link or pass one.
 
-The issue tracker conventions (GitHub, Jira, local markdown under `.scratch/`, etc.) and triage label vocabulary should have been provided to you — run `/setup-matt-pocock-skills` if not.
+The issue tracker conventions (GitHub, Jira, local markdown under `.scratch/`, etc.) and triage label vocabulary should have been provided to you — run `/setup-imick-skills` if not.
 
 ## Workflow
 
