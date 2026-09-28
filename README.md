@@ -25,7 +25,7 @@ My own skills plus the ones I use from [Matt Pocock](https://github.com/mattpoco
 
 | Skill | Source | What it does |
 | --- | --- | --- |
-| [`ask-matt`](skills/engineering/ask-matt/SKILL.md) | Matt Pocock | Ask which skill or flow fits your situation. |
+| [`ask-imick`](skills/engineering/ask-imick/SKILL.md) | Matt Pocock | Ask which skill or flow fits your situation. |
 | [`code-review`](skills/engineering/code-review/SKILL.md) | Matt Pocock | Review the changes since a fixed point (commit, branch, tag, or merge-base) along two axes: Standards (does the code follow this repo's documented coding standards?) and Spec (does the code match what the originating issue/spec asked for?). |
 | [`codebase-design`](skills/engineering/codebase-design/SKILL.md) | Matt Pocock | Shared vocabulary for designing deep modules. |
 | [`diagnosing-bugs`](skills/engineering/diagnosing-bugs/SKILL.md) | Matt Pocock | Diagnosis loop for hard bugs and performance regressions. |
