@@ -1,0 +1,17 @@
+{
+  "name": "imick",
+  "owner": {
+    "name": "iMick",
+    "url": "https://github.com/imick-io"
+  },
+  "description": "iMick's agent skills, as an installable Claude Code plugin.",
+  "plugins": [
+    {
+      "name": "imick-skills",
+      "source": "./",
+      "description": "iMick's agent skills: plan-work, do-work, review-work and code-quality reviews.",
+      "category": "engineering",
+      "keywords": ["engineering", "skills", "planning", "code-review"]
+    }
+  ]
+}
