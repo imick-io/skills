@@ -96,6 +96,11 @@
       "source": "own"
     },
     {
+      "local_path": "skills/engineering/product-design",
+      "local_name": "product-design",
+      "source": "own"
+    },
+    {
       "local_path": "skills/engineering/prototype",
       "local_name": "prototype",
       "source": "mattpocock",

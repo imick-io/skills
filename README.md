@@ -37,6 +37,7 @@ My own skills plus the ones I use from other authors, such as [Matt Pocock](http
 | [`implement`](skills/engineering/implement/SKILL.md) | Matt Pocock | Implement a piece of work based on a spec or set of tickets. |
 | [`improve-codebase-architecture`](skills/engineering/improve-codebase-architecture/SKILL.md) | Matt Pocock | Scan a codebase for deepening opportunities, present them as a visual HTML report, then grill through whichever one you pick. |
 | [`plan-work`](skills/engineering/plan-work/SKILL.md) | iMick | Read-only planning for an issue on the project issue tracker. |
+| [`product-design`](skills/engineering/product-design/SKILL.md) | iMick | Build an epic's real UI with the user, from a fast mockup on mock data to production tickets, so human and agent share one vision of the product. |
 | [`prototype`](skills/engineering/prototype/SKILL.md) | Matt Pocock | Build a throwaway prototype to answer a design question. |
 | [`research`](skills/engineering/research/SKILL.md) | Matt Pocock | Investigate a question against high-trust primary sources and capture the findings as a Markdown file in the repo. |
 | [`resolving-merge-conflicts`](skills/engineering/resolving-merge-conflicts/SKILL.md) | Matt Pocock | Use when you need to resolve an in-progress git merge/rebase conflict. |
