@@ -125,6 +125,11 @@
       "source": "own"
     },
     {
+      "local_path": "skills/engineering/scope-decomposer",
+      "local_name": "scope-decomposer",
+      "source": "own"
+    },
+    {
       "local_path": "skills/engineering/setup-imick-skills",
       "local_name": "setup-imick-skills",
       "source": "mattpocock",

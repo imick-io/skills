@@ -43,3 +43,21 @@ Used by `/wayfinder`. The **map** is a single issue with **child** issues as tic
 - **Frontier query**: list the map's open children (`gh issue list --state open`, scoped to the map's sub-issues / task list), drop any with an open blocker (`issue_dependencies_summary.blocked_by > 0`, or an open issue in the `Blocked by` line) or an assignee; first in map order wins.
 - **Claim**: `gh issue edit <n> --add-assignee @me`, the session's first write.
 - **Resolve**: `gh issue comment <n> --body "<answer>"`, then `gh issue close <n>`, then append a context pointer (gist + link) to the map's Decisions-so-far.
+
+## Initiatives and epics
+
+Used by `/scope-decomposer`, and by every skill that creates an issue under an epic. An **initiative** is a big idea; its **epics** are the bounded scopes under it, each planned by one wayfinder map and shipped as one PR from its own branch.
+
+- **Initiative**: an issue labelled `initiative`.
+- **Epic**: an issue labelled `epic`, linked to its initiative as a sub-issue: `gh api --method POST repos/<owner>/<repo>/issues/<initiative>/sub_issues -F sub_issue_id=<epic-db-id>` (the epic's database id, as for blocking). Its branch is `epic/NN-<slug>`, recorded in its body.
+- **Epic order**: native blocking between epics, as in Wayfinding operations.
+- **Milestone**: one per epic, titled `NN: <Initiative> / <Epic>`. `NN` is repo-wide, zero-padded, never reused: the next number is one above the highest `NN:` across all milestones, open and closed (`gh api "repos/<owner>/<repo>/milestones?state=all" --paginate --jq '.[].title'`). Create with `gh api --method POST repos/<owner>/<repo>/milestones -f title="<title>"`.
+- **Map for an epic**: the map `/wayfinder` charts for an epic is a sub-issue of that epic.
+
+**Inheritance.** Every issue created anywhere under an epic (its map, the map's tickets, the spec, build tickets, bugs) gets the epic's milestone (`gh issue edit <n> --milestone "<title>"`) and the epic's `area:*` label (see `docs/agents/team.md`; skip when the repo has a single area).
+
+**Assignment.** The assignee means *claimed*: someone is working on it now.
+
+- Initiatives and epics are assigned to their owner (from `docs/agents/team.md`).
+- `ready-for-human` work is assigned to the person who will do it.
+- Map tickets and `ready-for-agent` tickets stay unassigned until a session claims them; claiming assigns `@me`.

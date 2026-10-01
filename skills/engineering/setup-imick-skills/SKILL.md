@@ -11,6 +11,7 @@ Scaffold the per-repo configuration that the engineering skills assume:
 - **Issue tracker**: where issues live (GitHub by default; local markdown is also supported out of the box)
 - **Triage labels**: the strings used for the five canonical triage roles
 - **Domain docs**: where `CONTEXT.md` and ADRs live, and the consumer rules for reading them
+- **Team and areas**: the parts of the product, who owns each, and the people on each team
 
 This is a prompt-driven skill, not a deterministic script. Explore, present what you found, confirm with the user, then write.
 
@@ -60,12 +61,18 @@ The defaults are the five canonical roles, each label string equal to its name: 
 
 Offer **multi-context** (a root `CONTEXT-MAP.md` pointing to per-context `CONTEXT.md` files) only when exploration found monorepo signals. Then confirm which layout they want.
 
+**Section D: Team and areas.** Always ask: the repo rarely shows its full structure yet (a dashboard may be planned but not built), and only the user knows who owns what. Offer what exploration found (apps, workspaces, top-level folders) as suggestions to accept or correct, then ask, one at a time:
+
+1. **Areas**: the parts of the product, each with one owner. Label `area:<app>`, or `area:<app>:<part>` when an app has several owners. If the answer is a single area, record "Single area: no area labels" and skip the rest of this section.
+2. **Teams**: the teams, and which team owns each area.
+3. **People**: each member's GitHub handle and a one-line description of what they do, including who is the default for their team.
+
 ### 3. Confirm and edit
 
 Show the user a draft of:
 
 - The `## Agent skills` block to add to whichever of `CLAUDE.md` / `AGENTS.md` is being edited (see step 4 for selection rules)
-- The contents of `docs/agents/issue-tracker.md`, `docs/agents/domain.md`, and `docs/agents/triage-labels.md` (the last only when `triage` is installed)
+- The contents of `docs/agents/issue-tracker.md`, `docs/agents/domain.md`, `docs/agents/team.md`, and `docs/agents/triage-labels.md` (the last only when `triage` is installed)
 
 Let them edit before writing.
 
@@ -97,6 +104,10 @@ The block:
 ### Domain docs
 
 [one-line summary of layout: "single-context" or "multi-context"]. See `docs/agents/domain.md`.
+
+### Team and areas
+
+[one-line summary: the areas and their owning teams, or "single area"]. See `docs/agents/team.md`.
 ```
 
 Include the `### Triage labels` sub-block, and write `docs/agents/triage-labels.md`, only when `triage` is installed and Section B ran. When it isn't, both are omitted.
@@ -108,6 +119,9 @@ Then write the docs files using the seed templates in this skill folder as a sta
 - [issue-tracker-local.md](./issue-tracker-local.md): local-markdown issue tracker
 - [triage-labels.md](./triage-labels.md): label mapping (only if `triage` is installed)
 - [domain.md](./domain.md): domain doc consumer rules + layout
+- [team.md](./team.md): areas, owning teams and people
+
+On GitHub, also create every `area:*` label from `team.md` (`gh label create "<label>" --force`), plus `initiative` and `epic`.
 
 For "other" issue trackers, write `docs/agents/issue-tracker.md` from scratch using the user's description.
 
