@@ -45,6 +45,10 @@ A starting situation that generates work, then merges onto the main flow.
 
   When the map clears, **it hands off, it doesn't build**: merge onto the main flow at **`/to-spec`**, which collapses the map's linked decisions into a buildable plan, then `/to-tickets` and `/implement` as usual. Looping the map straight into `/implement` skips that collapse and throws the linked detail away, so go straight to `/implement` only when the effort turned out genuinely small.
 
+- **An idea too big even for one map: a whole product, an MVP, a broad issue (often one triage labelled `needs-scoping`)** → **`/scope-decomposer`**. It interviews you at the high level, then breaks the idea into an **initiative** of **epics** on the issue tracker, each with one destination, one owning area, its own milestone and branch, and blocking edges between them. It never plans inside an epic: each epic is exactly the input one **`/wayfinder`** map takes, so run `/wayfinder <epic>` on them in build order, starting with the one nothing blocks. Run it again on the initiative to add, split or merge epics that don't have a map yet.
+
+- **You need to see it** → **`/product-design`**, for an epic's UI. When words leave a feature abstract, it builds the real UI with you in the product itself, at the feature's real route on the epic branch: first a fast mockup on mock data, iterated live in the browser until you say "we agree", then `/to-spec` and `/to-tickets` turn the agreed mockup into production tickets. Call it at any point in an epic's life: before its map to see where you're landing, during the map when a decision needs a screen, or after. Where **`/prototype`** throws its code away once a question is answered, `/product-design` keeps it and grows it into production, and calls `/prototype` itself when you need variants to pick from.
+
 ## Codebase health
 
 Not feature work, just upkeep.
@@ -75,7 +79,7 @@ Read [PHASE-BOUNDARIES.md](PHASE-BOUNDARIES.md) for the ordered tree: the five q
 Off the main flow entirely.
 
 - **`/grill-me`**: the same relentless interview as `/grill-with-docs`, but **stateless**: it saves nothing locally and builds no `CONTEXT.md`. Reach for it when you are **not working in a working directory** (sharpening a plan, a design, a piece of writing, anything with no repo under it). If you are in a working directory, use `/grill-with-docs` instead: it runs the same interview and leaves a paper trail, so it is strictly the better one.
-- **`/grilling`** is the interview primitive itself: rounds, the frontier, facts are the agent's job and decisions are yours. `/grill-me` and `/grill-with-docs` are the two named ways in, and `/triage`, `/wayfinder` and `/improve-codebase-architecture` all run it internally. Reach for it directly only when you want the interview with no wrapper around it.
+- **`/grilling`** is the interview primitive itself: rounds, the frontier, facts are the agent's job and decisions are yours. `/grill-me` and `/grill-with-docs` are the two named ways in, and `/triage`, `/wayfinder`, `/scope-decomposer` and `/improve-codebase-architecture` all run it internally. Reach for it directly only when you want the interview with no wrapper around it.
 - **`/resolving-merge-conflicts`** works an in-progress merge or rebase conflict hunk by hunk, resolving by **intent** traced to each side's primary source rather than by picking lines, then finishes the operation. It never runs `--abort`. Standalone and off every flow: reach for it when you are already mid-conflict.
 - **`/prototype`** is a small, throwaway program that answers one design question: does this state model feel right, or what should this UI look like. Throwaway is a constraint on how the code is written, not a promise to destroy it: the answer folds into the real code, and the prototype itself is kept as a **primary source** on a `prototype/<name>` branch out of main, pointed at from the implementation issue. It's the detour in step 2 of the main flow, but reach for it any time a design question is hard to settle on paper.
 - **`/research`**: delegate reading legwork to a **background agent**: it investigates a question against **primary sources**, then leaves a cited Markdown file in the repo. Keep working while it reads. The file it produces is something to take *into* the main flow at `/grill-with-docs`, since research feeds the thinking rather than replacing it.
@@ -87,4 +91,4 @@ Off the main flow entirely.
 
 ## Precondition
 
-**`/setup-imick-skills`**: run before your first engineering flow to configure the issue tracker, triage labels, and doc layout the other skills assume. Custom issue trackers also work.
+**`/setup-imick-skills`**: run before your first engineering flow to configure the issue tracker, triage labels, doc layout, and the areas and teams (`team.md`) the other skills assume. Custom issue trackers also work.
