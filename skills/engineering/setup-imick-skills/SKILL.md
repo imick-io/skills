@@ -81,7 +81,7 @@ Then, besides the files in step 4:
 - Write `.github/workflows/triage.yml` from [triage-caller.yml](./triage-caller.yml), replacing both `<REF>` with the answer. Section B's labels file is required: run Section B even if `triage` isn't installed locally (the workflow loads the skill itself).
 - Create every role label from `triage-labels.md` (`gh label create "<label>" --force`).
 - Tell the user which secrets this repo needs, set on the repo, or on its organization limited to selected repositories (an org admin does this). They paste each value themselves; never ask for or handle the values:
-  - `CLAUDE_CODE_OAUTH_TOKEN` (from `claude setup-token`; one year) or `ANTHROPIC_API_KEY`: `gh secret set CLAUDE_CODE_OAUTH_TOKEN --repo <owner>/<repo>`
+  - `CLAUDE_CODE_OAUTH_TOKEN` (from `claude setup-token`; one year) or `ANTHROPIC_API_KEY`. The token prints wrapped over two lines, and terminals embedded in apps may mask it, so: run `claude setup-token` in a regular terminal, copy the token, check the clipboard with `pbpaste | tr -d '[:space:]' | cut -c1-13; pbpaste | tr -d '[:space:]' | wc -c` (expect `sk-ant-oat01-` and about 108), then store it with `pbpaste | tr -d '[:space:]' | gh secret set CLAUDE_CODE_OAUTH_TOKEN --repo <owner>/<repo>`
   - optional `SLACK_ALERTS_WEBHOOK_URL` (failures, stuck issues, token warnings) and `SLACK_FEED_WEBHOOK_URL` (every triage decision): Slack incoming webhooks, one per channel
 - Remind them that workflows only run from the default branch: commit and push this setup there.
 

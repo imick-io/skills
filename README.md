@@ -112,7 +112,7 @@ A GitHub workflow that runs the [`triage`](skills/engineering/triage/SKILL.md) s
 1. Add the labels from [`triage-labels.md`](skills/engineering/setup-imick-skills/triage-labels.md) and the `docs/agents/` files the skill reads (`triage-labels.md`, `team.md`).
 2. Copy [`triage-caller.yml`](skills/engineering/setup-imick-skills/triage-caller.yml) to `.github/workflows/triage.yml`, replacing `<REF>` with a release tag (`v1`) or `main`.
 3. Set the secrets, on the repo or on your organization:
-   - `CLAUDE_CODE_OAUTH_TOKEN` (from `claude setup-token`, valid one year; runs count against your Claude plan) or `ANTHROPIC_API_KEY` (billed per use).
+   - `CLAUDE_CODE_OAUTH_TOKEN` (from `claude setup-token`, valid one year; runs count against your Claude plan) or `ANTHROPIC_API_KEY` (billed per use). Run `claude setup-token` in a regular terminal (some app-embedded terminals mask the token), copy the token, check it with `pbpaste | tr -d '[:space:]' | cut -c1-13` (expect `sk-ant-oat01-`), then store it without line breaks: `pbpaste | tr -d '[:space:]' | gh secret set CLAUDE_CODE_OAUTH_TOKEN --repo <owner>/<repo>`.
    - Optional: `SLACK_FEED_WEBHOOK_URL` (one message per triage decision) and `SLACK_ALERTS_WEBHOOK_URL` (failures, issues stuck on `needs-triage`, token warnings). Every message starts with `[owner/repo]`, so several projects can share channels.
 4. Push to the default branch.
 
