@@ -1,0 +1,82 @@
+# Shared health and expiry checks for the token triage runs on. Call it once,
+# from one repo that holds the token; see
+# skills/engineering/setup-imick-skills/token-checks-caller.yml.
+name: Triage token checks (shared)
+
+on:
+  workflow_call:
+    inputs:
+      token-created:
+        description: Date the subscription token was created (YYYY-MM-DD). Empty when using an API key.
+        type: string
+        default: ""
+      token-lifetime-days:
+        type: number
+        default: 365
+      warn-days:
+        description: Start warning this many days before expiry
+        type: number
+        default: 30
+    secrets:
+      CLAUDE_CODE_OAUTH_TOKEN:
+        required: false
+      ANTHROPIC_API_KEY:
+        required: false
+      SLACK_ALERTS_WEBHOOK_URL:
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      WEBHOOK: ${{ secrets.SLACK_ALERTS_WEBHOOK_URL }}
+      REPO: ${{ github.repository }}
+    steps:
+      - name: Expiry
+        env:
+          CREATED: ${{ inputs.token-created }}
+          LIFETIME: ${{ inputs.token-lifetime-days }}
+          WARN: ${{ inputs.warn-days }}
+        run: |
+          set -euo pipefail
+          [ -n "$CREATED" ] || { echo "no token-created date: skipping"; exit 0; }
+          expires=$(date -u -d "$CREATED + $LIFETIME days" +%F)
+          left=$(( ( $(date -u -d "$expires" +%s) - $(date -u +%s) ) / 86400 ))
+          echo "token expires $expires ($left days left)"
+          [ "$left" -le "$WARN" ] || exit 0
+          # Weekly (Mondays) until the last week, then daily.
+          [ "$left" -le 7 ] || [ "$(date -u +%u)" = 1 ] || exit 0
+          msg="[$REPO] The triage token expires on $expires ($left days). Run \`claude setup-token\`, update CLAUDE_CODE_OAUTH_TOKEN in every repo or org that holds it, and update the token-created date."
+          echo "::warning::$msg"
+          [ -n "$WEBHOOK" ] || exit 0
+          jq -n --arg t "$msg" '{text: $t}' | curl -fsS -X POST -H 'Content-Type: application/json' --data @- "$WEBHOOK"
+
+      - name: Install Claude Code
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: Health
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          out=$(claude -p "Reply with the single word: ok" --max-turns 1 --output-format json 2>&1)
+          if jq -e '(.is_error | not) and (.result | ascii_downcase | test("ok"))' <<< "$out" > /dev/null 2>&1; then
+            echo "token healthy"; exit 0
+          fi
+          if grep -qiE '401|unauthori[sz]ed|oauth|authenticat|invalid.*(token|api key)|expired' <<< "$out"; then
+            cause="authentication failed: renew the token with \`claude setup-token\` and update CLAUDE_CODE_OAUTH_TOKEN"
+          elif grep -qiE 'usage limit|rate.?limit|429|limit reached|overloaded' <<< "$out"; then
+            cause="the usage limit or rate limit is hit: triage runs will fail until it resets"
+          else
+            cause="unknown cause, check the run"
+          fi
+          msg="[$REPO] Triage is down: the token health check failed ($cause). <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|Run>"
+          echo "::error::$msg"
+          if [ -n "$WEBHOOK" ]; then
+            jq -n --arg t "$msg" '{text: $t}' | curl -fsS -X POST -H 'Content-Type: application/json' --data @- "$WEBHOOK"
+          fi
+          exit 1

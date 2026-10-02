@@ -48,7 +48,7 @@ My own skills plus the ones I use from other authors, such as [Matt Pocock](http
 | [`thermo-nuclear-code-quality-review`](skills/engineering/thermo-nuclear-code-quality-review/SKILL.md) | Cursor | Run an extremely strict maintainability review for abstraction quality, giant files, and spaghetti-condition growth. |
 | [`to-spec`](skills/engineering/to-spec/SKILL.md) | Matt Pocock | Turn the current conversation into a spec and publish it to the project issue tracker: no interview, just synthesis of what you've already discussed. |
 | [`to-tickets`](skills/engineering/to-tickets/SKILL.md) | Matt Pocock | Break a plan, spec, or the current conversation into a set of tracer-bullet tickets, each declaring its blocking edges, published to the configured tracker (edges as text in one file per ticket locally, or native blocking links on a real tracker). |
-| [`triage`](skills/engineering/triage/SKILL.md) | Matt Pocock | Move issues and external PRs through a state machine of triage roles, categorise, verify, grill if needed, and write agent-ready briefs. |
+| [`triage`](skills/engineering/triage/SKILL.md) | iMick | Classify incoming issues (and optionally external PRs) by what they are and who acts next, write agent-ready briefs, and route big asks to scoping. |
 | [`wayfinder`](skills/engineering/wayfinder/SKILL.md) | Matt Pocock | Plan a huge chunk of work (more than one agent session can hold) as a shared map of decision tickets on your issue tracker, and resolve them one at a time until the way to the destination is clear. |
 | [`wizard`](skills/engineering/wizard/SKILL.md) | Matt Pocock | Generate an interactive bash wizard that walks a human through steps only they can perform. |
 
@@ -100,6 +100,25 @@ The tables above, [`plugin.json`](.claude-plugin/plugin.json) and [`THIRD_PARTY_
 ## Updating from upstream
 
 Run `/update-from-upstream` from this repo. It pulls the latest from every source in [`sources.json`](sources.json), merges it with the local customizations, and only asks when the two collide.
+
+## Automatic triage
+
+A GitHub workflow that runs the [`triage`](skills/engineering/triage/SKILL.md) skill on every new issue, so incoming work arrives labelled, briefed and assigned. Anyone can use it; nothing in it is specific to this repo's owner.
+
+**What it does.** On each new issue from an org member or collaborator, it labels the issue with what it is and who acts next (`bug` + `ready-for-agent-debugging`, `enhancement` + `ready-for-agent` or `ready-for-human`, `needs-scoping`, `needs-info`, `wontfix`), adds its area, assigns the person who acts next, and comments with its reasoning or an agent brief. It never closes anything. When a `needs-info` issue gets a reply or an edit, it triages again. Issues created by the planning skills (initiatives, epics, wayfinder maps and everything under an epic) are left alone.
+
+**Install** with `/setup-imick-skills` in your project, or by hand:
+
+1. Add the labels from [`triage-labels.md`](skills/engineering/setup-imick-skills/triage-labels.md) and the `docs/agents/` files the skill reads (`triage-labels.md`, `team.md`).
+2. Copy [`triage-caller.yml`](skills/engineering/setup-imick-skills/triage-caller.yml) to `.github/workflows/triage.yml`, replacing `<REF>` with a release tag (`v1`) or `main`.
+3. Set the secrets, on the repo or on your organization:
+   - `CLAUDE_CODE_OAUTH_TOKEN` (from `claude setup-token`, valid one year; runs count against your Claude plan) or `ANTHROPIC_API_KEY` (billed per use).
+   - Optional: `SLACK_FEED_WEBHOOK_URL` (one message per triage decision) and `SLACK_ALERTS_WEBHOOK_URL` (failures, issues stuck on `needs-triage`, token warnings). Every message starts with `[owner/repo]`, so several projects can share channels.
+4. Push to the default branch.
+
+**Token checks.** Once, in one repo that holds the token, copy [`token-checks-caller.yml`](skills/engineering/setup-imick-skills/token-checks-caller.yml) and set the variable `CLAUDE_TOKEN_CREATED` to the token's creation date. It checks the token daily and warns 30 days before it expires.
+
+**Safety.** The run can only read the code and edit issues: its tools are limited to reading files and `gh issue` commands, and issue text is treated as data, never as instructions. Re-run a triage from the Actions tab with the issue number, or run `/triage #<n>` locally.
 
 ## License
 

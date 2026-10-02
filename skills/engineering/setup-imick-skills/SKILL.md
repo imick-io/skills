@@ -12,6 +12,7 @@ Scaffold the per-repo configuration that the engineering skills assume:
 - **Triage labels**: the strings used for the five canonical triage roles
 - **Domain docs**: where `CONTEXT.md` and ADRs live, and the consumer rules for reading them
 - **Team and areas**: the parts of the product, who owns each, and the people on each team
+- **Automatic triage** (optional, GitHub only): a workflow that triages each new issue
 
 This is a prompt-driven skill, not a deterministic script. Explore, present what you found, confirm with the user, then write.
 
@@ -34,7 +35,7 @@ Look at the current repo to understand its starting state. Read whatever exists;
 
 Summarise what's present and what's missing. Then take the sections in order. One section, one answer, then the next.
 
-Lead each section with the recommended answer so the user can accept it in a word. Give a one-line explainer only when the choice genuinely branches; skip the section entirely when exploration already settled it (Section B when `triage` isn't installed, Section C when there's no monorepo).
+Lead each section with the recommended answer so the user can accept it in a word. Give a one-line explainer only when the choice genuinely branches; skip the section entirely when exploration already settled it (Section B when `triage` isn't installed and Section E is declined, Section C when there's no monorepo).
 
 **Section A: Issue tracker.**
 
@@ -55,7 +56,7 @@ If it is installed, ask exactly one question:
 
 > Do you want to keep the default triage labels? (recommended: **yes**)
 
-The defaults are the five canonical roles, each label string equal to its name: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. On **yes**, write them as-is. Only if the user says no, usually because their tracker already uses other names (e.g. `bug:triage` for `needs-triage`), collect the overrides so `triage` applies existing labels instead of creating duplicates.
+The defaults are the canonical roles in [triage-labels.md](./triage-labels.md), each label string equal to its name. On **yes**, write them as-is. Only if the user says no, usually because their tracker already uses other names, collect the overrides so `triage` applies existing labels instead of creating duplicates.
 
 **Section C: Domain docs.** Default to **single-context** (one `CONTEXT.md` + `docs/adr/` at the repo root). This fits almost every repo; write it without asking.
 
@@ -66,6 +67,25 @@ Offer **multi-context** (a root `CONTEXT-MAP.md` pointing to per-context `CONTEX
 1. **Areas**: the parts of the product, each with one owner. Label `area:<app>`, or `area:<app>:<part>` when an app has several owners. If the answer is a single area, record "Single area: no area labels" and skip the rest of this section.
 2. **Teams**: the teams, and which team owns each area.
 3. **People**: each member's GitHub handle and a one-line description of what they do, including who is the default for their team.
+
+**Section E: Automatic triage.** GitHub only; skip otherwise. Check `.github/workflows/` for an existing `triage.yml` first. Ask:
+
+> Install automatic triage? A workflow triages each new issue, re-triages `needs-info` issues when the reporter replies, and reports to Slack if you want. (recommended: **yes** for repos where others file issues)
+
+On **yes**, ask one more question:
+
+> Pin a released version (`v1`, recommended), or follow `main` (every change to the skills repo applies immediately)?
+
+Then, besides the files in step 4:
+
+- Write `.github/workflows/triage.yml` from [triage-caller.yml](./triage-caller.yml), replacing both `<REF>` with the answer. Section B's labels file is required: run Section B even if `triage` isn't installed locally (the workflow loads the skill itself).
+- Create every role label from `triage-labels.md` (`gh label create "<label>" --force`).
+- Tell the user which secrets this repo needs, set on the repo, or on its organization limited to selected repositories (an org admin does this). They paste each value themselves; never ask for or handle the values:
+  - `CLAUDE_CODE_OAUTH_TOKEN` (from `claude setup-token`; one year) or `ANTHROPIC_API_KEY`: `gh secret set CLAUDE_CODE_OAUTH_TOKEN --repo <owner>/<repo>`
+  - optional `SLACK_ALERTS_WEBHOOK_URL` (failures, stuck issues, token warnings) and `SLACK_FEED_WEBHOOK_URL` (every triage decision): Slack incoming webhooks, one per channel
+- Remind them that workflows only run from the default branch: commit and push this setup there.
+
+**First time only** (the user has no token checks running anywhere yet): offer to walk them through the one-time steps with the `wizard` skill: creating the token, the two Slack webhooks, and the token checks. The token checks go in one repo that holds the same token, from [token-checks-caller.yml](./token-checks-caller.yml), with the repo or org variable `CLAUDE_TOKEN_CREATED` set to the token's creation date (`gh variable set CLAUDE_TOKEN_CREATED --body YYYY-MM-DD`). Suggest keeping a list of every repo holding the token: renewing it is then a checklist.
 
 ### 3. Confirm and edit
 
@@ -121,7 +141,7 @@ Then write the docs files using the seed templates in this skill folder as a sta
 - [domain.md](./domain.md): domain doc consumer rules + layout
 - [team.md](./team.md): areas, owning teams and people
 
-On GitHub, also create every `area:*` label from `team.md` (`gh label create "<label>" --force`), plus `initiative` and `epic`.
+On GitHub, also create every `area:*` label from `team.md` (`gh label create "<label>" --force`), plus `initiative` and `epic`. Section E's workflow and labels are written here too, when the user chose it.
 
 For "other" issue trackers, write `docs/agents/issue-tracker.md` from scratch using the user's description.
 

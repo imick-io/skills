@@ -1,0 +1,30 @@
+# Automatic triage. The workflow itself lives in imick-io/skills; this file
+# only says when to run it. Secrets: CLAUDE_CODE_OAUTH_TOKEN (or
+# ANTHROPIC_API_KEY), and optionally SLACK_ALERTS_WEBHOOK_URL and
+# SLACK_FEED_WEBHOOK_URL, on this repo or its organization.
+name: Triage
+
+on:
+  issues:
+    types: [opened, edited]
+  issue_comment:
+    types: [created]
+  schedule:
+    - cron: "0 13 * * *" # daily sweep for issues stuck on needs-triage
+  workflow_dispatch:
+    inputs:
+      issue:
+        description: Issue number to triage now
+        required: true
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  triage:
+    uses: imick-io/skills/.github/workflows/triage.yml@<REF>
+    with:
+      issue-number: ${{ github.event.inputs.issue }}
+      skills-ref: <REF>
+    secrets: inherit

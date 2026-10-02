@@ -22,7 +22,6 @@ From https://github.com/mattpocock/skills:
 - `tdd` ← `skills/engineering/tdd` @ `c55ee46`
 - `to-spec` ← `skills/engineering/to-spec` @ `c55ee46`
 - `to-tickets` ← `skills/engineering/to-tickets` @ `c55ee46`
-- `triage` ← `skills/engineering/triage` @ `c55ee46`
 - `wayfinder` ← `skills/engineering/wayfinder` @ `c55ee46`
 - `wizard` ← `skills/engineering/wizard` @ `c55ee46`
 - `claude-handoff` ← `skills/in-progress/claude-handoff` @ `c55ee46`

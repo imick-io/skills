@@ -177,10 +177,7 @@
     {
       "local_path": "skills/engineering/triage",
       "local_name": "triage",
-      "source": "mattpocock",
-      "upstream_path": "skills/engineering/triage",
-      "upstream_name": "triage",
-      "synced_commit": "c55ee46073ed923f86ce59a5eb3b6d895095d1b7"
+      "source": "own"
     },
     {
       "local_path": "skills/engineering/wayfinder",

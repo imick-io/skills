@@ -35,7 +35,7 @@ The limit on this is the **[smart zone](https://www.aihero.dev/ai-coding-diction
 
 A starting situation that generates work, then merges onto the main flow.
 
-- **Bugs and requests piling up** → **`/triage`**. It moves issues through triage roles and produces agent-ready issues, which **`/implement`** later picks up.
+- **Bugs and requests piling up** → **`/triage`**. It labels each issue with what it is and who acts next, writes agent briefs, and routes big asks to `/scope-decomposer` (`needs-scoping`). With automatic triage installed (`/setup-imick-skills`), a workflow runs it on every new issue; `/triage` by hand is then the maintainer's review and override.
 
   Triage is only for issues **you didn't create**: bug reports, incoming feature requests, anything that arrives raw. Tickets that `/to-tickets` produced are already agent-ready, so **don't triage them**.
 

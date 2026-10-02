@@ -1,0 +1,20 @@
+# Daily health check and expiry warning for the token automatic triage runs on.
+# Install once, in one repo that holds the same token as your triage repos.
+# Set the repo (or org) variable CLAUDE_TOKEN_CREATED to the token's creation
+# date, YYYY-MM-DD.
+name: Triage token checks
+
+on:
+  schedule:
+    - cron: "0 12 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    uses: imick-io/skills/.github/workflows/token-checks.yml@<REF>
+    with:
+      token-created: ${{ vars.CLAUDE_TOKEN_CREATED }}
+    secrets: inherit
