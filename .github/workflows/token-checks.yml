@@ -67,6 +67,8 @@ jobs:
           if jq -e '(.is_error | not) and (.result | ascii_downcase | test("ok"))' <<< "$out" > /dev/null 2>&1; then
             echo "token healthy"; exit 0
           fi
+          echo "Claude said: $out" | tail -c 1500
+          out=$(jq -r '.result // empty' <<< "$out" 2>/dev/null || echo "$out")
           if grep -qiE 'not logged in|/login|401|unauthori[sz]ed|oauth|authenticat|invalid.*(token|api key)|expired' <<< "$out"; then
             cause="authentication failed: renew the token with \`claude setup-token\` and update CLAUDE_CODE_OAUTH_TOKEN"
           elif grep -qiE 'usage limit|rate.?limit|429|limit reached|overloaded' <<< "$out"; then
