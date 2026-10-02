@@ -63,7 +63,7 @@ jobs:
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
-          out=$(claude -p "Reply with the single word: ok" --max-turns 1 --output-format json 2>&1)
+          out=$(claude -p "Reply with the single word: ok" --max-turns 1 --output-format json 2>&1) || true
           if jq -e '(.is_error | not) and (.result | ascii_downcase | test("ok"))' <<< "$out" > /dev/null 2>&1; then
             echo "token healthy"; exit 0
           fi
