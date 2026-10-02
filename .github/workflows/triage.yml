@@ -177,7 +177,11 @@ jobs:
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           out=$(cat "$RUNNER_TEMP/claude.json" "$RUNNER_TEMP/claude.err" 2>/dev/null || true)
-          echo "Claude output (tail):"; tail -c 2000 <<< "$out"; echo
+          result=$(jq -r '.result // empty' "$RUNNER_TEMP/claude.json" 2>/dev/null || true)
+          echo "Claude result: ${result:-none}"; echo "Claude stderr:"; tail -c 1500 "$RUNNER_TEMP/claude.err" 2>/dev/null || true
+          out="$result
+          $(cat "$RUNNER_TEMP/claude.err" 2>/dev/null || true)"
+          [ -n "${out//[[:space:]]/}" ] || out=""
           if ! grep -q . <<< "$out"; then
             cause="the run failed before Claude produced any output"
           elif grep -qiE '401|unauthori[sz]ed|oauth|authenticat|invalid.*(token|api key)|expired' <<< "$out"; then
