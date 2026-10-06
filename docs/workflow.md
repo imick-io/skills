@@ -8,19 +8,19 @@ flowchart TD
   T -->|small enhancement| RA[ready-for-agent]
   T -->|bug| RB[ready-for-agent-debugging]
   T -->|too big| NS[needs-scoping]
-  T -->|unclear| NI[needs-info: reporter answers, triage re-runs]
+  T -->|unclear| NI["needs-info: reporter answers, triage re-runs"]
   Idea[Your idea] --> SD
-  NS --> SD[/scope-decomposer/]
-  SD --> E[Initiative + epics<br/>milestone and branch each]
-  E --> W[/wayfinder/: decisions]
-  E -. any time .-> PD[/product-design/: real UI on mock data]
-  W --> SP[/to-spec/ then /to-tickets/]
+  NS --> SD["/scope-decomposer"]
+  SD --> E["Initiative + epics<br/>milestone and branch each"]
+  E --> W["/wayfinder: decisions"]
+  E -. any time .-> PD["/product-design: real UI on mock data"]
+  W --> SP["/to-spec, then /to-tickets"]
   PD -->|we agree| SP
   SP --> RA
   RA --> L[[Agent loop]]
   RB --> L
   L -->|epic tickets| EB[epic branch]
-  L -->|other tickets| PR1[PR: Fixes #n]
+  L -->|other tickets| PR1["PR: Fixes #n"]
   EB -->|milestone empty| EPR[Epic PR to main]
   EPR --> V[[verify-epic]]
   V -->|failures| RB
