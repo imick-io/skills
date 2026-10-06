@@ -1,0 +1,47 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+concurrency: ${{ github.workflow }}-${{ github.ref }}
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - run: npm ci
+
+      - run: npm run check-plugin-version
+
+      # With pending changesets: opens or updates the "Version skills" PR.
+      # Once that PR is merged: tags the release (vX.Y.Z) and publishes it.
+      - id: changesets
+        uses: changesets/action@v1
+        with:
+          version: npm run version
+          publish: npx changeset tag
+          commit: "chore: version skills"
+          title: "chore: version skills"
+          createGithubReleases: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Projects pin the shared workflows to the major tag (@v1): move it to
+      # the release just made. A new major (v2.0.0) starts a new tag and leaves
+      # the old one where it was.
+      - name: Move the major tag
+        if: steps.changesets.outputs.published == 'true'
+        run: |
+          major="v$(node -p "require('./package.json').version.split('.')[0]")"
+          git tag -f "$major"
+          git push -f origin "$major"
