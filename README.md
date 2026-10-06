@@ -121,6 +121,23 @@ A GitHub workflow that runs the [`triage`](skills/engineering/triage/SKILL.md) s
 
 **Safety.** The run can only read the code and edit issues: its tools are limited to reading files and `gh issue` commands, and issue text is treated as data, never as instructions. Re-run a triage from the Actions tab with the issue number, or run `/triage #<n>` locally.
 
+## Releasing
+
+Projects pin the shared workflows and the triage skill to a **version tag** (`@v1`), not to `main`, so a change here reaches them only when it's released. A test repo can follow `@main` to try changes first.
+
+**Release a change** that keeps working with existing setups (better prompts, new checks, clearer comments):
+
+1. Push it to `main`.
+2. Try it in a repo that follows `@main`: open a test issue and check the result.
+3. Move the tag to the tested commit. Every project on `@v1` picks it up on its next run, with nothing to edit:
+
+   ```bash
+   git tag -f v1
+   git push -f origin v1
+   ```
+
+**Release a breaking change** (a new required secret, renamed labels, a changed caller workflow) as the next major tag instead, `v2`, and move each project over when it's ready: change `@v1` to `@v2` in its `.github/workflows/triage.yml`, or re-run `/setup-imick-skills`.
+
 ## License
 
 MIT
