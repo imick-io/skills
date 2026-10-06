@@ -370,6 +370,12 @@ def cmd_detach(a):
     """Keep a skill its source deleted, as your own from now on."""
     m = load_map()
     e = entry_for(m, a.local_path)
+    if "upstream_path" in e:
+        # The original would otherwise come back as a "new" upstream skill.
+        declined = m["sources"][e["source"]].setdefault("declined", [])
+        if e["upstream_path"] not in declined:
+            declined.append(e["upstream_path"])
+            declined.sort()
     for k in ("upstream_path", "upstream_name", "synced_commit", "base_path"):
         e.pop(k, None)
     e["source"] = "own"

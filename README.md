@@ -35,12 +35,14 @@ My own skills plus the ones I use from other authors, such as [Matt Pocock](http
 | [`domain-modeling`](skills/engineering/domain-modeling/SKILL.md) | Matt Pocock | Build and sharpen a project's domain model. |
 | [`grill-with-docs`](skills/engineering/grill-with-docs/SKILL.md) | Matt Pocock | A relentless interview to sharpen a plan or design, which also creates docs (ADR's and glossary) as we go. |
 | [`implement`](skills/engineering/implement/SKILL.md) | Matt Pocock | Implement a piece of work based on a spec or set of tickets. |
+| [`implement-spec`](skills/engineering/implement-spec/SKILL.md) | Matt Pocock | Implement the result of /to-spec and /to-tickets in code. |
 | [`improve-codebase-architecture`](skills/engineering/improve-codebase-architecture/SKILL.md) | Matt Pocock | Scan a codebase for deepening opportunities, present them as a visual HTML report, then grill through whichever one you pick. |
 | [`plan-work`](skills/engineering/plan-work/SKILL.md) | iMick | Read-only planning for an issue on the project issue tracker. |
+| [`pr`](skills/engineering/pr/SKILL.md) | Matt Pocock | Use when writing a PR body. |
 | [`product-design`](skills/engineering/product-design/SKILL.md) | iMick | Build an epic's real UI with the user, from a fast mockup on mock data to production tickets, so human and agent share one vision of the product. |
 | [`prototype`](skills/engineering/prototype/SKILL.md) | Matt Pocock | Build a throwaway prototype to answer a design question. |
 | [`research`](skills/engineering/research/SKILL.md) | Matt Pocock | Investigate a question against high-trust primary sources and capture the findings as a Markdown file in the repo. |
-| [`resolving-merge-conflicts`](skills/engineering/resolving-merge-conflicts/SKILL.md) | Matt Pocock | Use when you need to resolve an in-progress git merge/rebase conflict. |
+| [`retro`](skills/engineering/retro/SKILL.md) | Matt Pocock | Conduct a retrospective on a coding session. |
 | [`review-work`](skills/engineering/review-work/SKILL.md) | iMick | Refactor-only review pass over a recent commit. |
 | [`scope-decomposer`](skills/engineering/scope-decomposer/SKILL.md) | iMick | Break a big idea, product, feature, existing project or broad issue into an initiative of epics on the issue tracker, each one ready for /wayfinder. |
 | [`setup-imick-skills`](skills/engineering/setup-imick-skills/SKILL.md) | Matt Pocock | Configure this repo for the engineering skills: set up its issue tracker, triage label vocabulary, and domain doc layout. |
@@ -80,10 +82,7 @@ My own skills plus the ones I use from other authors, such as [Matt Pocock](http
 | Skill | Source | What it does |
 | --- | --- | --- |
 | [`claude-handoff`](skills/in-progress/claude-handoff/SKILL.md) | Matt Pocock | Hand the current conversation off to a fresh background agent that picks up the work immediately. |
-| [`implement-spec`](skills/in-progress/implement-spec/SKILL.md) | Matt Pocock | Implement a specification in code. |
 | [`loop-me`](skills/in-progress/loop-me/SKILL.md) | Matt Pocock | Grill me about specs for the workflows I want to build, within this workspace. |
-| [`pr`](skills/in-progress/pr/SKILL.md) | Matt Pocock | Use when writing a PR body. |
-| [`retro`](skills/in-progress/retro/SKILL.md) | Matt Pocock | Conduct a retrospective on a coding session. |
 | [`setup-ts-deep-modules`](skills/in-progress/setup-ts-deep-modules/SKILL.md) | Matt Pocock | Wire dependency-cruiser into a TypeScript repo so each package is a deep module, with implementation hidden in subfolders and reachable only through its entry-point files. |
 | [`writing-beats`](skills/in-progress/writing-beats/SKILL.md) | Matt Pocock | Writing, exploit; assemble raw material into a journey of beats, grounding each term before a beat leans on it. |
 | [`writing-fragments`](skills/in-progress/writing-fragments/SKILL.md) | Matt Pocock | Writing, explore: mine raw fragments, no structure yet. |
