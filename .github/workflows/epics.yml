@@ -76,7 +76,7 @@ jobs:
             [ "$verify" = success ] || reasons+=("verify-epic $verify")
 
             if [ ${#reasons[@]} -eq 0 ]; then post success "Ready to merge"
-            else post failure "$(IFS='; '; echo "${reasons[*]}" | cut -c1-140)"; fi
+            else post failure "$(printf '%s; ' "${reasons[@]}" | sed 's/; $//' | cut -c1-140)"; fi
           done
 
   # When an epic closes: close its milestone; when it was the initiative's last
