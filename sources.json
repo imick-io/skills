@@ -49,6 +49,11 @@
       "synced_commit": "4588b32ecab9ecc9fc8cc6b6c5e7d675b6004b0d"
     },
     {
+      "local_path": "skills/engineering/debug-and-fix",
+      "local_name": "debug-and-fix",
+      "source": "own"
+    },
+    {
       "local_path": "skills/engineering/diagnosing-bugs",
       "local_name": "diagnosing-bugs",
       "source": "mattpocock",
