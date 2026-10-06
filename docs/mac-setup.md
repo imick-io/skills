@@ -102,6 +102,6 @@ launchctl unload ~/Library/LaunchAgents/io.imick.agents.<project>.plist   # stop
 - [ ] `gh auth status` shows the bot account.
 - [ ] For each project: `npm run agents -- --once` passes, then its launch agent is loaded and its log shows "nothing ready; sleeping" or work.
 
-## Coming next
+## Verifying epics
 
-The Mac will also be a **self-hosted GitHub Actions runner** for `/verify-epic`, which tests epic PRs in a real browser. Its setup will be added here when that ships.
+Nothing extra to install: when an epic's tickets are all done, the agent loop on this Mac opens its PR and runs `verify-epic` in the same Docker sandboxes, with the headless browser from the loop's image. Give each project's `GH_TOKEN` the extra permissions listed in its `.sandcastle/.env.example` (Commit statuses, Deployments, Pull requests), and set its preview source in `docs/agents/preview.md`.
