@@ -204,6 +204,11 @@
       "source": "own"
     },
     {
+      "local_path": "skills/engineering/verify-epic",
+      "local_name": "verify-epic",
+      "source": "own"
+    },
+    {
       "local_path": "skills/engineering/wayfinder",
       "local_name": "wayfinder",
       "source": "mattpocock",

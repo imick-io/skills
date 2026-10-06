@@ -52,6 +52,7 @@ My own skills plus the ones I use from other authors, such as [Matt Pocock](http
 | [`to-spec`](skills/engineering/to-spec/SKILL.md) | Matt Pocock | Turn the current conversation into a spec and publish it to the project issue tracker: no interview, just synthesis of what you've already discussed. |
 | [`to-tickets`](skills/engineering/to-tickets/SKILL.md) | Matt Pocock | Break a plan, spec, or the current conversation into a set of tracer-bullet tickets, each declaring its blocking edges, published to the configured tracker (edges as text in one file per ticket locally, or native blocking links on a real tracker). |
 | [`triage`](skills/engineering/triage/SKILL.md) | iMick | Classify incoming issues (and optionally external PRs) by what they are and who acts next, write agent-ready briefs, and route big asks to scoping. |
+| [`verify-epic`](skills/engineering/verify-epic/SKILL.md) | iMick | Test an epic's PR against its tickets, spec and agreed screens in the running app, file each failure as a bug ticket under the epic, and set the verify-epic status the merge gate requires. |
 | [`wayfinder`](skills/engineering/wayfinder/SKILL.md) | Matt Pocock | Plan a huge chunk of work (more than one agent session can hold) as a shared map of decision tickets on your issue tracker, and resolve them one at a time until the way to the destination is clear. |
 | [`wizard`](skills/engineering/wizard/SKILL.md) | Matt Pocock | Generate an interactive bash wizard that walks a human through steps only they can perform. |
 
@@ -176,6 +177,15 @@ Tune it in `.sandcastle/.env`: `AGENTS_IDLE_MINUTES` (45), `AGENTS_MAX_PARALLEL`
 - Each run leaves a log in `.sandcastle/logs/`.
 
 To run it around the clock on a spare Mac (never sleeping, reachable from your phone with Claude's Remote Control), see [docs/mac-setup.md](docs/mac-setup.md).
+
+## Epic PRs
+
+When the agent loop finishes an epic (every ticket in its milestone closed), it opens the epic's PR to `main` and runs [`verify-epic`](skills/engineering/verify-epic/SKILL.md) on it: in the running app (the PR's preview, per `docs/agents/preview.md`, or started locally) it checks that the app loads cleanly, then each ticket's acceptance criteria, the spec's user stories, the API contracts and the agreed screens. Each failure becomes a `bug` + `ready-for-agent-debugging` ticket under the epic, which the loop fixes on the epic branch; the PR gets one report that updates in place, and a `verify-epic` status. New commits are verified again.
+
+The shared [`epics.yml`](.github/workflows/epics.yml) workflow (installed by `/setup-imick-skills`, Section G, from [`epics-caller.yml`](skills/engineering/setup-imick-skills/epics-caller.yml)) adds:
+
+- **`epic-gate`**, a status check to make required on `main`: green for any PR that isn't an epic's; for an epic PR, green only with no open tickets in its milestone, no `mocks/` folder left, and `verify-epic` passed.
+- **The closing chain**: merging the epic PR closes the epic ("Closes #n"), which closes its milestone; when an initiative's last epic closes, the initiative closes too, or gets a comment if its "Not yet scoped" section still lists areas.
 
 ## Releasing
 

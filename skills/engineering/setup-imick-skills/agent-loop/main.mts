@@ -16,6 +16,9 @@
 //   5. Land: epic tickets merge into the epic branch and close; the others
 //      get a PR with "Fixes #n". An epic with no open tickets left gets its
 //      PR to main ("Closes #epic").
+//   6. Verify: an epic PR whose milestone is empty is checked with
+//      /verify-epic, once per commit; its failures become tickets that the
+//      next pass picks up, and its status feeds the epic-gate merge check.
 //
 // Adapted from Sandcastle's parallel-planner-with-review template
 // (https://github.com/mattpocock/sandcastle, MIT).
@@ -197,7 +200,7 @@ const planSchema = z.object({ issues: z.array(z.object({ number: z.number() })) 
 async function pass(): Promise<number> {
   epicCache.clear();
   const ready = readyTickets();
-  if (!ready.length) return 0;
+  if (!ready.length) return await verifyEpics();
 
   const plan = await sandcastle.run({
     hooks,
@@ -277,10 +280,7 @@ async function pass(): Promise<number> {
     land(t, epicPath);
   }
 
-  for (const epicPath of new Set(work.filter((w) => w.epicPath).map((w) => w.t.epic!.number))) {
-    openEpicPrIfDone(work.find((w) => w.t.epic?.number === epicPath)!.t.epic!);
-  }
-  return work.length;
+  return work.length + (await verifyEpics());
 }
 
 function land(t: Ticket, epicPath?: string) {
@@ -307,17 +307,50 @@ function land(t: Ticket, epicPath?: string) {
   log(`#${t.number} → ${url}`);
 }
 
-// The epic is done building when nothing in its milestone is open except the
-// epic itself. Then its PR to main goes up, and /verify-epic takes over.
-function openEpicPrIfDone(epic: Epic) {
-  const open = ghJson<{ number: number }[]>("issue", "list", "--state", "open", "--milestone", epic.milestone, "--json", "number", "--limit", "200")
-    .filter((i) => i.number !== epic.number);
-  if (open.length) return;
-  const existing = ghJson<unknown[]>("pr", "list", "--state", "open", "--head", epic.branch, "--json", "number");
-  if (existing.length) return;
-  const url = gh("pr", "create", "--base", "main", "--head", epic.branch, "--title", epic.title, "--body",
-    `Closes #${epic.number}\n\nEvery ticket in milestone **${epic.milestone}** is done. Verification runs next.`);
-  log(`epic #${epic.number} complete → ${url}`);
+// An epic is done building when nothing in its milestone is open except the
+// epic itself. Then its PR to main goes up (once), and every new commit on it
+// is verified once. Returns the number of verifications run.
+async function verifyEpics(): Promise<number> {
+  const epics = ghJson<{ number: number; title: string; body: string; milestone: { title: string } | null }[]>(
+    "issue", "list", "--state", "open", "--label", LABEL.epic, "--json", "number,title,body,milestone", "--limit", "100",
+  );
+  let ran = 0;
+  for (const e of epics) {
+    const branch = e.body.match(/`(epic\/[^`]+)`/)?.[1];
+    const milestone = e.milestone?.title;
+    if (!branch || !milestone || !tryGit(undefined, "ls-remote", "--exit-code", "--heads", "origin", branch)) continue;
+    const open = ghJson<{ number: number }[]>("issue", "list", "--state", "open", "--milestone", milestone, "--json", "number", "--limit", "200")
+      .filter((i) => i.number !== e.number);
+    if (open.length) continue;
+
+    let [pr] = ghJson<{ number: number; headRefOid: string }[]>("pr", "list", "--state", "open", "--head", branch, "--json", "number,headRefOid");
+    if (!pr) {
+      const url = gh("pr", "create", "--base", "main", "--head", branch, "--title", e.title, "--body",
+        `Closes #${e.number}\n\nEvery ticket in milestone **${milestone}** is done. Verification runs next.`);
+      log(`epic #${e.number} complete → ${url}`);
+      [pr] = ghJson<{ number: number; headRefOid: string }[]>("pr", "list", "--state", "open", "--head", branch, "--json", "number,headRefOid");
+      if (!pr) continue;
+    }
+    const verified = gh("api", `repos/${repo}/commits/${pr.headRefOid}/status`, "--jq", '[.statuses[] | select(.context=="verify-epic")][0].state // ""');
+    if (verified === "success" || verified === "failure") continue; // this commit is done
+
+    const verifyBranch = `agent/verify-${e.number}`;
+    git(undefined, "fetch", "--quiet", "origin", branch);
+    git(undefined, "branch", "-f", verifyBranch, `origin/${branch}`);
+    log(`verifying epic #${e.number} (PR #${pr.number} at ${pr.headRefOid.slice(0, 7)})`);
+    await sandcastle.run({
+      hooks,
+      sandbox: docker(),
+      name: `verify #${e.number}`,
+      maxIterations: 1,
+      branchStrategy: { type: "branch", branch: verifyBranch },
+      agent: sandcastle.claudeCode(WORKER),
+      promptFile: "./.sandcastle/verify-prompt.md",
+      promptArgs: { PR: String(pr.number), EPIC: String(e.number), SHA: pr.headRefOid, BRANCH: verifyBranch },
+    });
+    ran++;
+  }
+  return ran;
 }
 
 // ---------------------------------------------------------------------------
