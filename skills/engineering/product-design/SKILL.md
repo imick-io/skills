@@ -19,7 +19,7 @@ It can be called at any point in an epic's life: before its map to see where it 
 
 The input is an epic (issue or local path) or a plain description. A description means no tracker: skip every tracker step below and work on a branch named for the feature.
 
-1. **Load the epic**: its Destination, Notes and Design section; its map's Decisions so far and its spec, if they exist; `CONTEXT.md`; the area and owner in `docs/agents/team.md`. The tracker operations are in the tracker doc; if none has been provided, tell the user to run `/setup-imick-skills`.
+1. **Load the epic**: its Destination, Notes and Design section; its map's Decisions so far and its spec, if they exist; `GLOSSARY.md`; the area and owner in `docs/agents/team.md`. The tracker operations are in the tracker doc; if none has been provided, tell the user to run `/setup-imick-skills`.
 2. **Find the phase** in the Design section. No section yet means explore, from scratch. `agreed` or later means the work has moved to tickets: say so and stop unless the user asks to reopen the design.
 3. **Check out the epic branch** named in the epic's body. If it doesn't exist yet, create it from the default branch and tell the user.
 4. **Learn the UI stack**: the routing convention, the design system and component library, how data is fetched, and how the app is run (the `run` skill covers launching).

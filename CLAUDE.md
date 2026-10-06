@@ -7,8 +7,8 @@ My agent skills. `sources.json` maps every skill to where it comes from (my own,
 1. **Work on a branch and open a pull request**; `main` only moves through merged PRs.
 2. **Add a changeset** in the same PR for any change to a skill, a shared workflow, or the setup templates: `npx changeset`, then write the changelog entry for someone using the skills, not for someone reading the diff. Pick the bump:
    - **patch**: a fix or wording change that doesn't change what the skill does
-   - **minor**: a new skill, or new behaviour in an existing one
-   - **major**: anything that breaks an existing setup: a new required secret, a renamed label, a changed caller workflow, a removed or renamed skill. Projects pinned to `@v1` stay on v1 until moved by hand.
+   - **minor**: a new skill, new behaviour in an existing one, or a removed or renamed skill (say how to migrate in the changeset, e.g. a file to `git mv`)
+   - **major**: only a change that breaks the pinned workflows or their setup: a new required secret, renamed triage labels, a changed caller workflow. Projects pinned to `@v1` stay on v1 until moved by hand, so a major is reserved for what would break them.
    Repo plumbing (this file, CI, scripts) needs no changeset.
 3. **Regenerate** after adding, removing or moving a skill: `python3 skills/misc/update-from-upstream/scripts/sync.py regen` rebuilds the README tables, `plugin.json`'s skill list and `THIRD_PARTY_NOTICES.md` from `sources.json`. Never edit those by hand.
 

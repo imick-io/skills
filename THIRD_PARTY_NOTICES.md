@@ -7,43 +7,42 @@ Skills in this repo that come from other authors, and the licenses they are used
 
 From https://github.com/mattpocock/skills:
 
-- `ask-imick` ← `skills/engineering/ask-matt` @ `c55ee46`
-- `code-review` ← `skills/engineering/code-review` @ `c55ee46`
-- `codebase-design` ← `skills/engineering/codebase-design` @ `c55ee46`
-- `diagnosing-bugs` ← `skills/engineering/diagnosing-bugs` @ `c55ee46`
-- `domain-modeling` ← `skills/engineering/domain-modeling` @ `c55ee46`
-- `grill-with-docs` ← `skills/engineering/grill-with-docs` @ `c55ee46`
-- `implement` ← `skills/engineering/implement` @ `c55ee46`
-- `improve-codebase-architecture` ← `skills/engineering/improve-codebase-architecture` @ `c55ee46`
-- `prototype` ← `skills/engineering/prototype` @ `c55ee46`
-- `research` ← `skills/engineering/research` @ `c55ee46`
-- `resolving-merge-conflicts` ← `skills/engineering/resolving-merge-conflicts` @ `c55ee46`
-- `setup-imick-skills` ← `skills/engineering/setup-matt-pocock-skills` @ `c55ee46`
-- `tdd` ← `skills/engineering/tdd` @ `c55ee46`
-- `to-spec` ← `skills/engineering/to-spec` @ `c55ee46`
-- `to-tickets` ← `skills/engineering/to-tickets` @ `c55ee46`
-- `wayfinder` ← `skills/engineering/wayfinder` @ `c55ee46`
-- `wizard` ← `skills/engineering/wizard` @ `c55ee46`
-- `claude-handoff` ← `skills/in-progress/claude-handoff` @ `c55ee46`
-- `implement-spec` ← `skills/in-progress/implement-spec` @ `c55ee46`
-- `loop-me` ← `skills/in-progress/loop-me` @ `c55ee46`
-- `pr` ← `skills/in-progress/pr` @ `c55ee46`
-- `retro` ← `skills/in-progress/retro` @ `c55ee46`
-- `setup-ts-deep-modules` ← `skills/in-progress/setup-ts-deep-modules` @ `c55ee46`
-- `writing-beats` ← `skills/in-progress/writing-beats` @ `c55ee46`
-- `writing-fragments` ← `skills/in-progress/writing-fragments` @ `c55ee46`
-- `writing-shape` ← `skills/in-progress/writing-shape` @ `c55ee46`
-- `git-guardrails-claude-code` ← `skills/misc/git-guardrails-claude-code` @ `c55ee46`
-- `migrate-to-shoehorn` ← `skills/misc/migrate-to-shoehorn` @ `c55ee46`
-- `scaffold-exercises` ← `skills/misc/scaffold-exercises` @ `c55ee46`
-- `setup-pre-commit` ← `skills/misc/setup-pre-commit` @ `c55ee46`
-- `grill-me` ← `skills/productivity/grill-me` @ `c55ee46`
-- `grilling` ← `skills/productivity/grilling` @ `c55ee46`
-- `handoff` ← `skills/productivity/handoff` @ `c55ee46`
-- `teach` ← `skills/productivity/teach` @ `c55ee46`
-- `to-questionnaire` ← `skills/productivity/to-questionnaire` @ `c55ee46`
-- `wait-what` ← `skills/productivity/wait-what` @ `c55ee46`
-- `writing-for-agents` ← `skills/productivity/writing-for-agents` @ `c55ee46`
+- `ask-imick` ← `skills/engineering/ask-matt` @ `4588b32`
+- `code-review` ← `skills/engineering/code-review` @ `4588b32`
+- `codebase-design` ← `skills/engineering/codebase-design` @ `4588b32`
+- `diagnosing-bugs` ← `skills/engineering/diagnosing-bugs` @ `4588b32`
+- `domain-modeling` ← `skills/engineering/domain-modeling` @ `4588b32`
+- `grill-with-docs` ← `skills/engineering/grill-with-docs` @ `4588b32`
+- `implement` ← `skills/engineering/implement` @ `4588b32`
+- `implement-spec` ← `skills/engineering/implement-spec` @ `4588b32`
+- `improve-codebase-architecture` ← `skills/engineering/improve-codebase-architecture` @ `4588b32`
+- `pr` ← `skills/engineering/pr` @ `4588b32`
+- `prototype` ← `skills/engineering/prototype` @ `4588b32`
+- `research` ← `skills/engineering/research` @ `4588b32`
+- `retro` ← `skills/engineering/retro` @ `4588b32`
+- `setup-imick-skills` ← `skills/engineering/setup-matt-pocock-skills` @ `4588b32`
+- `tdd` ← `skills/engineering/tdd` @ `4588b32`
+- `to-spec` ← `skills/engineering/to-spec` @ `4588b32`
+- `to-tickets` ← `skills/engineering/to-tickets` @ `4588b32`
+- `wayfinder` ← `skills/engineering/wayfinder` @ `4588b32`
+- `wizard` ← `skills/engineering/wizard` @ `4588b32`
+- `claude-handoff` ← `skills/in-progress/claude-handoff` @ `4588b32`
+- `loop-me` ← `skills/in-progress/loop-me` @ `4588b32`
+- `setup-ts-deep-modules` ← `skills/in-progress/setup-ts-deep-modules` @ `4588b32`
+- `writing-beats` ← `skills/in-progress/writing-beats` @ `4588b32`
+- `writing-fragments` ← `skills/in-progress/writing-fragments` @ `4588b32`
+- `writing-shape` ← `skills/in-progress/writing-shape` @ `4588b32`
+- `git-guardrails-claude-code` ← `skills/misc/git-guardrails-claude-code` @ `4588b32`
+- `migrate-to-shoehorn` ← `skills/misc/migrate-to-shoehorn` @ `4588b32`
+- `scaffold-exercises` ← `skills/misc/scaffold-exercises` @ `4588b32`
+- `setup-pre-commit` ← `skills/misc/setup-pre-commit` @ `4588b32`
+- `grill-me` ← `skills/productivity/grill-me` @ `4588b32`
+- `grilling` ← `skills/productivity/grilling` @ `4588b32`
+- `handoff` ← `skills/productivity/handoff` @ `4588b32`
+- `teach` ← `skills/productivity/teach` @ `4588b32`
+- `to-questionnaire` ← `skills/productivity/to-questionnaire` @ `4588b32`
+- `wait-what` ← `skills/productivity/wait-what` @ `4588b32`
+- `writing-for-agents` ← `skills/productivity/writing-for-agents` @ `4588b32`
 
 ```
 MIT License
@@ -73,7 +72,7 @@ SOFTWARE.
 
 From https://github.com/cursor/plugins:
 
-- `thermo-nuclear-code-quality-review` ← `thermos/skills/thermo-nuclear-code-quality-review` @ `5102244`
+- `thermo-nuclear-code-quality-review` ← `thermos/skills/thermo-nuclear-code-quality-review` @ `df58112`
 
 ```
 MIT License
