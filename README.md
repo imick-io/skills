@@ -30,6 +30,7 @@ My own skills plus the ones I use from other authors, such as [Matt Pocock](http
 | [`ask-imick`](skills/engineering/ask-imick/SKILL.md) | Matt Pocock | Ask which skill or flow fits your situation. |
 | [`code-review`](skills/engineering/code-review/SKILL.md) | Matt Pocock | Review the changes since a fixed point (commit, branch, tag, or merge-base) along two axes: Standards (does the code follow this repo's documented coding standards?) and Spec (does the code match what the originating issue/spec asked for?). |
 | [`codebase-design`](skills/engineering/codebase-design/SKILL.md) | Matt Pocock | Shared vocabulary for designing deep modules. |
+| [`debug-and-fix`](skills/engineering/debug-and-fix/SKILL.md) | iMick | Take a bug from the ready-for-agent-debugging queue, diagnose it with diagnosing-bugs (reproducing UI bugs in the browser), fix it with a regression test when the diagnosis is clean, and report the outcome on the issue with the right labels. |
 | [`diagnosing-bugs`](skills/engineering/diagnosing-bugs/SKILL.md) | Matt Pocock | Diagnosis loop for hard bugs and performance regressions. |
 | [`do-work`](skills/engineering/do-work/SKILL.md) | iMick | Implements the approved plan from the same Claude Code session, executing per the plan's declared Approach (RGR or direct). |
 | [`domain-modeling`](skills/engineering/domain-modeling/SKILL.md) | Matt Pocock | Build and sharpen a project's domain model. |

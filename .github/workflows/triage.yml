@@ -89,7 +89,7 @@ jobs:
           if [ "$EVENT" != workflow_dispatch ] && [ -z "$MANUAL_ISSUE" ]; then
             if [ "$EVENT" = issues ] && [ "$ACTION" = opened ]; then
               # Already labelled at creation means a skill or a person shaped it.
-              for l in bug enhancement needs-scoping needs-info wontfix ready-for-agent ready-for-agent-debugging ready-for-human; do
+              for l in bug enhancement needs-scoping needs-info wontfix ready-for-agent ready-for-agent-debugging ready-for-human ready-for-review; do
                 has "$l" && skip "already triaged ($l)"
               done
             else

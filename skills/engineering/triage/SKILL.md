@@ -38,6 +38,8 @@ A triaged issue carries exactly one **what** role and exactly one **who** role, 
 | `needs-scoping` | `ready-for-human` | Too big for one brief; a person runs `/scope-decomposer` on it |
 | `needs-info` | `ready-for-human` | Can't be classified yet; the reporter answers the triage notes |
 | `wontfix` | `ready-for-human` | Already built, a duplicate, or rejected; a person confirms and closes it |
+| `bug` | `ready-for-human` | Set by `/debug-and-fix`: diagnosed, but the fix needs a person; the diagnosis is on the issue |
+| `bug` | `ready-for-review` | Set by `/debug-and-fix`: fixed, the PR waits for review and closes the issue on merge |
 
 **`enhancement` means small**: one brief, one agent session. Almost any real feature ask is bigger than that and is `needs-scoping`.
 
@@ -45,7 +47,7 @@ A triaged issue carries exactly one **what** role and exactly one **who** role, 
 
 These are canonical role names. The actual label strings are mapped in `docs/agents/triage-labels.md`. If it doesn't exist, tell the user to run `/setup-imick-skills`. If an issue carries roles outside the pairings above, flag it and ask before doing anything else.
 
-`ready-for-agent` and `ready-for-agent-debugging` are the agents' inbox; `ready-for-human` is the people's inbox, and `who` is about who acts next, not who builds.
+`ready-for-agent` and `ready-for-agent-debugging` are the agents' inbox; `ready-for-human` and `ready-for-review` are the people's inbox, and `who` is about who acts next, not who builds. Triage itself never sets the two pairings marked as set by `/debug-and-fix`.
 
 ## Areas and assignment
 
