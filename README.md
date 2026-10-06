@@ -2,6 +2,8 @@
 
 My agent skills, straight from my `.claude/skills` directory.
 
+**New here?** [How work flows](docs/workflow.md) shows the whole path from idea to merged code, and which skill runs each step.
+
 ## Installation
 
 ### Claude Code (plugin)
