@@ -96,6 +96,20 @@ def read_tree(src, commit, path):
     return files
 
 
+def changelog_since(src, commits, head, limit=12000):
+    """Lines the source added to its changelog since the oldest synced commit."""
+    d = cache_dir(src)
+    base = commits[0]
+    for c in commits[1:]:
+        if run(["git", "merge-base", "--is-ancestor", c, base], cwd=d, check=False).returncode == 0:
+            base = c
+    diff = run(["git", "diff", "--unified=0", base, head, "--", src["changelog_path"]],
+               cwd=d, check=False).stdout.decode()
+    added = [l[1:] for l in diff.splitlines() if l.startswith("+") and not l.startswith("+++")]
+    text = "\n".join(added).strip()
+    return text[:limit] + ("\n[…truncated]" if len(text) > limit else "")
+
+
 def git_show(src, commit, path):
     r = run(["git", "show", f"{commit}:{path}"], cwd=cache_dir(src), check=False)
     return r.stdout.decode() if r.returncode == 0 else None
@@ -186,11 +200,15 @@ def cmd_prepare(_):
     deleted upstream skills. Writes nothing to the repo."""
     m = load_map()
     report = {"started": datetime.datetime.now().isoformat(timespec="seconds"),
-              "heads": {}, "added": [], "moved": [], "deleted": [], "files": {}}
+              "heads": {}, "added": [], "moved": [], "deleted": [], "files": {}, "changelog": {}}
     for sid, src in m["sources"].items():
         head = fetch(src)
         report["heads"][sid] = head
         tracked = [e for e in m["skills"] if e["source"] == sid]
+        if src.get("changelog_path") and tracked:
+            notes = changelog_since(src, [e["synced_commit"] for e in tracked], head)
+            if notes:
+                report["changelog"][sid] = notes
         tracked_paths = {e["upstream_path"] for e in tracked}
         upstream = list_upstream_skills(src, head) if src["track"] == "all" else []
         untracked = [p for p in upstream if p not in tracked_paths and p not in src.get("declined", [])]
@@ -218,6 +236,8 @@ def cmd_prepare(_):
                                     "description": frontmatter(skill, "description")})
     save_report(report)
     print(json.dumps({k: report[k] for k in ("heads", "added", "moved", "deleted")}, indent=2))
+    for sid, notes in report["changelog"].items():
+        print(f"\n--- {sid} changelog since last sync ---\n{notes}")
 
 
 def merge_one(base, theirs, ours):

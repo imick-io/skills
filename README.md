@@ -123,20 +123,15 @@ A GitHub workflow that runs the [`triage`](skills/engineering/triage/SKILL.md) s
 
 ## Releasing
 
-Projects pin the shared workflows and the triage skill to a **version tag** (`@v1`), not to `main`, so a change here reaches them only when it's released. A test repo can follow `@main` to try changes first.
+Versions follow [semver](https://semver.org) and are managed with [Changesets](https://github.com/changesets/changesets); see [CHANGELOG.md](CHANGELOG.md) for what changed in each release.
 
-**Release a change** that keeps working with existing setups (better prompts, new checks, clearer comments):
+Projects pin the shared workflows and the triage skill to a **major tag** (`@v1`), so a change here reaches them only once it's released. A test repo can follow `@main` to try changes first.
 
-1. Push it to `main`.
-2. Try it in a repo that follows `@main`: open a test issue and check the result.
-3. Move the tag to the tested commit. Every project on `@v1` picks it up on its next run, with nothing to edit:
+1. Every change lands through a pull request with a changeset describing it (`npx changeset`): **patch** for fixes, **minor** for new skills or behaviour, **major** for anything that breaks an existing setup.
+2. The release workflow collects pending changesets into a **"chore: version skills"** pull request that bumps the version and writes the changelog.
+3. Merging it releases: the workflow tags `vX.Y.Z`, publishes a GitHub Release, and moves `v1` to it. Projects on `@v1` pick it up on their next run.
 
-   ```bash
-   git tag -f v1
-   git push -f origin v1
-   ```
-
-**Release a breaking change** (a new required secret, renamed labels, a changed caller workflow) as the next major tag instead, `v2`, and move each project over when it's ready: change `@v1` to `@v2` in its `.github/workflows/triage.yml`, or re-run `/setup-imick-skills`.
+A **major** release (`v2.0.0`) starts a new `v2` tag and leaves `v1` where it was. Move each project when it's ready: change `@v1` to `@v2` in its `.github/workflows/triage.yml`, or re-run `/setup-imick-skills`.
 
 ## License
 

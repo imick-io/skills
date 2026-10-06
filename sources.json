@@ -8,7 +8,8 @@
       "license_path": "LICENSE",
       "track": "all",
       "skills_root": "skills",
-      "declined": []
+      "declined": [],
+      "changelog_path": "CHANGELOG.md"
     },
     "cursor": {
       "repo": "cursor/plugins",

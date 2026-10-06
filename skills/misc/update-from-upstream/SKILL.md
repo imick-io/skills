@@ -19,7 +19,9 @@ Run every command as `python3 <this skill>/scripts/sync.py <command>` from the r
    - `moved`: a tracked skill found at a new upstream path (e.g. promoted from `in-progress/` to `engineering/`).
    - `deleted`: a tracked skill gone upstream.
 
-   Put all of them to the user in **one** round of questions, each with the skill's description and your recommendation:
+   For a source that keeps a changelog (`changelog_path` in `sources.json`), `prepare` also prints the entries added since the last sync. Use them: they give the source's own reasons for each change, so quote the relevant entry with every structural question, and when resolving conflicts in step 4.
+
+   Put all of them to the user in **one** round of questions, each with the skill's description, the source's changelog entry when there is one, and your recommendation:
    - added → `accept-new <source> <upstream_path>` (lands at the same category path, `--local-path` to override), or `decline <source> <upstream_path>` (remembered, never offered again).
    - moved → `move <local_path> <new_upstream_path>`, adding `--new-local-path` if the user wants the local folder to follow the new category.
    - deleted → `remove <local_path>`, or `detach <local_path>` to keep it as the user's own.
