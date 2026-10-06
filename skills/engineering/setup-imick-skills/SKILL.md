@@ -13,6 +13,7 @@ Scaffold the per-repo configuration that the engineering skills assume:
 - **Domain docs**: where `GLOSSARY.md` and ADRs live, and the consumer rules for reading them
 - **Team and areas**: the parts of the product, who owns each, and the people on each team
 - **Automatic triage** (optional, GitHub only): a workflow that triages each new issue
+- **Agent loop** (optional, GitHub only): Sandcastle agents that work the ready tickets
 
 This is a prompt-driven skill, not a deterministic script. Explore, present what you found, confirm with the user, then write.
 
@@ -35,7 +36,7 @@ Look at the current repo to understand its starting state. Read whatever exists;
 
 Summarise what's present and what's missing. Then take the sections in order. One section, one answer, then the next.
 
-Lead each section with the recommended answer so the user can accept it in a word. Give a one-line explainer only when the choice genuinely branches; skip the section entirely when exploration already settled it (Section B when `triage` isn't installed and Section E is declined, Section C when there's no monorepo).
+Lead each section with the recommended answer so the user can accept it in a word. Give a one-line explainer only when the choice genuinely branches; skip the section entirely when exploration already settled it (Section B when `triage` isn't installed and Section E is declined, Section C when there's no monorepo, Sections E and F off GitHub).
 
 **Section A: Issue tracker.**
 
@@ -86,6 +87,23 @@ Then, besides the files in step 4:
 - Remind them that workflows only run from the default branch: commit and push this setup there.
 
 **First time only** (the user has no token checks running anywhere yet): offer to walk them through the one-time steps with the `wizard` skill: creating the token, the two Slack webhooks, and the token checks. The token checks go in one repo that holds the same token, from [token-checks-caller.yml](./token-checks-caller.yml), with the repo or org variable `CLAUDE_TOKEN_CREATED` set to the token's creation date (`gh variable set CLAUDE_TOKEN_CREATED --body YYYY-MM-DD`). Suggest keeping a list of every repo holding the token: renewing it is then a checklist.
+
+**Section F: Agent loop.** GitHub only; skip otherwise. Ask:
+
+> Set up the agent loop? Agents in Docker sandboxes work this repo's `ready-for-agent` and `ready-for-agent-debugging` tickets: epic tickets land on the epic branch, the rest as PRs, and a finished epic opens its PR to `main`. You run it with `npm run agents` (or `-- --once` for one pass), on your machine while you work and on an always-on machine. (recommended: **yes** once the repo has an issue tracker and tickets)
+
+On **yes**:
+
+1. **Docker**: check `docker info` succeeds; if not, ask the user to start Docker Desktop (or install it) and wait.
+2. **Scaffold**: `npx @ai-hero/sandcastle init --agent claude-code --sandbox docker --template blank --issue-tracker github-issues --create-label false --build-image false --install-template-deps false`, then replace its files with this skill's [agent-loop/](./agent-loop/) folder: `main.mts`, the four prompts, `Dockerfile` and `.env.example`, all into `.sandcastle/`. Delete the scaffold's `prompt.md`.
+3. **Dependencies and script**: install `@ai-hero/sandcastle`, `zod` and `tsx` as dev dependencies with the project's package manager, and add the script `"agents": "tsx --env-file-if-exists=.sandcastle/.env .sandcastle/main.mts"`.
+4. **Image**: `npx sandcastle docker build-image`.
+5. **Secrets**: tell the user to copy `.sandcastle/.env.example` to `.sandcastle/.env` (gitignored) and fill it themselves; never ask for or handle the values:
+   - `CLAUDE_CODE_OAUTH_TOKEN`: the same clipboard routine as Section E, writing to the file instead of a secret.
+   - `GH_TOKEN`: a fine-grained token for this repo with **Issues: read and write** and **Metadata: read**. Agents in the sandbox use it to read tickets and comment; pushing and PRs happen on the host with the user's own `gh` login.
+6. **Labels**: make sure `ready-for-agent`, `ready-for-agent-debugging`, `ready-for-human` and `ready-for-review` exist.
+
+The loop needs the skills it calls committed in the repo (`implement`, `tdd`, `code-review`, `debug-and-fix`, `diagnosing-bugs`, and their dependencies): agents in the sandbox see only the repo. Check `.claude/skills/` and offer `npx skills@latest add imick-io/skills` for any missing.
 
 ### 3. Confirm and edit
 
