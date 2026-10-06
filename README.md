@@ -121,6 +121,60 @@ A GitHub workflow that runs the [`triage`](skills/engineering/triage/SKILL.md) s
 
 **Safety.** The run can only read the code and edit issues: its tools are limited to reading files and `gh issue` commands, and issue text is treated as data, never as instructions. Re-run a triage from the Actions tab with the issue number, or run `/triage #<n>` locally.
 
+## Agent loop
+
+Agents that work your tickets while you do something else. A [Sandcastle](https://github.com/mattpocock/sandcastle) loop runs in your project, picks up every issue labelled `ready-for-agent` or `ready-for-agent-debugging`, and works it in a Docker sandbox with the same skills you'd use by hand (`implement`, `debug-and-fix`, `code-review`).
+
+**What one pass does**
+
+1. **Finds the queue**: open, unassigned, unblocked `ready-for-agent` and `ready-for-agent-debugging` issues. Specs (from `to-spec`) are skipped: `to-tickets` turns them into tickets.
+2. **Plans**: an agent picks the tickets that can run in parallel without touching the same code (3 at most by default).
+3. **Claims** each ticket by assigning it. Two loops (an always-on machine and your laptop) never take the same ticket, and the assignee shows who's on what.
+4. **Prepares branches**: a ticket under an epic branches off the epic's branch (`epic/NN-slug`, created from `main` if needed) after `main` is merged into it. If that merge conflicts, the loop opens a `ready-for-human` "Resolve conflicts" ticket and skips the epic. Other tickets branch off `main`.
+5. **Builds and reviews**: one sandbox per ticket runs `implement` (or `debug-and-fix` for bugs), then a `code-review` pass.
+6. **Lands the work**:
+   - an **epic ticket** merges into the epic branch, which is pushed, and the ticket closes;
+   - a **standalone ticket** gets a PR with `Fixes #n`, and the issue moves to `ready-for-review`;
+   - a ticket with **no commits** (couldn't be built, or a bug that needs a person) moves to `ready-for-human` with the agent's explanation;
+   - an **epic whose milestone has no open tickets left** gets its PR to `main` (`Closes #epic`).
+
+Then it checks again. With nothing ready it sleeps (45 minutes by default); on a usage limit it sleeps an hour and posts once to Slack.
+
+**Install** with `/setup-imick-skills` (Section F) in your project. By hand:
+
+1. `npx @ai-hero/sandcastle init --agent claude-code --sandbox docker --template blank --issue-tracker github-issues --create-label false --build-image false --install-template-deps false`
+2. Replace the scaffold's `main.mts`/`main.ts` and `prompt.md` with the files in [`setup-imick-skills/agent-loop/`](skills/engineering/setup-imick-skills/agent-loop/) (the loop, four prompts, a Dockerfile with a headless Chromium, and `.env.example`), all into `.sandcastle/`.
+3. `npm i -D @ai-hero/sandcastle zod tsx`, and add the script `"agents": "tsx --env-file-if-exists=.sandcastle/.env .sandcastle/main.mts"`.
+4. Commit the skills the loop calls into `.claude/skills/` (`implement`, `tdd`, `code-review`, `debug-and-fix`, `diagnosing-bugs` and what they use): agents see only the repo.
+5. Start Docker, then build the image: `npx sandcastle docker build-image`.
+
+**Secrets** go in `.sandcastle/.env` (gitignored): `cp .sandcastle/.env.example .sandcastle/.env`, then fill each from your clipboard so no line break or masking sneaks in:
+
+```bash
+# Claude token (from `claude setup-token`, run in a regular terminal)
+sed -i '' "s|^CLAUDE_CODE_OAUTH_TOKEN=.*|CLAUDE_CODE_OAUTH_TOKEN=$(pbpaste | tr -d '[:space:]')|" .sandcastle/.env
+# A fine-grained GitHub token for this repo only: Issues read/write, Metadata read
+sed -i '' "s|^GH_TOKEN=.*|GH_TOKEN=$(pbpaste | tr -d '[:space:]')|" .sandcastle/.env
+```
+
+Agents use `GH_TOKEN` inside the sandbox to read and comment on issues. Pushing branches and opening PRs happen on your machine, with your own `gh` login (or the always-on machine's bot account).
+
+**Run**
+
+```bash
+npm run agents             # loop: works everything ready, sleeps when idle
+npm run agents -- --once   # one pass, then exit
+```
+
+Tune it in `.sandcastle/.env`: `AGENTS_IDLE_MINUTES` (45), `AGENTS_MAX_PARALLEL` (3), `AGENTS_PLANNER_MODEL`, `AGENTS_WORKER_MODEL`, and `SLACK_ALERTS_WEBHOOK_URL` for usage-limit and failure alerts.
+
+**Good to know**
+
+- The epic branch lives in its own worktree (`.sandcastle/worktrees/`), so the loop never switches the branch you're working on.
+- Runs count against the Claude plan behind `CLAUDE_CODE_OAUTH_TOKEN`; an idle loop costs nothing (each check is a `gh issue list`).
+- Nothing merges to `main` by itself: standalone work and finished epics arrive as PRs for you.
+- Each run leaves a log in `.sandcastle/logs/`.
+
 ## Releasing
 
 Versions follow [semver](https://semver.org) and are managed with [Changesets](https://github.com/changesets/changesets); see [CHANGELOG.md](CHANGELOG.md) for what changed in each release.
