@@ -56,6 +56,7 @@ My own skills plus the ones I use from other authors, such as [Matt Pocock](http
 
 | Skill | Source | What it does |
 | --- | --- | --- |
+| [`dig`](skills/productivity/dig/SKILL.md) | iMick | Dig into one grilling question in the background (why it matters, the options, what competitors do) and come back with a sharper recommendation. |
 | [`grill-me`](skills/productivity/grill-me/SKILL.md) | Matt Pocock | A relentless interview to sharpen a plan or design. |
 | [`grilling`](skills/productivity/grilling/SKILL.md) | Matt Pocock | Grill the user relentlessly about a plan, decision, or idea. |
 | [`handoff`](skills/productivity/handoff/SKILL.md) | Matt Pocock | Compact the current conversation into a handoff document for another agent to pick up. |

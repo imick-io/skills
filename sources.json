@@ -306,6 +306,11 @@
       "plugin": false
     },
     {
+      "local_path": "skills/productivity/dig",
+      "local_name": "dig",
+      "source": "own"
+    },
+    {
       "local_path": "skills/productivity/grill-me",
       "local_name": "grill-me",
       "source": "mattpocock",

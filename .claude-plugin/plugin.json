@@ -43,6 +43,7 @@
     "./skills/misc/migrate-to-shoehorn",
     "./skills/misc/scaffold-exercises",
     "./skills/misc/setup-pre-commit",
+    "./skills/productivity/dig",
     "./skills/productivity/grill-me",
     "./skills/productivity/grilling",
     "./skills/productivity/handoff",
