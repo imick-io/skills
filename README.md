@@ -175,6 +175,8 @@ Tune it in `.sandcastle/.env`: `AGENTS_IDLE_MINUTES` (45), `AGENTS_MAX_PARALLEL`
 - Nothing merges to `main` by itself: standalone work and finished epics arrive as PRs for you.
 - Each run leaves a log in `.sandcastle/logs/`.
 
+To run it around the clock on a spare Mac (never sleeping, reachable from your phone with Claude's Remote Control), see [docs/mac-setup.md](docs/mac-setup.md).
+
 ## Releasing
 
 Versions follow [semver](https://semver.org) and are managed with [Changesets](https://github.com/changesets/changesets); see [CHANGELOG.md](CHANGELOG.md) for what changed in each release.
