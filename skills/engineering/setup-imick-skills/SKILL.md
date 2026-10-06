@@ -14,6 +14,7 @@ Scaffold the per-repo configuration that the engineering skills assume:
 - **Team and areas**: the parts of the product, who owns each, and the people on each team
 - **Automatic triage** (optional, GitHub only): a workflow that triages each new issue
 - **Agent loop** (optional, GitHub only): Sandcastle agents that work the ready tickets
+- **Epic PRs** (optional, GitHub only): the epic-gate merge check and the closing chain
 
 This is a prompt-driven skill, not a deterministic script. Explore, present what you found, confirm with the user, then write.
 
@@ -36,7 +37,7 @@ Look at the current repo to understand its starting state. Read whatever exists;
 
 Summarise what's present and what's missing. Then take the sections in order. One section, one answer, then the next.
 
-Lead each section with the recommended answer so the user can accept it in a word. Give a one-line explainer only when the choice genuinely branches; skip the section entirely when exploration already settled it (Section B when `triage` isn't installed and Section E is declined, Section C when there's no monorepo, Sections E and F off GitHub).
+Lead each section with the recommended answer so the user can accept it in a word. Give a one-line explainer only when the choice genuinely branches; skip the section entirely when exploration already settled it (Section B when `triage` isn't installed and Section E is declined, Section C when there's no monorepo, Sections E, F and G off GitHub).
 
 **Section A: Issue tracker.**
 
@@ -100,10 +101,20 @@ On **yes**:
 4. **Image**: `npx sandcastle docker build-image`.
 5. **Secrets**: tell the user to copy `.sandcastle/.env.example` to `.sandcastle/.env` (gitignored) and fill it themselves; never ask for or handle the values:
    - `CLAUDE_CODE_OAUTH_TOKEN`: the same clipboard routine as Section E, writing to the file instead of a secret.
-   - `GH_TOKEN`: a fine-grained token for this repo with **Issues: read and write** and **Metadata: read**. Agents in the sandbox use it to read tickets and comment; pushing and PRs happen on the host with the user's own `gh` login.
+   - `GH_TOKEN`: a fine-grained token for this repo with **Issues: read and write**, **Metadata: read**, and for `verify-epic` **Commit statuses: read and write**, **Deployments: read** and **Pull requests: read**. Agents in the sandbox use it to read tickets and comment; pushing and PRs happen on the host with the user's own `gh` login.
 6. **Labels**: make sure `ready-for-agent`, `ready-for-agent-debugging`, `ready-for-human` and `ready-for-review` exist.
 
-The loop needs the skills it calls committed in the repo (`implement`, `tdd`, `code-review`, `debug-and-fix`, `diagnosing-bugs`, and their dependencies): agents in the sandbox see only the repo. Check `.claude/skills/` and offer `npx skills@latest add imick-io/skills` for any missing.
+The loop needs the skills it calls committed in the repo (`implement`, `tdd`, `code-review`, `debug-and-fix`, `diagnosing-bugs`, `verify-epic`, and their dependencies): agents in the sandbox see only the repo. Check `.claude/skills/` and offer `npx skills@latest add imick-io/skills` for any missing.
+
+**Section G: Epic PRs.** GitHub only, and only when the repo uses epics (`/scope-decomposer`). Ask:
+
+> Install the epic workflow? It adds the **epic-gate** check, which keeps an epic's PR unmergeable until its tickets are closed, no `mocks/` folder is left and `verify-epic` passed, and the **closing chain**, which closes an epic's milestone when the epic closes and its initiative when the last epic ships. (recommended: **yes** with the agent loop)
+
+On **yes**:
+
+1. Write `.github/workflows/epics.yml` from [epics-caller.yml](./epics-caller.yml), with the same `<REF>` choice as Section E.
+2. Write `docs/agents/preview.md` from [preview.md](./preview.md). Ask which **Source** applies: previews reported to GitHub (`github-deployments`, e.g. Vercel), a predictable URL (`url-pattern`, e.g. Coolify: ask for the pattern with `{number}`), or none (`local`). Ask whether previews are protected, and if so which environment variable names hold the credentials; the user puts the values in `.sandcastle/.env` themselves.
+3. **Make `epic-gate` a required check** on the default branch. This changes a repo setting: confirm first, then use the repo's existing branch protection (add `epic-gate` to its required status checks) or, if there is none, tell the user to add it under **Settings → Branches**. Every non-epic PR passes it automatically.
 
 ### 3. Confirm and edit
 

@@ -1,0 +1,131 @@
+# Shared epic workflow: the epic-gate merge check and the closing chain.
+# Projects call it from a short workflow of their own; see
+# skills/engineering/setup-imick-skills/epics-caller.yml. No Claude involved.
+name: Epics (shared)
+
+on:
+  workflow_call:
+    inputs:
+      epic-label:
+        type: string
+        default: epic
+      initiative-label:
+        type: string
+        default: initiative
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+  statuses: write
+
+jobs:
+  # Required check on main. Passes for any PR that isn't an epic's. For an epic
+  # PR (head epic/*), passes only when its milestone has no open tickets, no
+  # mocks/ folder is left, and the verify-epic status is green.
+  gate:
+    if: github.event_name != 'issues' || github.event.issue.milestone != null
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+      EVENT: ${{ github.event_name }}
+      EPIC_LABEL: ${{ inputs.epic-label }}
+    steps:
+      - name: Evaluate
+        run: |
+          set -euo pipefail
+          # Which PRs to evaluate depends on what happened.
+          case "$EVENT" in
+            pull_request)
+              prs='${{ github.event.pull_request.number }}' ;;
+            status)
+              [ '${{ github.event.context }}' = epic-gate ] && { echo "own status"; exit 0; }
+              prs=$(gh api "repos/$REPO/commits/${{ github.event.sha }}/pulls" --jq '[.[] | select(.state=="open") | .number] | join(" ")') ;;
+            issues)
+              # A ticket closed: re-check its epic's open PR.
+              milestone='${{ github.event.issue.milestone.title }}'
+              body=$(gh issue list --repo "$REPO" --state all --label "$EPIC_LABEL" --milestone "$milestone" --json body --jq '.[0].body // ""')
+              branch=$(grep -oE '`epic/[^`]+`' <<< "$body" | head -1 | tr -d '`' || true)
+              [ -n "$branch" ] || { echo "no epic for milestone $milestone"; exit 0; }
+              prs=$(gh pr list --repo "$REPO" --state open --head "$branch" --json number --jq '[.[].number] | join(" ")') ;;
+            *) prs="" ;;
+          esac
+
+          for pr in $prs; do
+            info=$(gh pr view "$pr" --repo "$REPO" --json headRefName,headRefOid,body)
+            head=$(jq -r .headRefName <<< "$info"); sha=$(jq -r .headRefOid <<< "$info")
+            post() { gh api "repos/$REPO/statuses/$sha" -f state="$1" -f context=epic-gate -f description="$2" > /dev/null; echo "#$pr: $1 ($2)"; }
+
+            if [[ "$head" != epic/* ]]; then post success "Not an epic PR"; continue; fi
+
+            reasons=()
+            epic=$(jq -r .body <<< "$info" | grep -oiE '(closes|fixes|resolves) #[0-9]+' | head -1 | grep -oE '[0-9]+' || true)
+            if [ -z "$epic" ]; then
+              reasons+=("no 'Closes #epic' in the PR body")
+            else
+              milestone=$(gh issue view "$epic" --repo "$REPO" --json milestone --jq '.milestone.title // ""')
+              if [ -n "$milestone" ]; then
+                open=$(gh issue list --repo "$REPO" --state open --milestone "$milestone" --json number --limit 200 --jq "[.[] | select(.number != $epic)] | length")
+                [ "$open" -eq 0 ] || reasons+=("$open open ticket(s)")
+              fi
+            fi
+            mocks=$(gh api "repos/$REPO/git/trees/$sha?recursive=1" --jq '[.tree[].path | select(test("(^|/)mocks(/|$)"))] | length')
+            [ "$mocks" -eq 0 ] || reasons+=("mocks/ left in the code")
+            verify=$(gh api "repos/$REPO/commits/$sha/status" --jq '[.statuses[] | select(.context=="verify-epic")][0].state // "missing"')
+            [ "$verify" = success ] || reasons+=("verify-epic $verify")
+
+            if [ ${#reasons[@]} -eq 0 ]; then post success "Ready to merge"
+            else post failure "$(printf '%s; ' "${reasons[@]}" | sed 's/; $//' | cut -c1-140)"; fi
+          done
+
+  # When an epic closes: close its milestone; when it was the initiative's last
+  # open epic, close the initiative, or comment if parked areas remain.
+  close-chain:
+    if: github.event_name == 'issues' && github.event.action == 'closed' && contains(github.event.issue.labels.*.name, inputs.epic-label)
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+      EPIC: ${{ github.event.issue.number }}
+      EPIC_LABEL: ${{ inputs.epic-label }}
+      INITIATIVE_LABEL: ${{ inputs.initiative-label }}
+      MILESTONE: ${{ github.event.issue.milestone.number }}
+    steps:
+      - name: Close the milestone
+        if: env.MILESTONE != ''
+        run: |
+          gh api --method PATCH "repos/$REPO/milestones/$MILESTONE" -f state=closed --jq '"closed milestone: " + .title'
+
+      - name: Close or nudge the initiative
+        run: |
+          set -euo pipefail
+          initiative=$(gh api "repos/$REPO/issues/$EPIC/parent" --jq "select([.labels[].name] | index(\"$INITIATIVE_LABEL\")) | .number" 2>/dev/null || true)
+          [ -n "$initiative" ] || { echo "epic #$EPIC has no initiative"; exit 0; }
+          [ "$(gh issue view "$initiative" --repo "$REPO" --json state --jq .state)" = OPEN ] || exit 0
+
+          open=$(gh api "repos/$REPO/issues/$initiative/sub_issues" --paginate --jq "[.[] | select(.state==\"open\" and ([.labels[].name] | index(\"$EPIC_LABEL\")))] | length")
+          [ "$open" -eq 0 ] || { echo "$open epic(s) still open"; exit 0; }
+          total=$(gh api "repos/$REPO/issues/$initiative/sub_issues" --paginate --jq "[.[] | select([.labels[].name] | index(\"$EPIC_LABEL\"))] | length")
+
+          # The "Not yet scoped" section, minus HTML comments and blank lines.
+          parked=$(gh issue view "$initiative" --repo "$REPO" --json body --jq .body \
+            | awk '/^## Not yet scoped/ { on = 1; next } /^## / { on = 0 } on' \
+            | sed -e 's/<!--.*-->//g' | grep -vE '^\s*$' || true)
+
+          note='> *This was generated by the epics workflow.*'
+          if [ -n "$parked" ]; then
+            gh issue comment "$initiative" --repo "$REPO" --body "$note
+
+          All $total epic(s) of this initiative are done. These areas were never scoped:
+
+          $parked
+
+          Run \`/scope-decomposer #$initiative\` to turn them into epics, or remove them from \"Not yet scoped\" and close this initiative."
+            echo "initiative #$initiative: parked areas remain"
+          else
+            gh issue close "$initiative" --repo "$REPO" --comment "$note
+
+          All $total epic(s) shipped. Closing this initiative."
+            echo "initiative #$initiative closed"
+          fi

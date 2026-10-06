@@ -1,0 +1,21 @@
+# Epic merge gate and closing chain. The workflow itself lives in
+# imick-io/skills; this file only says when to run it. Make "epic-gate" a
+# required status check on main for the gate to block merges.
+name: Epics
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, edited]
+  status:
+  issues:
+    types: [closed]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+  statuses: write
+
+jobs:
+  epics:
+    uses: imick-io/skills/.github/workflows/epics.yml@<REF>
