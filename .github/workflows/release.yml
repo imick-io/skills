@@ -23,25 +23,35 @@ jobs:
 
       - run: npm run check-plugin-version
 
-      # With pending changesets: opens or updates the "Version skills" PR.
-      # Once that PR is merged: tags the release (vX.Y.Z) and publishes it.
+      # With pending changesets: opens or updates the "chore: version skills" PR.
       - id: changesets
         uses: changesets/action@v1
         with:
           version: npm run version
-          publish: npx changeset tag
           commit: "chore: version skills"
           title: "chore: version skills"
-          createGithubReleases: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # Projects pin the shared workflows to the major tag (@v1): move it to
-      # the release just made. A new major (v2.0.0) starts a new tag and leaves
-      # the old one where it was.
-      - name: Move the major tag
-        if: steps.changesets.outputs.published == 'true'
+      # With none pending (the version PR was just merged, or nothing changed):
+      # release the current version if it isn't tagged yet, then move the major
+      # tag projects pin to (@v1). A new major starts a new tag and leaves the
+      # old one where it was.
+      - name: Release
+        if: steps.changesets.outputs.hasChangesets == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          major="v$(node -p "require('./package.json').version.split('.')[0]")"
+          set -euo pipefail
+          version=$(node -p "require('./package.json').version")
+          tag="v$version"
+          if git ls-remote --exit-code --tags origin "refs/tags/$tag" > /dev/null; then
+            echo "$tag is already released"; exit 0
+          fi
+          git tag "$tag"
+          git push origin "$tag"
+          awk -v h="## $version" '$0 == h { on = 1; next } /^## / { on = 0 } on' CHANGELOG.md > "$RUNNER_TEMP/notes.md"
+          gh release create "$tag" --title "$tag" --notes-file "$RUNNER_TEMP/notes.md"
+          major="v${version%%.*}"
           git tag -f "$major"
           git push -f origin "$major"
