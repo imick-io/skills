@@ -95,7 +95,7 @@ Then, besides the files in step 4:
 On **yes**:
 
 1. **Docker**: check `docker info` succeeds; if not, ask the user to start Docker Desktop (or install it) and wait.
-2. **Scaffold**: `npx @ai-hero/sandcastle init --agent claude-code --sandbox docker --template blank --issue-tracker github-issues --create-label false --build-image false --install-template-deps false`, then replace its files with this skill's [agent-loop/](./agent-loop/) folder: `main.mts`, the four prompts, `Dockerfile` and `.env.example`, all into `.sandcastle/`. Delete the scaffold's `prompt.md`.
+2. **Scaffold**: `npx @ai-hero/sandcastle init --agent claude-code --sandbox docker --template blank --issue-tracker github-issues --create-label false --build-image false --install-template-deps false`, then replace its files with this skill's [agent-loop/](./agent-loop/) folder: `main.mts`, the four prompts, `Dockerfile` and `.env.example`, all into `.sandcastle/`. Delete the scaffold's `prompt.md` and its `main.ts` (a `"type": "module"` project gets `main.ts` instead of `main.mts`).
 3. **Dependencies and script**: install `@ai-hero/sandcastle`, `zod` and `tsx` as dev dependencies with the project's package manager, and add the script `"agents": "tsx --env-file-if-exists=.sandcastle/.env .sandcastle/main.mts"`.
 4. **Image**: `npx sandcastle docker build-image`.
 5. **Secrets**: tell the user to copy `.sandcastle/.env.example` to `.sandcastle/.env` (gitignored) and fill it themselves; never ask for or handle the values:
