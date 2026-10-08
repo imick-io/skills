@@ -2,6 +2,8 @@
 
 From an idea, or an issue a teammate files, to merged code: who does each step (you, an agent, or a workflow), which skill or command runs it, and what it leaves behind.
 
+To actually start a project, follow [Running a new project](new-project.md); this page explains how the pieces fit.
+
 ```mermaid
 flowchart TD
   I[Issue filed] -->|triage workflow| T{Triage}
