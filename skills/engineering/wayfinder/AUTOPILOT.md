@@ -2,11 +2,11 @@
 
 Wayfinding without the human in every decision. The agent charts the map and resolves its decisions on its own, using confidence to decide what it can settle alone and research to settle the rest. The human's one checkpoint is the **spec**: every decision taken on autopilot is listed there, least confident first, for them to approve or correct.
 
-Autopilot is a property of the **map**: its Notes carry `Mode: autopilot`, optionally with a threshold (`Mode: autopilot 75`; 75 when omitted). Invoking `/wayfinder <epic or map> autopilot` writes that line; every later session on the map, a person's or the agent loop's, follows it. Everything in the main skill still holds (the map, tickets, fog, out of scope, blocking, the tracker operations) except what this file overrides.
+Autopilot is a property of the **epic**: its `autopilot` label, usually set at the end of its `/brief`. Invoking `/wayfinder <epic> autopilot` adds the label. Every session on the epic's map, a person's or the agent loop's, follows it. The threshold is 75 unless the map's Notes say otherwise (`Threshold: 80`); an older map whose Notes say `Mode: autopilot` counts too. Everything in the main skill still holds (the map, tickets, fog, out of scope, blocking, the tracker operations) except what this file overrides.
 
 ## Chart
 
-As in "Chart the map", but without the grilling: take the destination, Notes and Out of scope from the epic as given (an epic is required; without one, ask for the destination and stop there), survey the code with a subagent, and map the frontier yourself. Create the map with `Mode: autopilot` in its Notes, its tickets, and their blocking edges. Then carry on working through it in the same session.
+As in "Chart the map", but without the grilling: take the destination, Notes, Out of scope and **Brief** from the epic as given, every Brief line as a decision already made at 100% (an epic is required; without one, ask for the destination and stop there), survey the code with a subagent, and map the frontier yourself. Create the map (its Notes link the Brief), its tickets, and their blocking edges. A question the Brief already answers is no ticket: record it in Decisions so far as "From the brief". Then carry on working through it in the same session.
 
 ## Work through the map
 
@@ -36,7 +36,7 @@ Done when the map has no open tickets except parked tasks. If parked tasks block
 
 When the way is clear, read the `to-spec` skill's SKILL.md and follow it, then shape what it published:
 
-- Append a **Decided on autopilot** section: every decision on the map, **lowest confidence first**, one line each with its percentage, `assumed` where it applies, and a link to its ticket.
+- Append a **Decided on autopilot** section: every decision the agent took (the Brief's are the human's, and stay out of it), **lowest confidence first**, one line each with its percentage, `assumed` where it applies, and a link to its ticket.
 - Labels: add `spec` and `ready-for-human`, remove `ready-for-agent`. Put it in the epic's milestone and assign the epic's owner.
 - Comment, starting with the AI disclaimer, asking for review: approve by adding the `spec-approved` label, or comment what to change.
 

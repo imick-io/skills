@@ -104,13 +104,13 @@ Ruling something out of scope is a scoping act, not a step on the route. When a 
 
 Two modes. Either way, **never resolve more than one ticket per session**, with the exception of research tickets.
 
-**Autopilot.** When invoked with `autopilot`, or when the map's Notes say `Mode: autopilot`, read [AUTOPILOT.md](AUTOPILOT.md): it overrides the human-in-the-loop parts of both modes.
+**Autopilot.** When the epic carries the `autopilot` label (or the map's Notes say `Mode: autopilot`), read [AUTOPILOT.md](AUTOPILOT.md): it overrides the human-in-the-loop parts of both modes. Invoking with `autopilot` adds the label to the epic.
 
 ### Chart the map
 
 User invokes with a loose idea, or with an **epic** (an issue labelled `epic`, from `/scope-decomposer`).
 
-1. **Name the destination.** Given an epic, its Destination, Notes and Out of scope are the starting point: confirm the destination with the user and sharpen it, rather than deriving it afresh. Otherwise, call the Skill tool twice, for "grilling" and "domain-modeling", to pin down what this map is finding its way to: the spec, decision, or change. The destination fixes the scope, so it's settled first.
+1. **Name the destination.** Given an epic, its Destination, Notes, Out of scope and **Brief** are the starting point (every Brief line is the human's settled decision; don't re-open it): confirm the destination with the user and sharpen it, rather than deriving it afresh. Otherwise, call the Skill tool twice, for "grilling" and "domain-modeling", to pin down what this map is finding its way to: the spec, decision, or change. The destination fixes the scope, so it's settled first.
 2. **Map the frontier.** Grill again, **breadth-first** this time: fan out across the whole space rather than deep on any one thread, surfacing the open decisions and the first steps takeable now. **If this surfaces no fog** (the way to the destination is already clear, the whole journey small enough for one session), you don't need a map. Stop and ask the user how they'd like to proceed.
 3. **Create the map** (label `wayfinder:map`): Destination and Notes filled in, Decisions-so-far empty, the fog sketched into **Not yet specified**. A map for an epic carries the epic's Out of scope over, and is created under the epic as the tracker doc's "Initiatives and epics" section describes.
 4. **Create the tickets you can specify now** as child issues of the map, then wire blocking edges in a **second pass** (issues need ids before they can reference each other). Wiring sorts them into the frontier and the blocked; everything you can't yet specify stays in the fog: the **Not yet specified** section.
