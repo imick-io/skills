@@ -165,9 +165,12 @@ Agents use `GH_TOKEN` inside the sandbox to read and comment on issues. Pushing 
 **Run**
 
 ```bash
-npm run agents             # loop: works everything ready, sleeps when idle
-npm run agents -- --once   # one pass, then exit
+npm run agents                  # loop: works everything ready, sleeps when idle
+npm run agents -- --once        # one pass, then exit
+npm run agents -- --autopilot   # also plans epics on autopilot (combine with --once)
 ```
+
+**Autopilot planning** (`--autopilot`), for projects where you don't need a say in every decision. Each pass also plans the unblocked epics: it charts a wayfinder map for an epic nobody has started, in autopilot mode, then resolves its decisions alone: anything at 75% confidence or more is decided, anything below is researched with `dig` first and, if still unsure, decided as **assumed**. Tasks that need you (an account, access) are parked as `ready-for-human`. When the way is clear it writes the spec with a **Decided on autopilot** section (every decision, least confident first), labels it `ready-for-human` and pings Slack. **Approve** by adding the `spec-approved` label, and the next pass cuts the tickets and the build begins; **request changes** with a comment, and the next pass revises the spec. Epics you plan by hand (`/wayfinder` without `autopilot`) are never touched. The same mode works by hand: `/wayfinder <epic> autopilot`.
 
 Tune it in `.sandcastle/.env`: `AGENTS_IDLE_MINUTES` (45), `AGENTS_MAX_PARALLEL` (3), `AGENTS_PLANNER_MODEL`, `AGENTS_WORKER_MODEL`, and `SLACK_ALERTS_WEBHOOK_URL` for usage-limit and failure alerts.
 
