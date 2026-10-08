@@ -64,7 +64,7 @@ The loop runs per project (see [Agent loop](../README.md#agent-loop)). On this M
 
 **Docker Desktop**: install it, then **Settings → General → Start Docker Desktop when you sign in: on**. Give it enough memory for parallel agents (**Resources**: 8 GB or more if the Mac has it).
 
-**Each project**: clone it (e.g. into `~/Projects/`), run `npm install`, set up the loop (`/setup-imick-skills`, Section F), fill `.sandcastle/.env`, and test one pass: `npm run agents -- --once`.
+**Each project**: clone it (e.g. into `~/Projects/`), run `npm install`, fill `.sandcastle/.env` with the bot's tokens, and test one pass: `npm run agents -- --once`. The project is set up once, on any machine, following [Running a new project](new-project.md); the Mac only needs the clone and its own `.env`. If your laptop also runs the loop for a project, give one of them `--no-planning` when you'd rather keep planning on a single machine.
 
 **Run it as a service**: one launchd agent per project, restarted if it stops. Save as `~/Library/LaunchAgents/io.imick.agents.<project>.plist`, replacing `<project>`, `<you>` and the path:
 

@@ -1,6 +1,6 @@
 ---
 name: scope-decomposer
-description: Break a big idea, product, feature, existing project or broad issue into an initiative of epics on the issue tracker, each one ready for /wayfinder.
+description: Break a big idea, product, feature, existing project or broad issue into an initiative of epics on the issue tracker, each one ready for /brief and then /wayfinder.
 disable-model-invocation: true
 ---
 
@@ -33,10 +33,10 @@ The input is an idea in prose, an issue (often labelled `needs-scoping` by triag
 
 4. **Publish**, in this order:
    1. The **initiative**. From an existing issue, keep its text, append the sections below, and swap any triage labels (`needs-scoping`, `ready-for-human`) for `initiative`. Label it with every area its epics use, and assign the owner the user named.
-   2. Each **epic**, in build order: its milestone (next free repo-wide number), the issue (label `epic` + its area, in its milestone, assigned to the area's default person, linked under the initiative).
+   2. Each **epic**, in build order: its milestone (next free repo-wide number), the issue (labels `epic`, `needs-briefing` and `ready-for-human` + its area, in its milestone, assigned to the area's default person, linked under the initiative).
    3. Blocking edges between epics, in a second pass once every epic has an id.
 
-5. **Hand off.** Report what was created, by name with links, and name the first epic nothing blocks: "Start with `/wayfinder <epic>` (<milestone title>)."
+5. **Hand off.** Report what was created, by name with links. Every epic waits for its brief: "Next, run `/brief` to brief the epics, starting with <first epic nothing blocks> (<milestone title>); each brief ends by choosing manual or autopilot planning."
 
 ## Bodies
 

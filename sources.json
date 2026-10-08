@@ -33,6 +33,11 @@
       "synced_commit": "4588b32ecab9ecc9fc8cc6b6c5e7d675b6004b0d"
     },
     {
+      "local_path": "skills/engineering/brief",
+      "local_name": "brief",
+      "source": "own"
+    },
+    {
       "local_path": "skills/engineering/code-review",
       "local_name": "code-review",
       "source": "mattpocock",

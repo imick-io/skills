@@ -2,7 +2,12 @@
 
 My agent skills, straight from my `.claude/skills` directory.
 
-**New here?** [How work flows](docs/workflow.md) shows the whole path from idea to merged code, and which skill runs each step.
+## Documentation
+
+- **[Running a new project](docs/new-project.md)**: the step-by-step checklist, from an empty repo to agents shipping epics, plus the daily check and troubleshooting.
+- **[How work flows](docs/workflow.md)**: the whole path from idea to merged code, who does each step, and the labels and branches involved.
+- **[Always-on Mac](docs/mac-setup.md)**: a spare Mac that never sleeps, runs the agent loop, and lets you use Claude on it from your phone.
+- The sections below are the reference for each piece: installation, the skills, automatic triage, the agent loop, epic PRs, and releasing.
 
 ## Installation
 
@@ -30,6 +35,7 @@ My own skills plus the ones I use from other authors, such as [Matt Pocock](http
 | Skill | Source | What it does |
 | --- | --- | --- |
 | [`ask-imick`](skills/engineering/ask-imick/SKILL.md) | Matt Pocock | Ask which skill or flow fits your situation. |
+| [`brief`](skills/engineering/brief/SKILL.md) | iMick | Brief an epic before it's planned - a short, high-level grill-with-docs session that captures what you already have in mind, then choose whether wayfinder runs on it manually or on autopilot. |
 | [`code-review`](skills/engineering/code-review/SKILL.md) | Matt Pocock | Review the changes since a fixed point (commit, branch, tag, or merge-base) along two axes: Standards (does the code follow this repo's documented coding standards?) and Spec (does the code match what the originating issue/spec asked for?). |
 | [`codebase-design`](skills/engineering/codebase-design/SKILL.md) | Matt Pocock | Shared vocabulary for designing deep modules. |
 | [`debug-and-fix`](skills/engineering/debug-and-fix/SKILL.md) | iMick | Take a bug from the ready-for-agent-debugging queue, diagnose it with diagnosing-bugs (reproducing UI bugs in the browser), fix it with a regression test when the diagnosis is clean, and report the outcome on the issue with the right labels. |
@@ -47,7 +53,7 @@ My own skills plus the ones I use from other authors, such as [Matt Pocock](http
 | [`research`](skills/engineering/research/SKILL.md) | Matt Pocock | Investigate a question against high-trust primary sources and capture the findings as a Markdown file in the repo. |
 | [`retro`](skills/engineering/retro/SKILL.md) | Matt Pocock | Conduct a retrospective on a coding session. |
 | [`review-work`](skills/engineering/review-work/SKILL.md) | iMick | Refactor-only review pass over a recent commit. |
-| [`scope-decomposer`](skills/engineering/scope-decomposer/SKILL.md) | iMick | Break a big idea, product, feature, existing project or broad issue into an initiative of epics on the issue tracker, each one ready for /wayfinder. |
+| [`scope-decomposer`](skills/engineering/scope-decomposer/SKILL.md) | iMick | Break a big idea, product, feature, existing project or broad issue into an initiative of epics on the issue tracker, each one ready for /brief and then /wayfinder. |
 | [`setup-imick-skills`](skills/engineering/setup-imick-skills/SKILL.md) | Matt Pocock | Configure this repo for the engineering skills: set up its issue tracker, triage label vocabulary, and domain doc layout. |
 | [`tdd`](skills/engineering/tdd/SKILL.md) | Matt Pocock | Test-driven development. |
 | [`thermo-nuclear-code-quality-review`](skills/engineering/thermo-nuclear-code-quality-review/SKILL.md) | Cursor | Run an extremely strict maintainability review for abstraction quality, giant files, and spaghetti-condition growth. |
@@ -165,12 +171,12 @@ Agents use `GH_TOKEN` inside the sandbox to read and comment on issues. Pushing 
 **Run**
 
 ```bash
-npm run agents                  # loop: works everything ready, sleeps when idle
-npm run agents -- --once        # one pass, then exit
-npm run agents -- --autopilot   # also plans epics on autopilot (combine with --once)
+npm run agents                    # loop: plans autopilot epics, works everything ready, sleeps when idle
+npm run agents -- --once          # one pass, then exit
+npm run agents -- --no-planning   # build only: leave planning to another machine
 ```
 
-**Autopilot planning** (`--autopilot`), for projects where you don't need a say in every decision. Each pass also plans the unblocked epics: it charts a wayfinder map for an epic nobody has started, in autopilot mode, then resolves its decisions alone: anything at 75% confidence or more is decided, anything below is researched with `dig` first and, if still unsure, decided as **assumed**. Tasks that need you (an account, access) are parked as `ready-for-human`. When the way is clear it writes the spec with a **Decided on autopilot** section (every decision, least confident first), labels it `ready-for-human` and pings Slack. **Approve** by adding the `spec-approved` label, and the next pass cuts the tickets and the build begins; **request changes** with a comment, and the next pass revises the spec. Epics you plan by hand (`/wayfinder` without `autopilot`) are never touched. The same mode works by hand: `/wayfinder <epic> autopilot`.
+**Autopilot planning**, per epic. Every epic from `/scope-decomposer` waits for a **`/brief`**: a short, high-level session where you say what you already have in mind (must-haves, no-gos, the big product calls), saved in the epic's Brief section, the glossary and ADRs. The brief ends with **autopilot or manual?** An epic labelled `autopilot` is planned by the loop: it runs wayfinder on it by itself, takes every Brief line as decided, decides the rest (75% confidence or more directly, below that after researching it with `dig`, still unsure as **assumed**), parks tasks that need you as `ready-for-human`, and writes the spec with a **Decided on autopilot** section (least confident first). The spec waits on `ready-for-human` and Slack pings you: **approve** with the `spec-approved` label and the next pass cuts the tickets; **request changes** with a comment and the next pass revises it. Epics without the label are yours to plan with `/wayfinder <epic>`, and the loop never touches them.
 
 Tune it in `.sandcastle/.env`: `AGENTS_IDLE_MINUTES` (45), `AGENTS_MAX_PARALLEL` (3), `AGENTS_PLANNER_MODEL`, `AGENTS_WORKER_MODEL`, and `SLACK_ALERTS_WEBHOOK_URL` for usage-limit and failure alerts.
 

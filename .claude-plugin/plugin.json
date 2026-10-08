@@ -16,6 +16,7 @@
   ],
   "skills": [
     "./skills/engineering/ask-imick",
+    "./skills/engineering/brief",
     "./skills/engineering/code-review",
     "./skills/engineering/codebase-design",
     "./skills/engineering/debug-and-fix",
