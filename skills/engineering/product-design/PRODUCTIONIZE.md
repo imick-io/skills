@@ -6,9 +6,9 @@ The user has said the design is agreed. Turn the mockup into a spec and producti
 
 2. **Mark it agreed.** Update the Design section: `**Phase:** agreed`, an **Agreed screenshots** line linking the `design/NN-<slug>` branch, and **Next:** "Writing the UI spec and tickets."
 
-3. **Write the UI spec.** Call the Skill tool with "to-spec". Its input is this design: the agreed behaviours from the conversation (rules, interactions, what happens on save, on error, on leaving with unsaved edits), the mockup's routes and the screenshots. Title it `UI spec: <epic>`, publish it under the epic in its milestone, and link the map's spec when one exists. It stays a separate issue so neither spec grows toward the tracker's size limit.
+3. **Write the UI spec.** Read the `to-spec` skill's SKILL.md and follow it. Its input is this design: the agreed behaviours from the conversation (rules, interactions, what happens on save, on error, on leaving with unsaved edits), the mockup's routes and the screenshots. Title it `UI spec: <epic>`, label it `spec` (removing the `ready-for-agent` that `to-spec` applies: specs are never built directly), publish it under the epic in its milestone, and link the map's spec when one exists. It stays a separate issue so neither spec grows toward the tracker's size limit.
 
-4. **Cut the tickets.** Call the Skill tool with "to-tickets", reading the UI spec and the mockup. Cut them as:
+4. **Cut the tickets.** Read the `to-tickets` skill's SKILL.md and follow it, reading the UI spec and the mockup. Cut them as:
    1. **Foundation**: the shared components and the data boundary (a hook or client the screens read from, backed by the `mocks/` data for now). Every other UI ticket is blocked by it.
    2. **One ticket per screen or region**: upgraded to production end to end, on the design system, with every state the UI spec lists (empty, loading, error, edge cases).
    3. **Replace mock data with the real API**: deletes the `mocks/` folder and points the data boundary at the real backend. Blocked by the backend tickets that provide that API; if they don't exist yet, say so in its body.

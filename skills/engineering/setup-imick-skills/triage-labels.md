@@ -15,6 +15,8 @@ A triaged issue carries one **what** role and one **who** role; `needs-triage` m
 | `ready-for-agent` | who | `ready-for-agent` | An agent builds it from the brief |
 | `ready-for-human` | who | `ready-for-human` | A person acts next |
 | `ready-for-review` | who | `ready-for-review` | A fix PR waits for a person's review |
+| `spec` | (planning) | `spec` | A spec, read by `/to-tickets`, never built directly |
+| `spec-approved` | (planning) | `spec-approved` | A person approved an autopilot spec; tickets can be cut |
 | `needs-triage` | (transient) | `needs-triage` | Triage hasn't finished |
 
 When a skill mentions a role, use the label string from this table. Edit the third column to match whatever vocabulary you actually use.

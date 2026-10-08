@@ -104,6 +104,8 @@ Ruling something out of scope is a scoping act, not a step on the route. When a 
 
 Two modes. Either way, **never resolve more than one ticket per session**, with the exception of research tickets.
 
+**Autopilot.** When invoked with `autopilot`, or when the map's Notes say `Mode: autopilot`, read [AUTOPILOT.md](AUTOPILOT.md): it overrides the human-in-the-loop parts of both modes.
+
 ### Chart the map
 
 User invokes with a loose idea, or with an **epic** (an issue labelled `epic`, from `/scope-decomposer`).

@@ -50,7 +50,7 @@ You decide; agents do the legwork; workflows keep the tracker tidy. Nothing reac
 
 **2. Scope.** A big idea, yours or a `needs-scoping` issue, goes through `/scope-decomposer`: a high-level interview, then an **initiative** issue with **epics** under it. Each epic has one destination, one area (and so one owner), its own milestone (`NN: Initiative / Epic`) and branch (`epic/NN-slug`), and blocking links to the epics it waits on. Parts too vague to bound stay in the initiative's "Not yet scoped" list until a later run.
 
-**3. Plan.** For each epic, in build order: `/wayfinder <epic>` charts the decisions it needs and works through them with you, one at a time (`/dig` researches a question you can't settle on instinct). `/product-design <epic>` can run at any point to build the real UI on mock data until you say "we agree". Both leave their decisions on the tracker.
+**3. Plan.** For each epic, in build order: `/wayfinder <epic>` charts the decisions it needs and works through them with you, one at a time (`/dig` researches a question you can't settle on instinct). `/product-design <epic>` can run at any point to build the real UI on mock data until you say "we agree". Both leave their decisions on the tracker. For projects where you don't need a say in every decision, `/wayfinder <epic> autopilot` (or the loop with `--autopilot`) decides alone: confident answers directly, uncertain ones after `dig`, the rest marked *assumed*. You then review just the spec, which lists every decision least confident first, and approve it with the `spec-approved` label.
 
 **4. Tickets.** Once the way is clear, `/to-spec` writes the spec and `/to-tickets` cuts it into tickets labelled `ready-for-agent`, each in the epic's milestone, with its blockers. `/product-design` does the same for the agreed UI.
 
@@ -73,6 +73,8 @@ You decide; agents do the legwork; workflows keep the tracker tidy. Nothing reac
 | `ready-for-human` | A person acts next | The assignee |
 | `ready-for-review` | A fix PR waits | Review the linked PR |
 | `initiative` / `epic` | Planning issues from `/scope-decomposer` | |
+| `spec` | A spec, turned into tickets by `/to-tickets` | |
+| `spec-approved` | You approved an autopilot spec | The loop cuts its tickets |
 | `wayfinder:*` | A wayfinder map and its decision tickets | `/wayfinder` |
 | `area:*` | Which part of the product, and so who owns it | `docs/agents/team.md` |
 
