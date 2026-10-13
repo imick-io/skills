@@ -103,6 +103,7 @@ On **yes**:
    - `CLAUDE_CODE_OAUTH_TOKEN`: the same clipboard routine as Section E, writing to the file instead of a secret.
    - `GH_TOKEN`: a fine-grained token for this repo with **Issues: read and write**, **Metadata: read**, and for `verify-epic` **Commit statuses: read and write**, **Deployments: read** and **Pull requests: read**. Agents in the sandbox use it to read tickets and comment; pushing and PRs happen on the host with the user's own `gh` login.
 6. **Labels**: make sure `ready-for-agent`, `ready-for-agent-debugging`, `ready-for-human` and `ready-for-review` exist.
+7. **Tracker page**: copy the `tracker` skill's [build.mjs](../tracker/build.mjs) to `tracker/build.mjs` and add `tracker/index.html` to `.gitignore`. The loop rebuilds the page before and after every pass; `node tracker/build.mjs` builds and opens it by hand.
 
 The loop needs the skills it calls committed in the repo (`implement`, `tdd`, `code-review`, `debug-and-fix`, `diagnosing-bugs`, `verify-epic`, and their dependencies; for planning `autopilot` epics also `wayfinder`, `dig`, `research`, `to-spec`, `to-tickets` and `prototype`): agents in the sandbox see only the repo. Check `.claude/skills/` and offer `npx skills@latest add imick-io/skills` for any missing.
 
