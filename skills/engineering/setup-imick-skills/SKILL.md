@@ -37,7 +37,7 @@ Look at the current repo to understand its starting state. Read whatever exists;
 
 Summarise what's present and what's missing. Then take the sections in order. One section, one answer, then the next.
 
-Lead each section with the recommended answer so the user can accept it in a word. Give a one-line explainer only when the choice genuinely branches; skip the section entirely when exploration already settled it (Section B when `triage` isn't installed and Section E is declined, Section C when there's no monorepo, Sections E, F and G off GitHub).
+Lead each section with the recommended answer so the user can accept it in a word. Give a one-line explainer only when the choice genuinely branches; skip the section entirely when exploration already settled it (Section B when `triage` isn't installed and Section E is declined, Section C when there's no monorepo, Sections E, F, G and H off GitHub).
 
 **Section A: Issue tracker.**
 
@@ -115,6 +115,12 @@ On **yes**:
 1. Write `.github/workflows/epics.yml` from [epics-caller.yml](./epics-caller.yml), with the same `<REF>` choice as Section E.
 2. Write `docs/agents/preview.md` from [preview.md](./preview.md). Ask which **Source** applies: previews reported to GitHub (`github-deployments`, e.g. Vercel), a predictable URL (`url-pattern`, e.g. Coolify: ask for the pattern with `{number}`), or none (`local`). Ask whether previews are protected, and if so which environment variable names hold the credentials; the user puts the values in `.sandcastle/.env` themselves.
 3. **Make `epic-gate` a required check** on the default branch. This changes a repo setting: confirm first, then use the repo's existing branch protection (add `epic-gate` to its required status checks) or, if there is none, tell the user to add it under **Settings → Branches**. Every non-epic PR passes it automatically.
+
+**Section H: Tracker page.** GitHub only; skip otherwise, and when `tracker/build.mjs` already exists. Ask:
+
+> Add the tracker page? `node tracker/build.mjs` builds a page from this repo's issues: what waits on you next, specs to approve, the epics' roadmap, and each epic's board with what blocks what. The agent loop rebuilds it before and after every pass. (recommended: **yes** with the agent loop or epics)
+
+On **yes**: copy the `tracker` skill's [build.mjs](../tracker/build.mjs) to `tracker/build.mjs`, add `tracker/index.html` to `.gitignore`, and run `node tracker/build.mjs` once to show it.
 
 ### 3. Confirm and edit
 

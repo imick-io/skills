@@ -26,6 +26,9 @@
 //      /verify-epic, once per commit; its failures become tickets that the
 //      next pass picks up, and its status feeds the epic-gate merge check.
 //
+// Before and after every pass the issue tracker page (tracker/index.html)
+// is rebuilt, so an open tracker tab follows the loop.
+//
 // Adapted from Sandcastle's parallel-planner-with-review template
 // (https://github.com/mattpocock/sandcastle, MIT).
 
@@ -292,6 +295,7 @@ async function pass(): Promise<number> {
       continue;
     }
     land(t, epicPath);
+    syncTracker();
   }
 
   return planned + work.length + (await verifyEpics());
@@ -482,9 +486,20 @@ async function verifyEpics(): Promise<number> {
 // Loop
 // ---------------------------------------------------------------------------
 
+// The tracker page is a convenience: a failed rebuild is logged, never fatal.
+function syncTracker() {
+  if (!existsSync("tracker/build.mjs")) return;
+  try {
+    execFileSync(process.execPath, ["tracker/build.mjs", "--no-open"], { stdio: "ignore", timeout: 120_000 });
+  } catch (error) {
+    log(`tracker rebuild failed: ${String(error).slice(0, 200)}`);
+  }
+}
+
 let limitAlerted = false;
 for (;;) {
   let worked = 0;
+  syncTracker();
   try {
     worked = await pass();
     limitAlerted = false;
@@ -498,8 +513,10 @@ for (;;) {
       continue;
     }
     await alert(`Agent loop pass failed: ${message.slice(0, 500)}`);
+    syncTracker();
     if (ONCE) process.exit(1);
   }
+  syncTracker();
   if (ONCE) break;
   if (!worked) {
     log(`nothing ready; sleeping ${IDLE_MINUTES} min`);
