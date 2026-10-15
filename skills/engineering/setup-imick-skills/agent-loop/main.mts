@@ -95,6 +95,16 @@ const tryGit = (cwd: string | undefined, ...args: string[]) => {
     return false;
   }
 };
+// A run that died leaves its sandbox worktree behind, holding the branch and
+// blocking `git branch -f` on the next pass: remove it first.
+const freeBranch = (branch: string) => {
+  const list = git(undefined, "worktree", "list", "--porcelain");
+  for (const block of list.split("\n\n")) {
+    const path = block.match(/^worktree (.+)$/m)?.[1];
+    if (path && block.split("\n").includes(`branch refs/heads/${branch}`)) tryGit(undefined, "worktree", "remove", "--force", path);
+  }
+  tryGit(undefined, "worktree", "prune");
+};
 const log = (msg: string) => console.log(`[agents ${new Date().toISOString()}] ${msg}`);
 const repo = gh("repo", "view", "--json", "nameWithOwner", "--jq", ".nameWithOwner");
 const me = gh("api", "user", "--jq", ".login");
@@ -417,6 +427,7 @@ async function planEpics(): Promise<number> {
       const epicPath = prepareEpic(j.epic);
       if (!epicPath) return;
       const branch = `agent/plan-${j.epic.number}`;
+      freeBranch(branch);
       git(undefined, "branch", "-f", branch, j.epic.branch);
       const box = await sandcastle.createSandbox({ branch, sandbox: docker(), hooks, copyToWorktree });
       let commits = 0;
@@ -471,9 +482,9 @@ async function verifyEpics(): Promise<number> {
     const branch = e.body.match(/`(epic\/[^`]+)`/)?.[1];
     const milestone = e.milestone?.title;
     if (!branch || !milestone || !tryGit(undefined, "ls-remote", "--exit-code", "--heads", "origin", branch)) continue;
-    const open = ghJson<{ number: number }[]>("issue", "list", "--state", "open", "--milestone", milestone, "--json", "number", "--limit", "200")
+    const items = ghJson<{ number: number; state: string }[]>("issue", "list", "--state", "all", "--milestone", milestone, "--json", "number,state", "--limit", "300")
       .filter((i) => i.number !== e.number);
-    if (open.length) continue;
+    if (!items.length || items.some((i) => i.state === "OPEN")) continue; // not planned yet, or still building
 
     let [pr] = ghJson<{ number: number; headRefOid: string }[]>("pr", "list", "--state", "open", "--head", branch, "--json", "number,headRefOid");
     if (!pr) {
@@ -488,6 +499,7 @@ async function verifyEpics(): Promise<number> {
 
     const verifyBranch = `agent/verify-${e.number}`;
     git(undefined, "fetch", "--quiet", "origin", branch);
+    freeBranch(verifyBranch);
     git(undefined, "branch", "-f", verifyBranch, `origin/${branch}`);
     log(`verifying epic #${e.number} (PR #${pr.number} at ${pr.headRefOid.slice(0, 7)})`);
     await sandcastle.run({
