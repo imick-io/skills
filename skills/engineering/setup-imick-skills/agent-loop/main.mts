@@ -4,6 +4,8 @@
 //                                     ready ticket, sleep when idle
 //   npm run agents -- --once          one pass, then exit
 //   npm run agents -- --no-planning   build only: leave epic planning to others
+//   npm run agents:awake              the loop under `caffeinate -i`: the Mac
+//                                     doesn't idle-sleep while it runs (macOS)
 //
 // Planning only touches epics labelled `autopilot` (chosen at the end of their
 // /brief): chart and resolve their wayfinder map, write the spec for your
