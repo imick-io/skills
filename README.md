@@ -154,7 +154,7 @@ Then it checks again. With nothing ready it sleeps (45 minutes by default); on a
 
 1. `npx @ai-hero/sandcastle init --agent claude-code --sandbox docker --template blank --issue-tracker github-issues --create-label false --build-image false --install-template-deps false`
 2. Replace the scaffold's `main.mts`/`main.ts` and `prompt.md` with the files in [`setup-imick-skills/agent-loop/`](skills/engineering/setup-imick-skills/agent-loop/) (the loop, four prompts, a Dockerfile with a headless Chromium, and `.env.example`), all into `.sandcastle/`.
-3. `npm i -D @ai-hero/sandcastle zod tsx`, and add the script `"agents": "tsx --env-file-if-exists=.sandcastle/.env .sandcastle/main.mts"`.
+3. `npm i -D @ai-hero/sandcastle zod tsx`, and add the scripts `"agents": "tsx --env-file-if-exists=.sandcastle/.env .sandcastle/main.mts"` and `"agents:awake": "caffeinate -i npm run agents"`.
 4. Commit the skills the loop calls into `.claude/skills/` (`implement`, `tdd`, `code-review`, `debug-and-fix`, `diagnosing-bugs` and what they use): agents see only the repo.
 5. Start Docker, then build the image: `npx sandcastle docker build-image`.
 
@@ -175,6 +175,7 @@ Agents use `GH_TOKEN` inside the sandbox to read and comment on issues. Pushing 
 npm run agents                    # loop: plans autopilot epics, works everything ready, sleeps when idle
 npm run agents -- --once          # one pass, then exit
 npm run agents -- --no-planning   # build only: leave planning to another machine
+npm run agents:awake              # the loop, keeping a laptop awake while it runs (macOS)
 ```
 
 **Autopilot planning**, per epic. Every epic from `/scope-decomposer` waits for a **`/brief`**: a short, high-level session where you say what you already have in mind (must-haves, no-gos, the big product calls), saved in the epic's Brief section, the glossary and ADRs. The brief ends with **autopilot or manual?** An epic labelled `autopilot` is planned by the loop: it runs wayfinder on it by itself, takes every Brief line as decided, decides the rest (75% confidence or more directly, below that after researching it with `dig`, still unsure as **assumed**), parks tasks that need you as `ready-for-human`, and writes the spec with a **Decided on autopilot** section (least confident first). The spec waits on `ready-for-human` and Slack pings you: **approve** with the `spec-approved` label and the next pass cuts the tickets; **request changes** with a comment and the next pass revises it. Epics without the label are yours to plan with `/wayfinder <epic>`, and the loop never touches them.
