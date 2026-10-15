@@ -1,5 +1,30 @@
 # imick-skills
 
+## 1.5.0
+
+### Minor Changes
+
+- [#17](https://github.com/imick-io/skills/pull/17) [`4e1be3e`](https://github.com/imick-io/skills/commit/4e1be3e951374f1edc93972202dc674f3ec11264) Thanks [@imick-io](https://github.com/imick-io)! - New `tracker` skill: `/tracker` builds and opens an issue tracker page for the current GitHub repo, with what waits on you next (and how much each item holds up), specs to approve, the epics' roadmap, and each epic's board and blocking diagram. The agent loop now rebuilds it before and after every pass when `tracker/build.mjs` exists, and `/setup-imick-skills` offers it as a yes/no step (Section H). In a project already running the loop, copy the new `syncTracker` hook from `agent-loop/main.mts` into `.sandcastle/main.mts`, then run `/tracker` once to install the page.
+
+### Patch Changes
+
+- [#21](https://github.com/imick-io/skills/pull/21) [`3e644e7`](https://github.com/imick-io/skills/commit/3e644e70eee85952b0dea3ae8950cb91895eb7af) Thanks [@imick-io](https://github.com/imick-io)! - Agent loop: a second script, `agents:awake` (`caffeinate -i npm run agents`), runs the loop without letting a Mac idle-sleep. A laptop that sleeps pauses the loop, and an agent run cut off mid-way can fail and leave its epic labelled `agent:planning`.
+  
+  In a project already running the loop, add `"agents:awake": "caffeinate -i npm run agents"` to `package.json` (with its package manager in place of `npm run`).
+
+- [#20](https://github.com/imick-io/skills/pull/20) [`381bbb8`](https://github.com/imick-io/skills/commit/381bbb853eccaf80f01821b8f47626d766d1fa11) Thanks [@imick-io](https://github.com/imick-io)! - Agent loop fixes:
+  - A run that died no longer blocks the next one: the loop removes a leftover sandbox worktree before resetting a planning or verify branch, instead of failing with "cannot force update the branch … used by worktree".
+  - An epic that hasn't been planned yet is no longer taken for finished: its milestone must hold at least one issue, all closed, before the loop opens the epic's PR. Before, an empty milestone passed, the loop tried to open a PR with no commits, and the failure aborted the whole pass.
+  
+  In a project already running the loop, copy `agent-loop/main.mts` over `.sandcastle/main.mts`, keeping any local changes (such as pnpm commands), and restart the loop.
+
+- [#19](https://github.com/imick-io/skills/pull/19) [`7d44fb8`](https://github.com/imick-io/skills/commit/7d44fb804e5fee069eadbef49f10401e2b5c17a5) Thanks [@imick-io](https://github.com/imick-io)! - Agent loop fixes:
+  - A ticket now waits while its epic is still blocked by other epics, instead of being built on missing foundations.
+  - The loop recognises its agents' comments even when they word the AI disclaimer their own way, so it no longer takes its own comment on a spec for your reply. The autopilot prompt also gives agents the exact disclaimer to use.
+  - A spec waiting for your approval is announced once per version, not on every pass.
+  
+  In a project already running the loop, copy `agent-loop/main.mts` and `agent-loop/autopilot-prompt.md` over `.sandcastle/`.
+
 ## 1.4.0
 
 ### Minor Changes
