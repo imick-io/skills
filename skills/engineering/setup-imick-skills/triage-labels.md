@@ -2,7 +2,7 @@
 
 The skills speak in terms of canonical triage roles. This file maps those roles to the actual label strings used in this repo's issue tracker.
 
-A triaged issue carries one **what** role and one **who** role; `needs-triage` marks one triage hasn't finished.
+A triaged issue carries one **what** role and one **who** role; `needs-triage` marks one triage hasn't finished. `backlog` parks an issue: it keeps its **what** role, drops its **who** role, and no agent touches it until a person takes it out.
 
 | Role | Axis | Label in our tracker | Meaning |
 | --- | --- | --- | --- |
@@ -20,5 +20,6 @@ A triaged issue carries one **what** role and one **who** role; `needs-triage` m
 | `spec` | (planning) | `spec` | A spec, read by `/to-tickets`, never built directly |
 | `spec-approved` | (planning) | `spec-approved` | A person approved an autopilot spec; tickets can be cut |
 | `needs-triage` | (transient) | `needs-triage` | Triage hasn't finished |
+| `backlog` | (parked) | `backlog` | Parked for later: skipped by triage, the agent loop and planning until a person removes the label |
 
 When a skill mentions a role, use the label string from this table. Edit the third column to match whatever vocabulary you actually use.
