@@ -23,7 +23,7 @@ const QUERY = `query($owner: String!, $name: String!, $after: String) {
     issues(first: 100, after: $after, orderBy: { field: CREATED_AT, direction: ASC }) {
       pageInfo { hasNextPage endCursor }
       nodes {
-        number title body state stateReason url closedAt
+        number title body state stateReason url closedAt createdAt
         labels(first: 20) { nodes { name } }
         milestone { title }
         assignees(first: 5) { nodes { login } }
@@ -51,6 +51,7 @@ function fetchIssues() {
     notPlanned: i.stateReason === "NOT_PLANNED",
     url: i.url,
     closedAt: i.closedAt,
+    createdAt: i.createdAt,
     labels: i.labels.nodes.map((l) => l.name),
     milestone: i.milestone?.title ?? null,
     assigned: i.assignees.nodes.length > 0,
@@ -247,12 +248,29 @@ const specs = issues.filter((i) => has(i, "spec")).map((i) => {
   };
 });
 
+// Backlog: everything parked for later, of any kind. Not action items: nobody
+// acts on them until a person takes one out of the backlog.
+const WHAT = ["bug", "enhancement", "needs-scoping", "needs-info", "wontfix"];
+const backlog = issues
+  .filter((i) => i.open && has(i, "backlog"))
+  .map((i) => ({
+    number: i.number,
+    title: i.title,
+    url: i.url,
+    kind: has(i, "initiative") ? "initiative" : has(i, "epic") ? "epic" : "issue",
+    what: WHAT.find((w) => has(i, w)) ?? null,
+    areas: i.labels.filter((l) => l.startsWith("area:")).map((l) => l.slice(5)),
+    epic: epicOf(i)?.number ?? null,
+    createdAt: i.createdAt,
+  }));
+
 const data = {
   generatedAt: new Date().toISOString(),
   repo: `${REPO.owner}/${REPO.name}`,
   epics: epicData,
   tickets,
   hitl,
+  backlog,
   specs,
   titles: Object.fromEntries(issues.map((i) => [i.number, i.title])),
   urls: Object.fromEntries(issues.map((i) => [i.number, i.url])),
@@ -426,6 +444,7 @@ label.check { display: inline-flex; gap: 6px; align-items: center; font-size: 14
     <button role="tab" data-tab="specs" aria-selected="false">Specs to validate<span id="spec-count"></span></button>
     <button role="tab" data-tab="roadmap" aria-selected="false">Roadmap</button>
     <button role="tab" data-tab="epic" aria-selected="false">Epic board</button>
+    <button role="tab" data-tab="backlog" aria-selected="false">Backlog<span id="backlog-count"></span></button>
   </nav>
 
   <section id="actions">
@@ -452,6 +471,11 @@ label.check { display: inline-flex; gap: 6px; align-items: center; font-size: 14
     <div class="rm-scroll"><div class="rm" id="rm"></div></div>
     <h2>Progress</h2>
     <div class="table-scroll"><table id="epic-table"></table></div>
+  </section>
+
+  <section id="backlog" hidden>
+    <p class="meta" style="margin-top:20px">Parked for later: no triage, no agent, no planning, and not in your action items. To bring one back, remove the <code>backlog</code> label and give it a <b>who</b> label (or <code>needs-triage</code> to send it through triage again).</p>
+    <div id="backlog-body"></div>
   </section>
 
   <section id="epic" hidden>
@@ -485,7 +509,7 @@ $('when').textContent = new Date(DATA.generatedAt).toLocaleString();
 const tabs = [...document.querySelectorAll('nav.tabs button')];
 function showTab(name) {
   tabs.forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === name)));
-  ['actions', 'specs', 'roadmap', 'epic'].forEach((id) => { $(id).hidden = id !== name; });
+  ['actions', 'specs', 'roadmap', 'epic', 'backlog'].forEach((id) => { $(id).hidden = id !== name; });
   try { localStorage.setItem('tracker-tab', name); } catch {}
   renderDiagrams();
 }
@@ -590,6 +614,26 @@ function renderSpecs() {
   }));
 }
 renderSpecs();
+
+// ---- Backlog
+function renderBacklog() {
+  const list = DATA.backlog;
+  $('backlog-count').innerHTML = list.length ? ' <span class="meta">' + list.length + '</span>' : '';
+  const groups = [['initiative', 'Initiatives'], ['epic', 'Epics'], ['issue', 'Issues']];
+  let html = '';
+  for (const [kind, label] of groups) {
+    const rows = list.filter((b) => b.kind === kind).sort((a, b) => a.number - b.number);
+    if (!rows.length) continue;
+    html += '<h2>' + label + ' <span class="meta">' + rows.length + '</span></h2><div class="table-scroll"><table><tr><th>Issue</th><th>What</th><th>Area</th>' +
+      (kind === 'issue' ? '<th>Epic</th>' : '') + '<th>Opened</th></tr>' +
+      rows.map((b) => '<tr><td>' + ref(b.number) + ' ' + esc(b.title) + '</td><td>' + (b.what ? '<span class="pill backlog">' + esc(b.what) + '</span>' : '<span class="meta">—</span>') +
+        '</td><td>' + (b.areas.length ? esc(b.areas.join(', ')) : '<span class="meta">—</span>') + '</td>' +
+        (kind === 'issue' ? '<td>' + (b.epic ? ref(b.epic) + ' ' + esc(epicName(b.epic)) : '<span class="meta">—</span>') + '</td>' : '') +
+        '<td class="meta">' + new Date(b.createdAt).toLocaleDateString() + '</td></tr>').join('') + '</table></div>';
+  }
+  $('backlog-body').innerHTML = html || '<div class="empty">Nothing is parked. Add the <code>backlog</code> label to an issue to park it here.</div>';
+}
+renderBacklog();
 
 // ---- Roadmap
 const EPIC_COLORS = { done: 'done', brief: 'you', spec: 'you', held: 'blocked', waiting: 'blocked', planning: 'queued', building: 'working', ready: 'queued', backlog: 'backlog' };
@@ -739,7 +783,7 @@ setInterval(() => { if (Date.now() - loadedAt > 180_000 && Date.now() - lastInpu
 try { const y = sessionStorage.getItem('tracker-scroll'); if (y) { sessionStorage.removeItem('tracker-scroll'); requestAnimationFrame(() => scrollTo(0, Number(y))); } } catch {}
 
 let startTab = 'actions';
-try { const t = localStorage.getItem('tracker-tab'); if (['actions', 'specs', 'roadmap', 'epic'].includes(t)) startTab = t; } catch {}
+try { const t = localStorage.getItem('tracker-tab'); if (['actions', 'specs', 'roadmap', 'epic', 'backlog'].includes(t)) startTab = t; } catch {}
 showTab(startTab);
 </script>
 </body>
