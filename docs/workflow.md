@@ -87,6 +87,7 @@ You decide; agents do the legwork; workflows keep the tracker tidy. Nothing reac
 | `spec` | A spec, turned into tickets by `/to-tickets` | |
 | `spec-approved` | You approved an autopilot spec | The loop cuts its tickets |
 | `wayfinder:*` | A wayfinder map and its decision tickets | `/wayfinder` |
+| `backlog` | Parked for later: no triage, no agent, no planning | Remove it (and set a **who** role) to bring the issue back |
 | `area:*` | Which part of the product, and so who owns it | `docs/agents/team.md` |
 
 An assignee means **claimed**: someone (or some agent) is working on it now. Agent tickets stay unassigned until claimed.

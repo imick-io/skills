@@ -75,6 +75,7 @@ const openBlockers = (i) => i.blockedBy.map((n) => byNumber.get(n)).filter((b) =
 // Who acts next on a ticket.
 function ticketStatus(i) {
   if (!i.open) return i.notPlanned ? "dropped" : "done";
+  if (has(i, "backlog")) return "backlog";
   if (has(i, "ready-for-review")) return "review";
   if (openBlockers(i).length) return "blocked";
   if (has(i, "ready-for-human")) return "you";
@@ -89,6 +90,7 @@ const planningOf = (e) => issues.filter((i) => isPlanning(i) && i.milestone && i
 
 function epicStatus(e) {
   if (!e.open) return "done";
+  if (has(e, "backlog")) return "backlog";
   if (has(e, "needs-briefing")) return "brief";
   const plans = planningOf(e);
   const spec = plans.find((p) => has(p, "spec") && p.open);
@@ -109,6 +111,7 @@ const EPIC_STATUS = {
   planning: "Agent is planning",
   building: "Building",
   ready: "Ready to plan",
+  backlog: "In the backlog",
 };
 
 const TICKET_STATUS = {
@@ -118,6 +121,7 @@ const TICKET_STATUS = {
   queued: "Agent queue",
   blocked: "Blocked",
   triage: "Needs triage",
+  backlog: "Backlog",
   done: "Done",
   dropped: "Dropped",
 };
@@ -191,7 +195,7 @@ function downstreamAll(n, seen = new Set()) {
 }
 
 const hitl = issues
-  .filter((i) => i.open && (has(i, "ready-for-human") || has(i, "ready-for-review")))
+  .filter((i) => i.open && !has(i, "backlog") && (has(i, "ready-for-human") || has(i, "ready-for-review")))
   .map((i) => {
     const blockers = openBlockers(i);
     return {
@@ -277,6 +281,7 @@ const html = `<!doctype html>
   --blocked: #7a7a73; --blocked-soft: #efefea;
   --done: #9a9a93; --done-soft: #f3f3f0;
   --triage: #a8323a; --triage-soft: #fbeaeb;
+  --backlog: #7a7a73; --backlog-soft: #ecece7;
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -289,6 +294,7 @@ const html = `<!doctype html>
     --blocked: #9b9b94; --blocked-soft: #2a2a27;
     --done: #6b6b66; --done-soft: #222220;
     --triage: #f08a90; --triage-soft: #3a1c1e;
+    --backlog: #8a8a83; --backlog-soft: #2a2a27;
   }
 }
 * { box-sizing: border-box; }
@@ -403,6 +409,7 @@ details.spec > .spec { border: 0; padding: 0; margin: 10px 0 0; }
 .hitl .noitems { margin: 8px 0 0 46px; font-size: 13px; color: var(--muted); }
 @media (max-width: 600px) { .hitl .sub, .hitl ul, .hitl .noitems, .hitl details summary { margin-left: 0; } }
 .pill.task { color: var(--you); background: var(--you-soft); }
+.pill.backlog { color: var(--backlog); background: var(--backlog-soft); }
 .pill.brief, .pill.spec { color: var(--queued); background: var(--queued-soft); }
 label.check { display: inline-flex; gap: 6px; align-items: center; font-size: 14px; }
 </style>
@@ -585,7 +592,7 @@ function renderSpecs() {
 renderSpecs();
 
 // ---- Roadmap
-const EPIC_COLORS = { done: 'done', brief: 'you', spec: 'you', held: 'blocked', waiting: 'blocked', planning: 'queued', building: 'working', ready: 'queued' };
+const EPIC_COLORS = { done: 'done', brief: 'you', spec: 'you', held: 'blocked', waiting: 'blocked', planning: 'queued', building: 'working', ready: 'queued', backlog: 'backlog' };
 $('epic-table').innerHTML = '<tr><th>Epic</th><th>Status</th><th>Tickets</th><th>Waits on</th></tr>' + DATA.epics.map((e) => {
   const pct = e.total ? Math.round((e.done / e.total) * 100) : 0;
   const counts = e.total ? Object.entries(e.counts).filter(([s, n]) => n && s !== 'done' && s !== 'dropped').map(([s, n]) => n + ' ' + DATA.ticketStatus[s].toLowerCase()).join(' · ') : '';
@@ -603,7 +610,7 @@ function classDefs() {
 }
 // Roadmap: epics in columns by build order, tickets listed inside planned
 // epics, arrows from an epic to the epics waiting on it.
-const LANE_ORDER = ['you', 'review', 'working', 'queued', 'triage', 'blocked', 'done', 'dropped'];
+const LANE_ORDER = ['you', 'review', 'working', 'queued', 'triage', 'blocked', 'backlog', 'done', 'dropped'];
 const epicLevel = {};
 function levelOf(e) {
   if (epicLevel[e.number] !== undefined) return epicLevel[e.number];
@@ -698,7 +705,7 @@ if (window.mermaid) mermaid.initialize({ startOnLoad: false, securityLevel: 'loo
 // ---- Epic board
 const planned = DATA.epics.filter((e) => e.total);
 $('epic-pick').innerHTML = planned.concat(DATA.epics.filter((e) => !e.total)).map((e) => '<option value="' + e.number + '">#' + e.number + ' ' + esc(e.title) + (e.total ? '' : ' (not planned)') + '</option>').join('');
-const LANES = [['you', 'Your turn', ['you', 'review']], ['working', 'Agent working', ['working']], ['queued', 'Agent queue', ['queued', 'triage']], ['blocked', 'Blocked', ['blocked']], ['done', 'Done', ['done', 'dropped']]];
+const LANES = [['you', 'Your turn', ['you', 'review']], ['working', 'Agent working', ['working']], ['queued', 'Agent queue', ['queued', 'triage']], ['blocked', 'Blocked', ['blocked']], ['backlog', 'Backlog', ['backlog']], ['done', 'Done', ['done', 'dropped']]];
 function renderBoard() {
   const n = Number($('epic-pick').value);
   const e = epicByNum[n];
