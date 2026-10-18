@@ -21,7 +21,8 @@ The tracker operations are in the tracker doc's **Initiatives and epics** sectio
    - the **must-haves** ("invite a partner by email to a shared budget"),
    - the **no-gos** ("no bank connections in v1"),
    - the **big product calls** ("shared or single-user?", "monthly or weekly first?"),
-   - anything **already decided** (a service, a stack choice, a reference product).
+   - anything **already decided** (a service, a stack choice, a reference product),
+   - on a **local-first** initiative (its Destination says so), any real service this epic can't fake. By default it uses local stand-ins only; carry that into **Already decided** as "Local first: no hosted services or accounts; local stand-ins only", naming any core integration that is the exception.
 
    Leave everything an agent can decide alone (which date picker, the empty-state copy) to wayfinder. A few rounds is the norm. Done when nothing the human has in mind about this epic is left unsaid: ask "anything else you already know you want or don't want here?" before moving on.
 
