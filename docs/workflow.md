@@ -65,9 +65,11 @@ You decide; agents do the legwork; workflows keep the tracker tidy. Nothing reac
 
 **6. Build.** The [agent loop](../README.md#agent-loop) picks up every ready, unblocked ticket, plans which can run in parallel, and works each in a Docker sandbox with `implement` (tests first, then `code-review`). Epic tickets land on the epic branch and close; other tickets arrive as PRs. Run it on your laptop while you work and on the [always-on Mac](mac-setup.md); assignment keeps them from taking the same ticket. A ticket an agent can't finish goes to `ready-for-human` with an explanation.
 
+**Fast mode.** For a personal project or an MVP, where speed beats review, set `AGENTS_MODE=fast` in `.sandcastle/.env` (or label one epic `fast`). The loop then works what waits on you: it answers a `ready-for-human` issue when it's at least 70% confident (`AGENTS_FAST_THRESHOLD`) and sends it back to the agents, or asks you one precise question on the issue and pings you in Slack (`agent:asked`); your comment there is the answer. It approves an autopilot spec when no decision is below the threshold, asking you only about those that are, resolves conflicts between `main` and an epic branch, and merges an epic's PR once verification passes. Anything that spends money, handles real credentials or personal data, deletes or publishes is always asked.
+
 **7. Bugs.** Bugs from triage or from verification are `ready-for-agent-debugging`. The loop runs `debug-and-fix`: reproduce (in a browser for UI bugs), find the cause, fix with a regression test when the diagnosis is clean, otherwise leave the diagnosis for a person. Run it by hand with `/debug-and-fix #n`.
 
-**8. Verify and ship.** When an epic's milestone has no open tickets, the loop opens the epic's PR to `main` and runs `verify-epic` in the running app: acceptance criteria, user stories, API contracts, agreed screens. Failures become bug tickets under the epic, the loop fixes them, and verification runs again. `epic-gate` turns green when nothing is open, no `mocks/` folder is left and verification passed. **You review and merge.** The epic closes, then its milestone, then the initiative when it was the last epic (unless parked areas remain).
+**8. Verify and ship.** When an epic's milestone has no open tickets, the loop opens the epic's PR to `main` and runs `verify-epic` in the running app: acceptance criteria, user stories, API contracts, agreed screens. Failures become bug tickets under the epic, the loop fixes them, and verification runs again. `epic-gate` turns green when nothing is open, no `mocks/` folder is left and verification passed. **You review and merge** (in fast mode, the loop merges once verification passes). The epic closes, then its milestone, then the initiative when it was the last epic (unless parked areas remain).
 
 **9. Upkeep.** `/update-from-upstream` brings in the latest from the skill authors this repo follows, keeping your customizations. Changes to the skills go through PRs with a changeset, and merging the "version skills" PR releases them ([Releasing](../README.md#releasing)).
 
@@ -84,6 +86,8 @@ You decide; agents do the legwork; workflows keep the tracker tidy. Nothing reac
 | `initiative` / `epic` | Planning issues from `/scope-decomposer` | |
 | `needs-briefing` | An epic waiting for its brief | `/brief` |
 | `autopilot` | An epic the agent loop plans by itself | The agent loop |
+| `fast` | An epic the loop unblocks by itself (fast mode for one epic) | The agent loop |
+| `agent:asked` | Fast mode asked you on this issue | Comment your answer |
 | `spec` | A spec, turned into tickets by `/to-tickets` | |
 | `spec-approved` | You approved an autopilot spec | The loop cuts its tickets |
 | `wayfinder:*` | A wayfinder map and its decision tickets | `/wayfinder` |

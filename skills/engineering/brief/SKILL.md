@@ -54,6 +54,6 @@ The tracker operations are in the tracker doc's **Initiatives and epics** sectio
 
    > **Autopilot or manual** for this epic? On autopilot, the agent loop runs wayfinder on it by itself, decides what the brief leaves open (researching what it's unsure of), and stops at the spec for your approval. On manual, you run `/wayfinder` on it.
 
-   Then remove `needs-briefing` and `ready-for-human`, and add `autopilot` when chosen.
+   Then remove `needs-briefing` and `ready-for-human`, and add `autopilot` when chosen. On autopilot, in a project whose loop isn't already in fast mode, mention **fast** too: with the `fast` label the loop also answers what would wait on them when it's confident enough, approves a confident spec and merges the verified epic, pinging them in Slack only for what it can't settle.
 
 6. **Hand off.** Report the brief and the mode, then the next step: "The agent loop will plan it" (autopilot) or "Run `/wayfinder <epic>` when you're ready" (manual). If more epics still need briefing, name the next one.
