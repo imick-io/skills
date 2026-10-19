@@ -63,6 +63,7 @@ My own skills plus the ones I use from other authors, such as [Matt Pocock](http
 | [`triage`](skills/engineering/triage/SKILL.md) | iMick | Classify incoming issues (and optionally external PRs) by what they are and who acts next, write agent-ready briefs, and route big asks to scoping. |
 | [`verify-epic`](skills/engineering/verify-epic/SKILL.md) | iMick | Test an epic's PR against its tickets, spec and agreed screens in the running app, file each failure as a bug ticket under the epic, and set the verify-epic status the merge gate requires. |
 | [`wayfinder`](skills/engineering/wayfinder/SKILL.md) | Matt Pocock | Plan a huge chunk of work (more than one agent session can hold) as a shared map of decision tickets on your issue tracker, and resolve them one at a time until the way to the destination is clear. |
+| [`whats-next`](skills/engineering/whats-next/SKILL.md) | iMick | What's next in a project using these skills - reads where it stands (setup, the agent loop, what waits on you on GitHub, local changes) and names the next one to three moves, each with its command. |
 | [`wizard`](skills/engineering/wizard/SKILL.md) | Matt Pocock | Generate an interactive bash wizard that walks a human through steps only they can perform. |
 
 ### Productivity
