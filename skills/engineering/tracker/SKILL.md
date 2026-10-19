@@ -7,7 +7,7 @@ description: Build and open the issue tracker page, a snapshot of the repo's Git
 
 [build.mjs](./build.mjs) pulls every issue of the current repo with `gh` and writes `tracker/index.html`, one self-contained page with four tabs:
 
-- **Action items**: everything waiting on a person (`ready-for-human`, `ready-for-review`, epics to brief, specs to approve), with each issue's acceptance-criteria checklist and how many open issues it holds up, directly or down the chain.
+- **Action items**: everything waiting on a person (`ready-for-human`, `ready-for-review`, epics to brief, specs to approve, finished epics whose PR waits for a merge), with each issue's acceptance-criteria checklist and how many open issues it holds up, directly or down the chain.
 - **Specs**: each spec, whether it's approved, and the decisions it lists.
 - **Roadmap**: the epics in dependency order with their status and progress, and a progress table per ticket status.
 - **Epic board**: one epic's tickets by status, and a diagram of what blocks what.

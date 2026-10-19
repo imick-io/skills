@@ -155,7 +155,7 @@ Then it checks again. With nothing ready it sleeps (45 minutes by default); on a
 
 1. `npx @ai-hero/sandcastle init --agent claude-code --sandbox docker --template blank --issue-tracker github-issues --create-label false --build-image false --install-template-deps false`
 2. Replace the scaffold's `main.mts`/`main.ts` and `prompt.md` with the files in [`setup-imick-skills/agent-loop/`](skills/engineering/setup-imick-skills/agent-loop/) (the loop, four prompts, a Dockerfile with a headless Chromium, and `.env.example`), all into `.sandcastle/`.
-3. `npm i -D @ai-hero/sandcastle zod tsx`, and add the scripts `"agents": "tsx --env-file-if-exists=.sandcastle/.env .sandcastle/main.mts"` and `"agents:awake": "caffeinate -i npm run agents"`.
+3. `npm i -D @ai-hero/sandcastle zod` (Node 22.6 or later runs the loop's TypeScript itself; no `tsx`), and add the scripts `"agents": "node --env-file-if-exists=.sandcastle/.env .sandcastle/main.mts"`, `"agents:awake": "caffeinate -i npm run agents"` and `"agents:stop": "touch .sandcastle/STOP"`; add `STOP` to `.sandcastle/.gitignore`. `npm run agents:stop` lets a running loop finish its in-flight tickets and exit, so you can close the machine once its Slack message arrives.
 4. Commit the skills the loop calls into `.claude/skills/` (`implement`, `tdd`, `code-review`, `debug-and-fix`, `diagnosing-bugs` and what they use): agents see only the repo.
 5. Start Docker, then build the image: `npx sandcastle docker build-image`.
 

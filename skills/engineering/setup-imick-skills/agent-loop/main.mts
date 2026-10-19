@@ -6,6 +6,20 @@
 //   npm run agents -- --no-planning   build only: leave epic planning to others
 //   npm run agents:awake              the loop under `caffeinate -i`: the Mac
 //                                     doesn't idle-sleep while it runs (macOS)
+//   npm run agents:stop               ask a running loop to stop nicely: it
+//                                     starts nothing new, lets in-flight
+//                                     tickets land, then exits. Ctrl-C quits
+//                                     at once instead (Sandcastle tears the
+//                                     sandboxes down and exits), but releases
+//                                     the loop's claims first so the next run
+//                                     starts clean
+//
+// Runs on Node directly (type stripping), not through tsx: tsx runs the script
+// in a child process and, on Ctrl-C, SIGKILLs that child when it doesn't
+// acknowledge the signal within a few ms, which is whenever the loop is inside
+// a `gh` or `git` call. The SIGINT handler below then never runs and tickets
+// stay claimed. Keep the syntax erasable (no enums, parameter properties or
+// decorators) so Node keeps accepting it.
 //
 // Planning only touches epics labelled `autopilot` (chosen at the end of their
 // /brief): chart and resolve their wayfinder map, write the spec for your
@@ -59,7 +73,7 @@
 import * as sandcastle from "@ai-hero/sandcastle";
 import { docker } from "@ai-hero/sandcastle/sandboxes/docker";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { setTimeout as sleep } from "node:timers/promises";
 import { z } from "zod";
 
@@ -75,6 +89,34 @@ const MAX_PARALLEL = Number(process.env.AGENTS_MAX_PARALLEL ?? 3);
 const PLANNER = process.env.AGENTS_PLANNER_MODEL ?? "claude-opus-5-5";
 const WORKER = process.env.AGENTS_WORKER_MODEL ?? "claude-sonnet-5";
 const ALERTS = process.env.SLACK_ALERTS_WEBHOOK_URL;
+// Graceful stop. `npm run agents:stop` creates this file from any terminal; the
+// loop reads it wherever it would start new work, finishes what is in flight
+// and removes it on exit. Starting the loop clears any file left behind.
+const STOP_FILE = ".sandcastle/STOP";
+const stopRequested = () => existsSync(STOP_FILE);
+
+// Ctrl-C can't be graceful: Sandcastle's own SIGINT handler tears every
+// sandbox down and exits. What it must not do is leave state behind that
+// the next run misreads as "someone is on it": a ticket's assignee, an
+// epic's `agent:planning` label or an issue's `agent:unblocking` label. This
+// handler runs first (registered before any sandbox exists) and clears them,
+// synchronously, before that exit. Work already committed on the ticket
+// branch survives; `prepareBranch` resumes from it.
+const inFlight = new Set<Ticket>();
+const planningEpics = new Set<number>();
+const unblockingIssues = new Set<number>();
+for (const signal of ["SIGINT", "SIGTERM"] as const) {
+  process.on(signal, () => {
+    for (const t of inFlight) { try { release(t, `${signal}: quitting, branch kept for the next run`); } catch { /* best effort */ } }
+    for (const n of planningEpics) { try { gh("issue", "edit", String(n), "--remove-label", LABEL.planning); } catch { /* best effort */ } }
+    for (const n of unblockingIssues) { try { gh("issue", "edit", String(n), "--remove-label", LABEL.unblocking); } catch { /* best effort */ } }
+    const released = inFlight.size + planningEpics.size + unblockingIssues.size;
+    console.log(`\n[agents] ${signal}: quitting now${released ? ", claims released" : ""}. For a graceful stop use \`npm run agents:stop\`.`);
+    // With a sandbox open, Sandcastle's own handler (registered later) tears
+    // it down and exits; with none, nobody else would, so exit here.
+    if (process.listenerCount(signal) <= 1) process.exit(128 + (signal === "SIGINT" ? 2 : 15));
+  });
+}
 type Mode = "normal" | "fast" | "supersonic";
 const MODE: Mode = process.env.AGENTS_MODE === "supersonic" ? "supersonic" : process.env.AGENTS_MODE === "fast" ? "fast" : "normal";
 // One confidence threshold for what the loop decides alone (AGENTS_FAST_THRESHOLD
@@ -307,8 +349,9 @@ const planSchema = z.object({ issues: z.array(z.object({ number: z.number() })) 
 async function pass(): Promise<number> {
   epicCache.clear();
   epicBlockedCache.clear();
-  const unblocked = await unblock();
-  const planned = unblocked + (PLANNING ? await planEpics() : 0);
+  const unblocked = stopRequested() ? 0 : await unblock();
+  const planned = unblocked + (PLANNING && !stopRequested() ? await planEpics() : 0);
+  if (stopRequested()) return planned;
   const ready = readyTickets();
   if (!ready.length) return planned + (await verifyEpics());
 
@@ -336,9 +379,11 @@ async function pass(): Promise<number> {
     if (t.epic && !epicPaths.has(t.epic.number)) epicPaths.set(t.epic.number, prepareEpic(t.epic));
     const epicPath = t.epic ? epicPaths.get(t.epic.number) : undefined;
     if (t.epic && !epicPath) continue; // epic paused on a conflict with main
+    if (stopRequested()) break; // claim nothing more once a stop is asked for
     if (!claim(t)) continue;
     prepareBranch(t, epicPath);
     work.push({ t, epicPath });
+    inFlight.add(t);
   }
   log(`working ${work.map(({ t }) => `#${t.number}`).join(", ") || "nothing"}`);
 
@@ -370,6 +415,7 @@ async function pass(): Promise<number> {
 
   for (const [i, outcome] of settled.entries()) {
     const { t, epicPath } = work[i]!;
+    inFlight.delete(t);
     if (outcome.status === "rejected") {
       const reason = String(outcome.reason);
       release(t, reason);
@@ -391,7 +437,7 @@ async function pass(): Promise<number> {
     syncTracker();
   }
 
-  return planned + work.length + (await verifyEpics());
+  return planned + work.length + (stopRequested() ? 0 : await verifyEpics());
 }
 
 function land(t: Ticket, epicPath?: string) {
@@ -489,6 +535,7 @@ async function planEpics(): Promise<number> {
 
   const runs = jobs.map(async (j) => {
     gh("issue", "edit", String(j.epic.number), "--add-label", LABEL.planning);
+    planningEpics.add(j.epic.number);
     try {
       const epicPath = prepareEpic(j.epic);
       if (!epicPath) return;
@@ -523,6 +570,7 @@ async function planEpics(): Promise<number> {
       }
     } finally {
       gh("issue", "edit", String(j.epic.number), "--remove-label", LABEL.planning);
+      planningEpics.delete(j.epic.number);
     }
   });
   const settled = await Promise.allSettled(runs);
@@ -653,6 +701,7 @@ async function unblock(): Promise<number> {
 
   const settled = await Promise.allSettled(waiting.map(async ({ i, mode }) => {
     gh("issue", "edit", String(i.number), "--add-label", LABEL.unblocking);
+    unblockingIssues.add(i.number);
     try {
       const run = await sandcastle.run({
         hooks,
@@ -686,6 +735,7 @@ async function unblock(): Promise<number> {
       log(`#${i.number} unblocked (${result.outcome}): ${result.summary}`);
     } finally {
       gh("issue", "edit", String(i.number), "--remove-label", LABEL.unblocking);
+      unblockingIssues.delete(i.number);
     }
   }));
   for (const [n, outcome] of settled.entries()) {
@@ -707,6 +757,7 @@ async function followUps(): Promise<number> {
     .slice(0, MAX_PARALLEL);
   for (const i of answered) {
     gh("issue", "edit", String(i.number), "--add-label", LABEL.unblocking);
+    unblockingIssues.add(i.number);
     try {
       const run = await sandcastle.run({
         hooks,
@@ -727,6 +778,7 @@ async function followUps(): Promise<number> {
       await alert(`Following up #${i.number} failed: ${reason.slice(0, 300)}`);
     } finally {
       gh("issue", "edit", String(i.number), "--remove-label", LABEL.unblocking);
+      unblockingIssues.delete(i.number);
     }
   }
   return answered.length;
@@ -763,6 +815,7 @@ async function sendDigest() {
 async function resolveConflicts(issue: Issue, epic: Epic) {
   const n = issue.number;
   gh("issue", "edit", String(n), "--add-label", LABEL.unblocking);
+  unblockingIssues.add(n);
   const branch = `agent/conflicts-${epic.number}`;
   try {
     const path = epicWorktree(epic);
@@ -827,6 +880,7 @@ async function resolveConflicts(issue: Issue, epic: Epic) {
   } finally {
     tryGit(undefined, "branch", "-D", branch);
     gh("issue", "edit", String(n), "--remove-label", LABEL.unblocking);
+    unblockingIssues.delete(n);
   }
 }
 
@@ -883,6 +937,26 @@ function syncTracker() {
   }
 }
 
+// Starting the loop is the clearest sign you want it running: a stop file
+// left by an earlier request (or a stop asked for while nothing ran) is cleared.
+if (existsSync(STOP_FILE)) {
+  rmSync(STOP_FILE, { force: true });
+  log("cleared an earlier stop request");
+}
+
+// Sleeps in one-minute steps so a stop request ends an idle wait promptly.
+async function idle(minutes: number) {
+  for (let i = 0; i < minutes && !stopRequested(); i++) await sleep(60_000);
+}
+
+async function stopNicely(worked: number) {
+  rmSync(STOP_FILE, { force: true });
+  log(worked ? "stopped nicely after landing the in-flight work" : "stopped nicely; nothing was in flight");
+  await alert(`Agent loop stopped nicely${worked ? " after landing its in-flight work" : ""}. Start it again with \`npm run agents:awake\`.`);
+  process.exit(0);
+}
+
+log(`started (pid ${process.pid}); \`npm run agents:stop\` stops it nicely`);
 let limitAlerted = false;
 for (;;) {
   let worked = 0;
@@ -897,7 +971,8 @@ for (;;) {
       if (!limitAlerted) await alert(`Usage limit reached; the agent loop sleeps ${LIMIT_SLEEP_MINUTES} min and retries.`);
       limitAlerted = true;
       if (ONCE) break;
-      await sleep(LIMIT_SLEEP_MINUTES * 60_000);
+      if (stopRequested()) await stopNicely(0);
+      await idle(LIMIT_SLEEP_MINUTES);
       continue;
     }
     await alert(`Agent loop pass failed: ${message.slice(0, 500)}`);
@@ -906,8 +981,10 @@ for (;;) {
   }
   syncTracker();
   if (ONCE) break;
+  if (stopRequested()) await stopNicely(worked);
   if (!worked) {
     log(`nothing ready; sleeping ${IDLE_MINUTES} min`);
-    await sleep(IDLE_MINUTES * 60_000);
+    await idle(IDLE_MINUTES);
+    if (stopRequested()) await stopNicely(0);
   }
 }
