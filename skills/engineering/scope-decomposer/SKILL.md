@@ -36,6 +36,14 @@ The exception is a product whose core **is** the integration (a Stripe Connect m
 
 The human can opt out (the product already runs somewhere, or hosting is the point); record it in the initiative's Destination.
 
+## Supersonic: one interview
+
+When the project's loop runs supersonic (`AGENTS_MODE=supersonic` in `.sandcastle/.env`), or the user asks for it, this interview also **briefs every epic**, so no `/brief` session follows and the loop starts planning straight away. Say so at the start of the interview.
+
+Don't run `/brief`'s interview once per epic. By the time the epics pass the four tests, the interview has covered most of what a brief holds: who it's for, the must-haves, the no-gos, the calls already made. **Draft** each epic's Brief from that, in `/brief`'s template (`.claude/skills/brief/SKILL.md`, step 4), ask only what a draft is missing, and apply `/brief`'s scope check (a must-have that doesn't fit its epic is a new epic). Show the drafts with the proposal; with many epics, confirm them three or four at a time, in build order. End with `/brief`'s last question: "Anything else you already know you want or don't want, on any epic?"
+
+An epic the user wants to brief later, or can't yet, is published the usual way (`needs-briefing`); the others don't wait for it.
+
 ## Run
 
 The input is an idea in prose, an issue (often labelled `needs-scoping` by triage), or an existing initiative. An existing initiative means a **re-run**: see below.
@@ -48,10 +56,10 @@ The input is an idea in prose, an issue (often labelled `needs-scoping` by triag
 
 4. **Publish**, in this order:
    1. The **initiative**. From an existing issue, keep its text, append the sections below, and swap any triage labels (`needs-scoping`, `ready-for-human`) for `initiative`. Label it with every area its epics use, and assign the owner the user named.
-   2. Each **epic**, in build order: its milestone (next free repo-wide number), the issue (labels `epic`, `needs-briefing` and `ready-for-human` + its area, in its milestone, assigned to the area's default person, linked under the initiative).
+   2. Each **epic**, in build order: its milestone (next free repo-wide number), the issue (labels `epic`, `needs-briefing` and `ready-for-human` + its area, in its milestone, assigned to the area's default person, linked under the initiative). On **supersonic**, a briefed epic carries its `## Brief` after the Destination and the labels `epic`, `autopilot` + its area (plus `supersonic` when the project isn't supersonic as a whole), without `needs-briefing` or `ready-for-human`.
    3. Blocking edges between epics, in a second pass once every epic has an id.
 
-5. **Hand off.** Report what was created, by name with links. Every epic waits for its brief: "Next, run `/brief` to brief the epics, starting with <first epic nothing blocks> (<milestone title>); each brief ends by choosing manual or autopilot planning."
+5. **Hand off.** Report what was created, by name with links. On supersonic: "The agent loop plans the briefed epics in build order, starting with <first epic nothing blocks>; you'll hear from it only for what can't be undone, and in its daily digest." Otherwise every epic waits for its brief: "Next, run `/brief` to brief the epics, starting with <first epic nothing blocks> (<milestone title>); each brief ends by choosing manual or autopilot planning."
 
 ## Bodies
 

@@ -65,7 +65,9 @@ You decide; agents do the legwork; workflows keep the tracker tidy. Nothing reac
 
 **6. Build.** The [agent loop](../README.md#agent-loop) picks up every ready, unblocked ticket, plans which can run in parallel, and works each in a Docker sandbox with `implement` (tests first, then `code-review`). Epic tickets land on the epic branch and close; other tickets arrive as PRs. Run it on your laptop while you work and on the [always-on Mac](mac-setup.md); assignment keeps them from taking the same ticket. A ticket an agent can't finish goes to `ready-for-human` with an explanation.
 
-**Fast mode.** For a personal project or an MVP, where speed beats review, set `AGENTS_MODE=fast` in `.sandcastle/.env` (or label one epic `fast`). The loop then works what waits on you: it answers a `ready-for-human` issue when it's at least 70% confident (`AGENTS_FAST_THRESHOLD`) and sends it back to the agents, or asks you one precise question on the issue and pings you in Slack (`agent:asked`); your comment there is the answer. It approves an autopilot spec when no decision is below the threshold, asking you only about those that are, resolves conflicts between `main` and an epic branch, and merges an epic's PR once verification passes. Anything that spends money, handles real credentials or personal data, deletes or publishes is always asked.
+**Fast mode.** For a personal project or an MVP, where speed beats review, set `AGENTS_MODE=fast` in `.sandcastle/.env` (or label one epic `fast`). The loop then works what waits on you: it answers a `ready-for-human` issue when it's at least 70% confident (`AGENTS_THRESHOLD`) and sends it back to the agents, or asks you one precise question on the issue and pings you in Slack (`agent:asked`); your comment there is the answer. It approves an autopilot spec when no decision is below the threshold, asking you only about those that are, resolves conflicts between `main` and an epic branch, and merges an epic's PR once verification passes. Anything that spends money, handles real credentials or personal data, deletes or publishes is always asked.
+
+**Supersonic mode.** For a throwaway MVP, `AGENTS_MODE=supersonic` (or the `supersonic` label) goes further. `/scope-decomposer` writes every epic's brief in its one interview, so the loop starts planning with no `/brief` sessions. Below the threshold, a call that can be undone is **assumed** instead of asked (`agent:assumed`): the loop goes on with its best guess, and the spec is always approved. The assumptions reach you in one Slack digest a day (`AGENTS_DIGEST_HOURS`); comment on an issue to change a call, and the loop edits what isn't built yet or files a follow-up ticket for what is. What can't be undone is still asked, and waited for.
 
 **7. Bugs.** Bugs from triage or from verification are `ready-for-agent-debugging`. The loop runs `debug-and-fix`: reproduce (in a browser for UI bugs), find the cause, fix with a regression test when the diagnosis is clean, otherwise leave the diagnosis for a person. Run it by hand with `/debug-and-fix #n`.
 
@@ -87,7 +89,9 @@ You decide; agents do the legwork; workflows keep the tracker tidy. Nothing reac
 | `needs-briefing` | An epic waiting for its brief | `/brief` |
 | `autopilot` | An epic the agent loop plans by itself | The agent loop |
 | `fast` | An epic the loop unblocks by itself (fast mode for one epic) | The agent loop |
+| `supersonic` | An epic in supersonic mode | The agent loop |
 | `agent:asked` | Fast mode asked you on this issue | Comment your answer |
+| `agent:assumed` | Supersonic assumed a call here | Comment to change it |
 | `spec` | A spec, turned into tickets by `/to-tickets` | |
 | `spec-approved` | You approved an autopilot spec | The loop cuts its tickets |
 | `wayfinder:*` | A wayfinder map and its decision tickets | `/wayfinder` |
