@@ -1,0 +1,2670 @@
+{
+  "$comment": "Hand-written half of docs/handbook.json. `python3 skills/misc/update-from-upstream/scripts/sync.py regen` merges it with the skills list generated from each SKILL.md. Edit this file, never docs/handbook.json.",
+  "intro": {
+    "title": "How the skills, labels and agent loop fit together",
+    "lede": "A big idea becomes an initiative of epics. Each epic is briefed, planned into decisions, cut into tickets, built by agents in sandboxes, verified in the running app and merged. Labels on GitHub issues say what each issue is and who acts next. Skills are the commands that move issues along.",
+    "principles": [
+      {
+        "tone": "human",
+        "title": "You decide",
+        "body": "Scope, the brief, specs and the final merge. Fast and supersonic modes hand some of that to agents."
+      },
+      {
+        "tone": "agent",
+        "title": "Agents do the legwork",
+        "body": "Planning on autopilot, building, debugging, reviewing and verifying, in Docker sandboxes."
+      },
+      {
+        "tone": "park",
+        "title": "Workflows keep it tidy",
+        "body": "Triage on every new issue, the epic merge gate, and closing what's done."
+      }
+    ]
+  },
+  "install": {
+    "steps": [
+      {
+        "title": "Install the skills into your project",
+        "command": "npx skills@latest add imick-io/skills"
+      },
+      {
+        "title": "Set the project up",
+        "command": "/setup-imick-skills"
+      },
+      {
+        "title": "Start from an idea",
+        "command": "/scope-decomposer \"<your idea>\""
+      }
+    ]
+  },
+  "flows": [
+    {
+      "id": "main",
+      "title": "The flow, by who acts",
+      "description": "Follow the arrows from the top. Each column is who acts: you in a Claude session, the agent loop running unattended, or a GitHub workflow. Dashed arrows are feedback.",
+      "rows": 12,
+      "columns": {
+        "youL": 118,
+        "youR": 330,
+        "loop": 575,
+        "gh": 845
+      },
+      "lanes": [
+        {
+          "name": "You",
+          "sub": "in a Claude session",
+          "x": 0,
+          "width": 440,
+          "tone": "you"
+        },
+        {
+          "name": "Agent loop",
+          "sub": "unattended, npm run agents",
+          "x": 440,
+          "width": 270,
+          "tone": "loop"
+        },
+        {
+          "name": "GitHub",
+          "sub": "workflows on the repo",
+          "x": 710,
+          "width": 270,
+          "tone": "gh"
+        }
+      ],
+      "nodes": {
+        "idea": {
+          "col": "youL",
+          "row": 0,
+          "lane": "you",
+          "title": "Your idea",
+          "sub": "a product or a big feature"
+        },
+        "filed": {
+          "col": "gh",
+          "row": 0,
+          "lane": "gh",
+          "title": "Issue filed",
+          "sub": "by you or a teammate"
+        },
+        "triage": {
+          "col": "gh",
+          "row": 1,
+          "lane": "gh",
+          "title": "Auto-triage",
+          "sub": "labels what it is + who acts",
+          "pills": [
+            {
+              "role": "what",
+              "label": "bug · enhancement"
+            }
+          ]
+        },
+        "scope": {
+          "col": "youL",
+          "row": 2,
+          "lane": "you",
+          "cmd": "/scope-decomposer",
+          "sub": "an initiative of epics",
+          "pills": [
+            {
+              "role": "plan",
+              "label": "epic"
+            }
+          ]
+        },
+        "brief": {
+          "col": "youL",
+          "row": 3,
+          "lane": "you",
+          "cmd": "/brief",
+          "sub": "your intent; pick the mode",
+          "pills": [
+            {
+              "role": "plan",
+              "label": "needs-briefing"
+            }
+          ]
+        },
+        "way": {
+          "col": "youL",
+          "row": 4,
+          "lane": "you",
+          "cmd": "/wayfinder",
+          "sub": "decisions, with you"
+        },
+        "auto": {
+          "col": "loop",
+          "row": 4,
+          "lane": "loop",
+          "title": "Plans the epic",
+          "sub": "wayfinder + research → a spec",
+          "pills": [
+            {
+              "role": "plan",
+              "label": "autopilot"
+            }
+          ]
+        },
+        "tickets": {
+          "col": "youL",
+          "row": 5,
+          "lane": "you",
+          "cmd": "/to-spec → /to-tickets",
+          "sub": "tickets with their blockers"
+        },
+        "approve": {
+          "col": "youR",
+          "row": 5,
+          "lane": "you",
+          "title": "Approve the spec",
+          "sub": "or comment what to change",
+          "pills": [
+            {
+              "role": "plan",
+              "label": "spec-approved"
+            }
+          ]
+        },
+        "build": {
+          "col": "loop",
+          "row": 6,
+          "lane": "loop",
+          "title": "Builds ready tickets",
+          "sub": "implement · debug · review",
+          "pills": [
+            {
+              "role": "agent",
+              "label": "ready-for-agent"
+            }
+          ]
+        },
+        "stuck": {
+          "col": "youR",
+          "row": 7,
+          "lane": "you",
+          "title": "Answer what's stuck",
+          "sub": "comment, relabel for agents",
+          "pills": [
+            {
+              "role": "human",
+              "label": "ready-for-human"
+            }
+          ]
+        },
+        "verify": {
+          "col": "loop",
+          "row": 8,
+          "lane": "loop",
+          "title": "Epic PR + verify-epic",
+          "sub": "tested in the running app"
+        },
+        "gate": {
+          "col": "gh",
+          "row": 9,
+          "lane": "gh",
+          "title": "epic-gate turns green",
+          "sub": "closed · no mocks · verified"
+        },
+        "merge": {
+          "col": "youL",
+          "row": 10,
+          "lane": "you",
+          "title": "Review & merge",
+          "sub": "the epic PR to main"
+        },
+        "close": {
+          "col": "gh",
+          "row": 11,
+          "lane": "gh",
+          "title": "Closing chain",
+          "sub": "epic → milestone → initiative"
+        }
+      },
+      "edges": [
+        {
+          "points": [
+            [
+              "idea.cx",
+              "idea.B"
+            ],
+            [
+              "scope.cx",
+              "scope.T"
+            ]
+          ]
+        },
+        {
+          "points": [
+            [
+              "filed.cx",
+              "filed.B"
+            ],
+            [
+              "triage.cx",
+              "triage.T"
+            ]
+          ]
+        },
+        {
+          "points": [
+            [
+              "triage.cx-50",
+              "triage.B"
+            ],
+            [
+              "triage.cx-50",
+              "scope.cy"
+            ],
+            [
+              "scope.R",
+              "scope.cy"
+            ]
+          ],
+          "label": "too big: needs-scoping",
+          "at": [
+            700,
+            "scope.cy"
+          ]
+        },
+        {
+          "points": [
+            [
+              "triage.cx+50",
+              "triage.B"
+            ],
+            [
+              "triage.cx+50",
+              "build.T-22"
+            ],
+            [
+              "build.cx+40",
+              "build.T-22"
+            ],
+            [
+              "build.cx+40",
+              "build.T"
+            ]
+          ],
+          "label": "bug or small enhancement",
+          "at": [
+            "triage.cx+50",
+            "auto.cy"
+          ]
+        },
+        {
+          "points": [
+            [
+              "scope.cx",
+              "scope.B"
+            ],
+            [
+              "brief.cx",
+              "brief.T"
+            ]
+          ]
+        },
+        {
+          "points": [
+            [
+              "brief.cx",
+              "brief.B"
+            ],
+            [
+              "way.cx",
+              "way.T"
+            ]
+          ],
+          "label": "manual",
+          "at": [
+            "brief.cx",
+            "mid(brief.B,way.T)"
+          ]
+        },
+        {
+          "points": [
+            [
+              "brief.R",
+              "brief.cy"
+            ],
+            [
+              "auto.cx",
+              "brief.cy"
+            ],
+            [
+              "auto.cx",
+              "auto.T"
+            ]
+          ],
+          "label": "autopilot",
+          "at": [
+            "approve.cx",
+            "brief.cy"
+          ]
+        },
+        {
+          "points": [
+            [
+              "way.cx",
+              "way.B"
+            ],
+            [
+              "tickets.cx",
+              "tickets.T"
+            ]
+          ]
+        },
+        {
+          "points": [
+            [
+              "auto.cx",
+              "auto.B"
+            ],
+            [
+              "auto.cx",
+              "approve.cy"
+            ],
+            [
+              "approve.R",
+              "approve.cy"
+            ]
+          ],
+          "label": "spec",
+          "at": [
+            "auto.cx",
+            "mid(auto.B,approve.cy)"
+          ]
+        },
+        {
+          "points": [
+            [
+              "tickets.cx",
+              "tickets.B"
+            ],
+            [
+              "tickets.cx",
+              "build.cy"
+            ],
+            [
+              "build.L",
+              "build.cy"
+            ]
+          ]
+        },
+        {
+          "points": [
+            [
+              "approve.cx",
+              "approve.B"
+            ],
+            [
+              "approve.cx",
+              "build.cy"
+            ]
+          ],
+          "join": true,
+          "label": "tickets cut",
+          "at": [
+            "approve.cx",
+            "mid(approve.B,build.cy)"
+          ]
+        },
+        {
+          "points": [
+            [
+              "build.L+30",
+              "build.B"
+            ],
+            [
+              "build.L+30",
+              "stuck.cy"
+            ],
+            [
+              "stuck.R",
+              "stuck.cy"
+            ]
+          ],
+          "dash": true,
+          "label": "can't finish",
+          "at": [
+            "build.L+30",
+            "mid(build.B,stuck.cy)"
+          ]
+        },
+        {
+          "points": [
+            [
+              "stuck.cx",
+              "stuck.T"
+            ],
+            [
+              "stuck.cx",
+              "build.cy+14"
+            ],
+            [
+              "build.L",
+              "build.cy+14"
+            ]
+          ],
+          "dash": true,
+          "label": "answered",
+          "at": [
+            "stuck.cx",
+            "mid(stuck.T,build.cy+14)"
+          ]
+        },
+        {
+          "points": [
+            [
+              "build.cx+20",
+              "build.B"
+            ],
+            [
+              "verify.cx+20",
+              "verify.T"
+            ]
+          ],
+          "label": "milestone empty",
+          "at": [
+            "build.cx+20",
+            "mid(build.B,verify.T)"
+          ]
+        },
+        {
+          "points": [
+            [
+              "verify.R",
+              "verify.cy"
+            ],
+            [
+              "verify.R+34",
+              "verify.cy"
+            ],
+            [
+              "verify.R+34",
+              "build.cy"
+            ],
+            [
+              "build.R",
+              "build.cy"
+            ]
+          ],
+          "dash": true,
+          "label": "failures → bugs",
+          "at": [
+            "verify.R+34",
+            "mid(verify.cy,build.cy)"
+          ]
+        },
+        {
+          "points": [
+            [
+              "verify.cx",
+              "verify.B"
+            ],
+            [
+              "verify.cx",
+              "gate.cy"
+            ],
+            [
+              "gate.L",
+              "gate.cy"
+            ]
+          ]
+        },
+        {
+          "points": [
+            [
+              "gate.cx",
+              "gate.B"
+            ],
+            [
+              "gate.cx",
+              "merge.cy"
+            ],
+            [
+              "merge.R",
+              "merge.cy"
+            ]
+          ]
+        },
+        {
+          "points": [
+            [
+              "merge.cx",
+              "merge.B"
+            ],
+            [
+              "merge.cx",
+              "close.cy"
+            ],
+            [
+              "close.L",
+              "close.cy"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "fast",
+      "title": "The fast track",
+      "description": "The same flow with fast mode on (`AGENTS_MODE=fast`, or the `fast` label on an epic). The loop takes the steps that waited on you: it approves its own spec, answers what's stuck, resolves conflicts and merges the verified epic. You come in only through the dashed arrows, when it asks.",
+      "note": "Below `AGENTS_THRESHOLD` (70 by default), it asks you instead of deciding. It always asks before spending money, handling real credentials or personal data, deleting or publishing anything.",
+      "rows": 13,
+      "columns": {
+        "you": 145,
+        "loopL": 410,
+        "loopR": 640,
+        "gh": 870
+      },
+      "lanes": [
+        {
+          "name": "You",
+          "sub": "only when asked",
+          "x": 0,
+          "width": 290,
+          "tone": "you"
+        },
+        {
+          "name": "Agent loop",
+          "sub": "AGENTS_MODE=fast, or a fast epic",
+          "x": 290,
+          "width": 470,
+          "tone": "loop"
+        },
+        {
+          "name": "GitHub",
+          "sub": "workflows on the repo",
+          "x": 760,
+          "width": 220,
+          "tone": "gh"
+        }
+      ],
+      "nodes": {
+        "idea": {
+          "col": "you",
+          "row": 0,
+          "lane": "you",
+          "title": "Your idea",
+          "sub": "a product or a big feature"
+        },
+        "filed": {
+          "col": "gh",
+          "row": 0,
+          "lane": "gh",
+          "title": "Issue filed",
+          "sub": "by you or a teammate"
+        },
+        "triage": {
+          "col": "gh",
+          "row": 1,
+          "lane": "gh",
+          "title": "Auto-triage",
+          "sub": "labels what + who"
+        },
+        "scope": {
+          "col": "you",
+          "row": 2,
+          "lane": "you",
+          "cmd": "/scope-decomposer",
+          "sub": "local-first v1, Go live last",
+          "pills": [
+            {
+              "role": "plan",
+              "label": "epic"
+            }
+          ]
+        },
+        "brief": {
+          "col": "you",
+          "row": 3,
+          "lane": "you",
+          "cmd": "/brief",
+          "sub": "pick autopilot + fast",
+          "pills": [
+            {
+              "role": "loop",
+              "label": "fast"
+            }
+          ]
+        },
+        "conflict": {
+          "col": "loopL",
+          "row": 4,
+          "lane": "loop",
+          "title": "Resolves conflicts",
+          "sub": "main ↔ epic branch, any time"
+        },
+        "auto": {
+          "col": "loopR",
+          "row": 4,
+          "lane": "loop",
+          "title": "Plans the epic",
+          "sub": "wayfinder + research → a spec",
+          "pills": [
+            {
+              "role": "plan",
+              "label": "autopilot"
+            }
+          ]
+        },
+        "callSpec": {
+          "col": "you",
+          "row": 5,
+          "lane": "you",
+          "title": "Your call",
+          "sub": "only on decisions < 70%",
+          "pills": [
+            {
+              "role": "loop",
+              "label": "agent:asked"
+            }
+          ]
+        },
+        "approve": {
+          "col": "loopR",
+          "row": 5,
+          "lane": "loop",
+          "title": "Approves its spec",
+          "sub": "every decision ≥ 70%",
+          "pills": [
+            {
+              "role": "plan",
+              "label": "spec-approved"
+            }
+          ]
+        },
+        "build": {
+          "col": "loopR",
+          "row": 7,
+          "lane": "loop",
+          "title": "Builds ready tickets",
+          "sub": "implement · debug · review",
+          "pills": [
+            {
+              "role": "agent",
+              "label": "ready-for-agent"
+            }
+          ]
+        },
+        "ask": {
+          "col": "you",
+          "row": 8,
+          "lane": "you",
+          "title": "Answer one question",
+          "sub": "Slack ping → comment",
+          "pills": [
+            {
+              "role": "loop",
+              "label": "agent:asked"
+            }
+          ]
+        },
+        "unblock": {
+          "col": "loopL",
+          "row": 8,
+          "lane": "loop",
+          "title": "Answers what's stuck",
+          "sub": "≥ 70%, or a local stand-in",
+          "pills": [
+            {
+              "role": "human",
+              "label": "ready-for-human"
+            }
+          ]
+        },
+        "verify": {
+          "col": "loopR",
+          "row": 9,
+          "lane": "loop",
+          "title": "Epic PR + verify-epic",
+          "sub": "tested in the running app"
+        },
+        "gate": {
+          "col": "gh",
+          "row": 10,
+          "lane": "gh",
+          "title": "epic-gate green",
+          "sub": "closed · verified"
+        },
+        "merge": {
+          "col": "loopR",
+          "row": 11,
+          "lane": "loop",
+          "title": "Merges the epic",
+          "sub": "into main, by itself"
+        },
+        "close": {
+          "col": "gh",
+          "row": 12,
+          "lane": "gh",
+          "title": "Closing chain",
+          "sub": "epic → milestone → initiative"
+        }
+      },
+      "edges": [
+        {
+          "points": [
+            [
+              "idea.cx",
+              "idea.B"
+            ],
+            [
+              "scope.cx",
+              "scope.T"
+            ]
+          ]
+        },
+        {
+          "points": [
+            [
+              "filed.cx",
+              "filed.B"
+            ],
+            [
+              "triage.cx",
+              "triage.T"
+            ]
+          ]
+        },
+        {
+          "points": [
+            [
+              "triage.cx-50",
+              "triage.B"
+            ],
+            [
+              "triage.cx-50",
+              "scope.cy"
+            ],
+            [
+              "scope.R",
+              "scope.cy"
+            ]
+          ],
+          "label": "too big",
+          "at": [
+            "conflict.cx",
+            "scope.cy"
+          ]
+        },
+        {
+          "points": [
+            [
+              "triage.cx+50",
+              "triage.B"
+            ],
+            [
+              "triage.cx+50",
+              "build.cy-12"
+            ],
+            [
+              "build.R",
+              "build.cy-12"
+            ]
+          ],
+          "label": "bug or small enhancement",
+          "at": [
+            870,
+            "approve.cy"
+          ]
+        },
+        {
+          "points": [
+            [
+              "scope.cx",
+              "scope.B"
+            ],
+            [
+              "brief.cx",
+              "brief.T"
+            ]
+          ]
+        },
+        {
+          "points": [
+            [
+              "brief.R",
+              "brief.cy"
+            ],
+            [
+              "auto.cx",
+              "brief.cy"
+            ],
+            [
+              "auto.cx",
+              "auto.T"
+            ]
+          ],
+          "label": "autopilot + fast",
+          "at": [
+            "conflict.cx",
+            "brief.cy"
+          ]
+        },
+        {
+          "points": [
+            [
+              "auto.cx",
+              "auto.B"
+            ],
+            [
+              "approve.cx",
+              "approve.T"
+            ]
+          ]
+        },
+        {
+          "points": [
+            [
+              "approve.L",
+              "approve.cy-12"
+            ],
+            [
+              "callSpec.R",
+              "callSpec.cy-12"
+            ]
+          ],
+          "dash": true,
+          "label": "below 70%",
+          "at": [
+            "conflict.cx",
+            "approve.cy-26"
+          ]
+        },
+        {
+          "points": [
+            [
+              "callSpec.R",
+              "callSpec.cy+12"
+            ],
+            [
+              "approve.L",
+              "approve.cy+12"
+            ]
+          ],
+          "dash": true,
+          "label": "your comment",
+          "at": [
+            "conflict.cx",
+            "approve.cy+26"
+          ]
+        },
+        {
+          "points": [
+            [
+              "approve.cx",
+              "approve.B"
+            ],
+            [
+              "build.cx",
+              "build.T"
+            ]
+          ],
+          "label": "tickets cut",
+          "at": [
+            "approve.cx",
+            "mid(approve.B,build.T)"
+          ]
+        },
+        {
+          "points": [
+            [
+              "build.L",
+              "build.cy+14"
+            ],
+            [
+              "unblock.cx+30",
+              "build.cy+14"
+            ],
+            [
+              "unblock.cx+30",
+              "unblock.T"
+            ]
+          ],
+          "dash": true,
+          "label": "can't finish",
+          "at": [
+            "mid(unblock.cx+30,build.L)",
+            "build.cy+14"
+          ]
+        },
+        {
+          "points": [
+            [
+              "unblock.cx-40",
+              "unblock.T"
+            ],
+            [
+              "unblock.cx-40",
+              "build.cy-12"
+            ],
+            [
+              "build.L",
+              "build.cy-12"
+            ]
+          ],
+          "dash": true,
+          "label": "answered",
+          "at": [
+            "unblock.cx-40",
+            "unblock.T-18"
+          ]
+        },
+        {
+          "points": [
+            [
+              "unblock.L",
+              "unblock.cy-12"
+            ],
+            [
+              "ask.R",
+              "ask.cy-12"
+            ]
+          ],
+          "dash": true
+        },
+        {
+          "points": [
+            [
+              "ask.R",
+              "ask.cy+12"
+            ],
+            [
+              "unblock.L",
+              "unblock.cy+12"
+            ]
+          ],
+          "dash": true
+        },
+        {
+          "points": [
+            [
+              "build.cx",
+              "build.B"
+            ],
+            [
+              "verify.cx",
+              "verify.T"
+            ]
+          ],
+          "label": "milestone empty",
+          "at": [
+            "build.cx",
+            "mid(build.B,verify.T)"
+          ]
+        },
+        {
+          "points": [
+            [
+              "verify.R",
+              "verify.cy"
+            ],
+            [
+              "verify.R+14",
+              "verify.cy"
+            ],
+            [
+              "verify.R+14",
+              "build.cy+12"
+            ],
+            [
+              "build.R",
+              "build.cy+12"
+            ]
+          ],
+          "dash": true,
+          "label": "failures",
+          "at": [
+            "verify.R+14",
+            "mid(build.B,verify.T)"
+          ]
+        },
+        {
+          "points": [
+            [
+              "verify.cx",
+              "verify.B"
+            ],
+            [
+              "verify.cx",
+              "gate.cy"
+            ],
+            [
+              "gate.L",
+              "gate.cy"
+            ]
+          ]
+        },
+        {
+          "points": [
+            [
+              "gate.cx",
+              "gate.B"
+            ],
+            [
+              "gate.cx",
+              "merge.cy"
+            ],
+            [
+              "merge.R",
+              "merge.cy"
+            ]
+          ]
+        },
+        {
+          "points": [
+            [
+              "merge.cx",
+              "merge.B"
+            ],
+            [
+              "merge.cx",
+              "close.cy"
+            ],
+            [
+              "close.L",
+              "close.cy"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "supersonic",
+      "title": "Supersonic",
+      "description": "Fast mode without the waiting, for throwaway MVPs (`AGENTS_MODE=supersonic`, or the `supersonic` label). `/scope-decomposer` writes every epic's brief in its one interview. Below the threshold, a call that can be undone is assumed instead of asked, and the spec is always approved. The assumptions reach you in one Slack digest a day; comment on an issue to change a call.",
+      "note": "It still stops and waits for money, credentials, personal data, deleting or publishing: those can't be undone. A wrong guess elsewhere costs rework, since your comment becomes a follow-up ticket. Fine for an MVP; not for production work.",
+      "rows": 12,
+      "columns": {
+        "you": 145,
+        "loopL": 410,
+        "loopR": 640,
+        "gh": 870
+      },
+      "lanes": [
+        {
+          "name": "You",
+          "sub": "one interview, then a digest",
+          "x": 0,
+          "width": 290,
+          "tone": "you"
+        },
+        {
+          "name": "Agent loop",
+          "sub": "AGENTS_MODE=supersonic",
+          "x": 290,
+          "width": 470,
+          "tone": "loop"
+        },
+        {
+          "name": "GitHub",
+          "sub": "workflows on the repo",
+          "x": 760,
+          "width": 220,
+          "tone": "gh"
+        }
+      ],
+      "nodes": {
+        "idea": {
+          "col": "you",
+          "row": 0,
+          "lane": "you",
+          "title": "Your idea",
+          "sub": "a throwaway MVP"
+        },
+        "filed": {
+          "col": "gh",
+          "row": 0,
+          "lane": "gh",
+          "title": "Issue filed",
+          "sub": "by you or a teammate"
+        },
+        "triage": {
+          "col": "gh",
+          "row": 1,
+          "lane": "gh",
+          "title": "Auto-triage",
+          "sub": "labels what + who"
+        },
+        "scope": {
+          "col": "you",
+          "row": 2,
+          "lane": "you",
+          "cmd": "/scope-decomposer",
+          "sub": "one interview: epics + briefs",
+          "pills": [
+            {
+              "role": "plan",
+              "label": "autopilot"
+            }
+          ]
+        },
+        "auto": {
+          "col": "loopR",
+          "row": 3,
+          "lane": "loop",
+          "title": "Plans the epic",
+          "sub": "wayfinder + research → a spec"
+        },
+        "conflict": {
+          "col": "loopL",
+          "row": 4,
+          "lane": "loop",
+          "title": "Resolves conflicts",
+          "sub": "main ↔ epic branch, any time"
+        },
+        "approve": {
+          "col": "loopR",
+          "row": 4,
+          "lane": "loop",
+          "title": "Approves its spec",
+          "sub": "always; low calls assumed",
+          "pills": [
+            {
+              "role": "plan",
+              "label": "spec-approved"
+            }
+          ]
+        },
+        "build": {
+          "col": "loopR",
+          "row": 6,
+          "lane": "loop",
+          "title": "Builds ready tickets",
+          "sub": "implement · debug · review",
+          "pills": [
+            {
+              "role": "agent",
+              "label": "ready-for-agent"
+            }
+          ]
+        },
+        "block": {
+          "col": "you",
+          "row": 7,
+          "lane": "you",
+          "title": "Blocking question",
+          "sub": "money · secrets · data · deletes",
+          "pills": [
+            {
+              "role": "loop",
+              "label": "agent:asked"
+            }
+          ]
+        },
+        "unblock": {
+          "col": "loopL",
+          "row": 7,
+          "lane": "loop",
+          "title": "Assumes or answers",
+          "sub": "best guess if it can be undone",
+          "pills": [
+            {
+              "role": "loop",
+              "label": "agent:assumed"
+            }
+          ]
+        },
+        "verify": {
+          "col": "loopR",
+          "row": 8,
+          "lane": "loop",
+          "title": "Epic PR + verify-epic",
+          "sub": "tested in the running app"
+        },
+        "gate": {
+          "col": "gh",
+          "row": 9,
+          "lane": "gh",
+          "title": "epic-gate green",
+          "sub": "closed · verified"
+        },
+        "digest": {
+          "col": "you",
+          "row": 10,
+          "lane": "you",
+          "title": "Daily digest",
+          "sub": "comment to change a call",
+          "pills": [
+            {
+              "role": "loop",
+              "label": "agent:assumed"
+            }
+          ]
+        },
+        "followup": {
+          "col": "loopL",
+          "row": 10,
+          "lane": "loop",
+          "title": "Follows up",
+          "sub": "edits it, or a follow-up ticket"
+        },
+        "merge": {
+          "col": "loopR",
+          "row": 10,
+          "lane": "loop",
+          "title": "Merges the epic",
+          "sub": "into main, by itself"
+        },
+        "close": {
+          "col": "gh",
+          "row": 11,
+          "lane": "gh",
+          "title": "Closing chain",
+          "sub": "epic → milestone → initiative"
+        }
+      },
+      "edges": [
+        {
+          "points": [
+            [
+              "idea.cx",
+              "idea.B"
+            ],
+            [
+              "scope.cx",
+              "scope.T"
+            ]
+          ]
+        },
+        {
+          "points": [
+            [
+              "filed.cx",
+              "filed.B"
+            ],
+            [
+              "triage.cx",
+              "triage.T"
+            ]
+          ]
+        },
+        {
+          "points": [
+            [
+              "triage.cx-50",
+              "triage.B"
+            ],
+            [
+              "triage.cx-50",
+              "scope.cy"
+            ],
+            [
+              "scope.R",
+              "scope.cy"
+            ]
+          ],
+          "label": "too big",
+          "at": [
+            "conflict.cx",
+            "scope.cy"
+          ]
+        },
+        {
+          "points": [
+            [
+              "triage.cx+50",
+              "triage.B"
+            ],
+            [
+              "triage.cx+50",
+              "build.cy-12"
+            ],
+            [
+              "build.R",
+              "build.cy-12"
+            ]
+          ],
+          "label": "bug or small enhancement",
+          "at": [
+            870,
+            "approve.cy"
+          ]
+        },
+        {
+          "points": [
+            [
+              "scope.cx",
+              "scope.B"
+            ],
+            [
+              "scope.cx",
+              "auto.cy"
+            ],
+            [
+              "auto.L",
+              "auto.cy"
+            ]
+          ],
+          "label": "briefed epics",
+          "at": [
+            "conflict.cx",
+            "auto.cy"
+          ]
+        },
+        {
+          "points": [
+            [
+              "auto.cx",
+              "auto.B"
+            ],
+            [
+              "approve.cx",
+              "approve.T"
+            ]
+          ]
+        },
+        {
+          "points": [
+            [
+              "approve.cx",
+              "approve.B"
+            ],
+            [
+              "build.cx",
+              "build.T"
+            ]
+          ],
+          "label": "tickets cut",
+          "at": [
+            "approve.cx",
+            "mid(approve.B,build.T)"
+          ]
+        },
+        {
+          "points": [
+            [
+              "build.L",
+              "build.cy+14"
+            ],
+            [
+              "unblock.cx+30",
+              "build.cy+14"
+            ],
+            [
+              "unblock.cx+30",
+              "unblock.T"
+            ]
+          ],
+          "dash": true,
+          "label": "can't finish",
+          "at": [
+            "mid(unblock.cx+30,build.L)",
+            "build.cy+14"
+          ]
+        },
+        {
+          "points": [
+            [
+              "unblock.cx-40",
+              "unblock.T"
+            ],
+            [
+              "unblock.cx-40",
+              "build.cy-12"
+            ],
+            [
+              "build.L",
+              "build.cy-12"
+            ]
+          ],
+          "dash": true,
+          "label": "back to build",
+          "at": [
+            "unblock.cx-40",
+            "unblock.T-18"
+          ]
+        },
+        {
+          "points": [
+            [
+              "unblock.L",
+              "unblock.cy-12"
+            ],
+            [
+              "block.R",
+              "block.cy-12"
+            ]
+          ],
+          "dash": true
+        },
+        {
+          "points": [
+            [
+              "block.R",
+              "block.cy+12"
+            ],
+            [
+              "unblock.L",
+              "unblock.cy+12"
+            ]
+          ],
+          "dash": true
+        },
+        {
+          "points": [
+            [
+              "build.cx",
+              "build.B"
+            ],
+            [
+              "verify.cx",
+              "verify.T"
+            ]
+          ],
+          "label": "milestone empty",
+          "at": [
+            "build.cx",
+            "mid(build.B,verify.T)"
+          ]
+        },
+        {
+          "points": [
+            [
+              "verify.R",
+              "verify.cy"
+            ],
+            [
+              "verify.R+14",
+              "verify.cy"
+            ],
+            [
+              "verify.R+14",
+              "build.cy+12"
+            ],
+            [
+              "build.R",
+              "build.cy+12"
+            ]
+          ],
+          "dash": true,
+          "label": "failures",
+          "at": [
+            "verify.R+14",
+            "mid(build.B,verify.T)"
+          ]
+        },
+        {
+          "points": [
+            [
+              "verify.cx",
+              "verify.B"
+            ],
+            [
+              "verify.cx",
+              "gate.cy"
+            ],
+            [
+              "gate.L",
+              "gate.cy"
+            ]
+          ]
+        },
+        {
+          "points": [
+            [
+              "unblock.cx",
+              "unblock.B"
+            ],
+            [
+              "unblock.cx",
+              "row9"
+            ],
+            [
+              "digest.cx",
+              "row9"
+            ],
+            [
+              "digest.cx",
+              "digest.T"
+            ]
+          ],
+          "dash": true,
+          "label": "assumed calls",
+          "at": [
+            "mid(digest.cx,unblock.cx)",
+            "row9"
+          ]
+        },
+        {
+          "points": [
+            [
+              "digest.R",
+              "digest.cy"
+            ],
+            [
+              "followup.L",
+              "followup.cy"
+            ]
+          ],
+          "dash": true
+        },
+        {
+          "points": [
+            [
+              "gate.cx",
+              "gate.B"
+            ],
+            [
+              "gate.cx",
+              "merge.cy"
+            ],
+            [
+              "merge.R",
+              "merge.cy"
+            ]
+          ]
+        },
+        {
+          "points": [
+            [
+              "merge.cx",
+              "merge.B"
+            ],
+            [
+              "merge.cx",
+              "close.cy"
+            ],
+            [
+              "close.L",
+              "close.cy"
+            ]
+          ]
+        }
+      ]
+    }
+  ],
+  "flowLayout": {
+    "width": 980,
+    "nodeWidth": 196,
+    "top": 76,
+    "row": 92,
+    "nodeHeight": 58,
+    "nodeHeightWithPills": 78
+  },
+  "stages": [
+    {
+      "title": "Intake",
+      "who": "Workflow",
+      "body": "Anyone files an issue. Automatic triage labels what it is and who acts next, and comments its reasoning: a small enhancement goes to agents with a brief, a bug to debugging, anything big to scoping, anything unclear back to the reporter.",
+      "tags": [
+        {
+          "cmd": "/triage"
+        },
+        {
+          "label": "needs-triage",
+          "role": "park"
+        },
+        {
+          "label": "needs-info",
+          "role": "what"
+        }
+      ]
+    },
+    {
+      "title": "Scope",
+      "who": "You + agent",
+      "body": "A big idea, yours or a needs-scoping issue, becomes an initiative with epics. Each epic has one destination, one owner area, its own milestone (NN: Initiative / Epic) and branch (epic/NN-slug), and blocking links to the epics it waits on. New products default to a local-first v1.",
+      "tags": [
+        {
+          "cmd": "/scope-decomposer"
+        },
+        {
+          "label": "initiative",
+          "role": "plan"
+        },
+        {
+          "label": "epic",
+          "role": "plan"
+        }
+      ]
+    },
+    {
+      "title": "Brief",
+      "who": "You + agent",
+      "body": "A short, high-level interview per epic captures your must-haves, no-gos and calls already made, saved in the epic's Brief. It ends with your choice: manual or autopilot (and fast, if you want it).",
+      "tags": [
+        {
+          "cmd": "/brief"
+        },
+        {
+          "label": "needs-briefing",
+          "role": "plan"
+        },
+        {
+          "label": "autopilot",
+          "role": "plan"
+        }
+      ]
+    },
+    {
+      "title": "Plan",
+      "who": "You, or the loop",
+      "body": "Wayfinder charts the decisions an epic needs as tickets and resolves them: with you, one at a time, or alone on autopilot, ending in a spec for your approval. /product-design builds the real UI on mock data until you agree.",
+      "tags": [
+        {
+          "cmd": "/wayfinder"
+        },
+        {
+          "cmd": "/dig"
+        },
+        {
+          "cmd": "/product-design"
+        },
+        {
+          "label": "wayfinder:map",
+          "role": "plan"
+        }
+      ]
+    },
+    {
+      "title": "Tickets",
+      "who": "Agent",
+      "body": "The spec is cut into tracer-bullet tickets, each in the epic's milestone with its blockers, labelled for agents.",
+      "tags": [
+        {
+          "cmd": "/to-spec"
+        },
+        {
+          "cmd": "/to-tickets"
+        },
+        {
+          "label": "spec",
+          "role": "plan"
+        },
+        {
+          "label": "ready-for-agent",
+          "role": "agent"
+        }
+      ]
+    },
+    {
+      "title": "Build & fix",
+      "who": "Agent loop",
+      "body": "The loop picks every ready, unblocked ticket, plans which can run in parallel, and works each in a Docker sandbox: tests first, then a code review. Epic tickets land on the epic branch and close; others arrive as PRs. A ticket it can't finish goes to a person.",
+      "tags": [
+        {
+          "label": "ready-for-agent",
+          "role": "agent"
+        },
+        {
+          "label": "ready-for-agent-debugging",
+          "role": "agent"
+        },
+        {
+          "label": "ready-for-human",
+          "role": "human"
+        }
+      ]
+    },
+    {
+      "title": "Verify",
+      "who": "Agent loop",
+      "body": "When a milestone has no open tickets, the loop opens the epic's PR and runs verify-epic in the running app: acceptance criteria, stories, API contracts, agreed screens. Failures become bug tickets, the loop fixes them, and verification runs again.",
+      "tags": [
+        {
+          "label": "ready-for-agent-debugging",
+          "role": "agent"
+        }
+      ]
+    },
+    {
+      "title": "Ship",
+      "who": "You (or fast mode)",
+      "body": "epic-gate turns green when nothing is open, no mocks/ folder is left and verification passed. You merge (fast mode merges for you). The epic closes, then its milestone, then the initiative when it was the last epic.",
+      "tags": [
+        {
+          "label": "ready-for-review",
+          "role": "human"
+        }
+      ]
+    }
+  ],
+  "labels": [
+    {
+      "name": "needs-triage",
+      "role": "park",
+      "kind": "Transient",
+      "means": "Triage hasn't finished",
+      "setBy": "New issue",
+      "next": "Triage runs, or /triage #n"
+    },
+    {
+      "name": "bug",
+      "role": "what",
+      "kind": "What",
+      "means": "Something is broken",
+      "setBy": "Triage",
+      "next": "Goes with a who label"
+    },
+    {
+      "name": "enhancement",
+      "role": "what",
+      "kind": "What",
+      "means": "A small improvement, one brief's worth",
+      "setBy": "Triage",
+      "next": "Goes with a who label"
+    },
+    {
+      "name": "needs-scoping",
+      "role": "what",
+      "kind": "What",
+      "means": "Too big for one brief",
+      "setBy": "Triage",
+      "next": "/scope-decomposer turns it into an initiative"
+    },
+    {
+      "name": "needs-info",
+      "role": "what",
+      "kind": "What",
+      "means": "Waiting on the reporter",
+      "setBy": "Triage",
+      "next": "The reporter replies; triage re-runs"
+    },
+    {
+      "name": "wontfix",
+      "role": "what",
+      "kind": "What",
+      "means": "Built already, duplicate or rejected",
+      "setBy": "Triage",
+      "next": "A person closes it"
+    },
+    {
+      "name": "ready-for-agent",
+      "role": "agent",
+      "kind": "Who",
+      "means": "An agent builds it",
+      "setBy": "Triage, /to-tickets, fast mode",
+      "next": "The loop runs implement"
+    },
+    {
+      "name": "ready-for-agent-debugging",
+      "role": "agent",
+      "kind": "Who",
+      "means": "An agent reproduces and fixes the bug",
+      "setBy": "Triage, verify-epic, fast mode",
+      "next": "The loop runs debug-and-fix"
+    },
+    {
+      "name": "ready-for-human",
+      "role": "human",
+      "kind": "Who",
+      "means": "A person acts next",
+      "setBy": "Any skill or the loop",
+      "next": "The assignee acts; in fast mode the loop tries first"
+    },
+    {
+      "name": "ready-for-review",
+      "role": "human",
+      "kind": "Who",
+      "means": "A fix PR waits for review",
+      "setBy": "The loop",
+      "next": "Review the linked PR"
+    },
+    {
+      "name": "initiative",
+      "role": "plan",
+      "kind": "Planning",
+      "means": "A big idea, the parent of epics",
+      "setBy": "/scope-decomposer",
+      "next": "Closes when its last epic ships"
+    },
+    {
+      "name": "epic",
+      "role": "plan",
+      "kind": "Planning",
+      "means": "One bounded scope: one map, one PR",
+      "setBy": "/scope-decomposer",
+      "next": "/brief, then planning"
+    },
+    {
+      "name": "needs-briefing",
+      "role": "plan",
+      "kind": "Planning",
+      "means": "An epic waiting for its brief",
+      "setBy": "/scope-decomposer",
+      "next": "/brief"
+    },
+    {
+      "name": "autopilot",
+      "role": "plan",
+      "kind": "Planning",
+      "means": "An epic the loop plans by itself",
+      "setBy": "/brief",
+      "next": "The loop runs wayfinder on autopilot"
+    },
+    {
+      "name": "wayfinder:map",
+      "role": "plan",
+      "kind": "Planning",
+      "means": "An epic's map of decisions (also wayfinder:* tickets)",
+      "setBy": "/wayfinder",
+      "next": "Resolve its decision tickets"
+    },
+    {
+      "name": "spec",
+      "role": "plan",
+      "kind": "Planning",
+      "means": "A spec, never built directly",
+      "setBy": "/to-spec, autopilot",
+      "next": "Approve it, then /to-tickets"
+    },
+    {
+      "name": "spec-approved",
+      "role": "plan",
+      "kind": "Planning",
+      "means": "You (or fast mode) approved an autopilot spec",
+      "setBy": "You, or fast mode",
+      "next": "The loop cuts its tickets"
+    },
+    {
+      "name": "area:*",
+      "role": "what",
+      "kind": "Ownership",
+      "means": "Which part of the product, so who owns it",
+      "setBy": "/scope-decomposer, triage",
+      "next": "See docs/agents/team.md"
+    },
+    {
+      "name": "agent:planning",
+      "role": "loop",
+      "kind": "Loop",
+      "means": "The loop is planning this epic right now",
+      "setBy": "The loop",
+      "next": "Removed when the run ends"
+    },
+    {
+      "name": "fast",
+      "role": "loop",
+      "kind": "Loop",
+      "means": "Fast mode for this one epic",
+      "setBy": "You",
+      "next": "The loop unblocks it by itself"
+    },
+    {
+      "name": "agent:unblocking",
+      "role": "loop",
+      "kind": "Loop",
+      "means": "Fast mode is working on this issue now",
+      "setBy": "The loop",
+      "next": "Removed when the run ends"
+    },
+    {
+      "name": "agent:asked",
+      "role": "loop",
+      "kind": "Loop",
+      "means": "Fast mode asked you a question here",
+      "setBy": "The loop",
+      "next": "Comment your answer on the issue"
+    },
+    {
+      "name": "supersonic",
+      "role": "loop",
+      "kind": "Loop",
+      "means": "Supersonic mode for this one epic",
+      "setBy": "You, or /scope-decomposer",
+      "next": "The loop assumes what can be undone"
+    },
+    {
+      "name": "agent:assumed",
+      "role": "loop",
+      "kind": "Loop",
+      "means": "Supersonic assumed a call here",
+      "setBy": "The loop",
+      "next": "Comment to change it; a follow-up fixes what's built"
+    },
+    {
+      "name": "backlog",
+      "role": "park",
+      "kind": "Parked",
+      "means": "Parked for later: no triage, no agent, no planning",
+      "setBy": "You, or /triage",
+      "next": "Remove it and set a who label to bring it back"
+    }
+  ],
+  "journeys": [
+    {
+      "title": "A bug someone files",
+      "steps": [
+        {
+          "label": "needs-triage",
+          "role": "park"
+        },
+        {
+          "via": "auto-triage"
+        },
+        {
+          "label": "bug",
+          "role": "what"
+        },
+        {
+          "label": "ready-for-agent-debugging",
+          "role": "agent"
+        },
+        {
+          "via": "debug-and-fix"
+        },
+        {
+          "label": "ready-for-review",
+          "role": "human"
+        },
+        {
+          "via": "you merge"
+        },
+        {
+          "end": "closed"
+        }
+      ],
+      "note": "If the diagnosis needs a person, debug-and-fix hands it to ready-for-human instead. Under an epic, the fix lands on the epic branch and the issue closes."
+    },
+    {
+      "title": "A small enhancement",
+      "steps": [
+        {
+          "label": "needs-triage",
+          "role": "park"
+        },
+        {
+          "via": "auto-triage"
+        },
+        {
+          "label": "enhancement",
+          "role": "what"
+        },
+        {
+          "label": "ready-for-agent",
+          "role": "agent"
+        },
+        {
+          "via": "implement"
+        },
+        {
+          "label": "ready-for-review",
+          "role": "human"
+        },
+        {
+          "via": "you merge"
+        },
+        {
+          "end": "closed"
+        }
+      ]
+    },
+    {
+      "title": "A big idea, on autopilot",
+      "steps": [
+        {
+          "label": "needs-scoping",
+          "role": "what"
+        },
+        {
+          "via": "/scope-decomposer"
+        },
+        {
+          "label": "epic",
+          "role": "plan"
+        },
+        {
+          "label": "needs-briefing",
+          "role": "plan"
+        },
+        {
+          "via": "/brief"
+        },
+        {
+          "label": "autopilot",
+          "role": "plan"
+        },
+        {
+          "via": "loop plans"
+        },
+        {
+          "label": "spec",
+          "role": "plan"
+        },
+        {
+          "via": "you approve"
+        },
+        {
+          "label": "spec-approved",
+          "role": "plan"
+        },
+        {
+          "via": "/to-tickets"
+        },
+        {
+          "label": "ready-for-agent",
+          "role": "agent"
+        },
+        {
+          "via": "verify-epic"
+        },
+        {
+          "via": "you merge"
+        },
+        {
+          "end": "closed"
+        }
+      ]
+    },
+    {
+      "title": "Fast mode, when the loop is stuck",
+      "steps": [
+        {
+          "label": "ready-for-human",
+          "role": "human"
+        },
+        {
+          "via": "loop answers"
+        },
+        {
+          "label": "ready-for-agent",
+          "role": "agent"
+        }
+      ],
+      "alt": [
+        {
+          "label": "ready-for-human",
+          "role": "human"
+        },
+        {
+          "via": "not confident"
+        },
+        {
+          "label": "agent:asked",
+          "role": "loop"
+        },
+        {
+          "via": "you comment"
+        },
+        {
+          "label": "ready-for-agent",
+          "role": "agent"
+        }
+      ]
+    },
+    {
+      "title": "Parking something",
+      "steps": [
+        {
+          "label": "ready-for-agent",
+          "role": "agent"
+        },
+        {
+          "via": "you park it"
+        },
+        {
+          "label": "backlog",
+          "role": "park"
+        },
+        {
+          "via": "you un-park"
+        },
+        {
+          "label": "ready-for-agent",
+          "role": "agent"
+        }
+      ],
+      "note": "Parking drops the who label, so a backlog issue is in nobody's inbox and no agent touches it."
+    }
+  ],
+  "modes": {
+    "columns": [
+      "Manual",
+      "Autopilot",
+      "Fast",
+      "Supersonic"
+    ],
+    "rows": [
+      {
+        "moment": "The brief",
+        "cells": [
+          [
+            "you",
+            "You, with an agent"
+          ],
+          [
+            "you",
+            "You, with an agent"
+          ],
+          [
+            "you",
+            "You, with an agent"
+          ],
+          [
+            "auto",
+            "Written by /scope-decomposer in its one interview"
+          ]
+        ]
+      },
+      {
+        "moment": "Each planning decision",
+        "cells": [
+          [
+            "you",
+            "You, one at a time in /wayfinder"
+          ],
+          [
+            "auto",
+            "Agent decides, digs when unsure, marks guesses assumed"
+          ],
+          [
+            "auto",
+            "Same as autopilot"
+          ],
+          [
+            "auto",
+            "Same as autopilot"
+          ]
+        ]
+      },
+      {
+        "moment": "The spec",
+        "cells": [
+          [
+            "you",
+            "You write it with /to-spec"
+          ],
+          [
+            "you",
+            "You approve it (spec-approved)"
+          ],
+          [
+            "auto",
+            "Approved if every decision is at or above the threshold; you're asked only about the ones below"
+          ],
+          [
+            "auto",
+            "Always approved; the low ones stand as assumed"
+          ]
+        ]
+      },
+      {
+        "moment": "An account, secret or access only you have",
+        "cells": [
+          [
+            "you",
+            "You"
+          ],
+          [
+            "you",
+            "Parked as ready-for-human (a local stand-in first on a local-first v1)"
+          ],
+          [
+            "auto",
+            "Local stand-in if one serves; otherwise asked in Slack"
+          ],
+          [
+            "auto",
+            "Local stand-in if one serves; otherwise asked and waited for"
+          ]
+        ]
+      },
+      {
+        "moment": "A ticket the agent can't finish",
+        "cells": [
+          [
+            "you",
+            "You"
+          ],
+          [
+            "you",
+            "You"
+          ],
+          [
+            "auto",
+            "Answered when confident enough, sent back to the agents; otherwise asked"
+          ],
+          [
+            "auto",
+            "Answered, or assumed when it can be undone; asked only otherwise"
+          ]
+        ]
+      },
+      {
+        "moment": "main conflicts with the epic branch",
+        "cells": [
+          [
+            "you",
+            "You"
+          ],
+          [
+            "you",
+            "You"
+          ],
+          [
+            "auto",
+            "An agent resolves the merge; asks you if it needs a product call"
+          ],
+          [
+            "auto",
+            "Same as fast"
+          ]
+        ]
+      },
+      {
+        "moment": "Merging the verified epic PR",
+        "cells": [
+          [
+            "you",
+            "You"
+          ],
+          [
+            "you",
+            "You"
+          ],
+          [
+            "auto",
+            "Merged once verify-epic passes"
+          ],
+          [
+            "auto",
+            "Merged once verify-epic passes"
+          ]
+        ]
+      },
+      {
+        "moment": "How you hear from it",
+        "cells": [
+          [
+            "none",
+            "You run it yourself"
+          ],
+          [
+            "none",
+            "A ping when a spec is ready"
+          ],
+          [
+            "none",
+            "A Slack ping per question"
+          ],
+          [
+            "auto",
+            "One digest a day; pings only for what blocks"
+          ]
+        ]
+      }
+    ],
+    "notes": [
+      {
+        "tone": "loop",
+        "title": "The loop always asks",
+        "body": "Fast and supersonic modes always stop for you before spending money, handling real credentials or personal data, deleting or publishing anything, or contradicting the brief. They never touch anything labelled `backlog`."
+      },
+      {
+        "tone": "agent",
+        "title": "Local-first v1",
+        "body": "For a new product, `/scope-decomposer` recommends building the whole first version on your machine (SQLite or Docker Postgres, local storage, a dev login, console email, test-mode payments). Cloud accounts, domains, secrets and deploys wait in one Go live epic, last and blocking nothing, so the loop never stalls on setup only you can do."
+      }
+    ],
+    "settings": "Set the mode in `.sandcastle/.env`: `AGENTS_MODE=fast` or `AGENTS_MODE=supersonic` for a whole project, or label one epic `fast` or `supersonic`. `AGENTS_THRESHOLD` (70 by default) is the confidence below which the loop asks (fast) or assumes (supersonic)."
+  },
+  "groups": [
+    {
+      "id": "plan",
+      "title": "Planning",
+      "description": "From an issue or idea to tickets agents can build."
+    },
+    {
+      "id": "build",
+      "title": "Building & fixing",
+      "description": "Turning tickets into tested, reviewed code, and checking the result."
+    },
+    {
+      "id": "design",
+      "title": "Design & code quality",
+      "description": "Shared vocabulary and reviews for the code's shape."
+    },
+    {
+      "id": "think",
+      "title": "Thinking tools",
+      "description": "Interviews and research the other skills lean on, also useful alone."
+    },
+    {
+      "id": "ops",
+      "title": "Setup & upkeep",
+      "description": "Project setup, the tracker page, repo hygiene."
+    },
+    {
+      "id": "wip",
+      "title": "In progress",
+      "description": "Not finished; not installed in projects yet."
+    },
+    {
+      "id": "more",
+      "title": "More skills",
+      "description": "Skills not yet sorted into a group."
+    }
+  ],
+  "skills": {
+    "triage": {
+      "group": "plan",
+      "uses": [
+        "grilling",
+        "domain-modeling"
+      ],
+      "next": [
+        "scope-decomposer",
+        "debug-and-fix"
+      ]
+    },
+    "scope-decomposer": {
+      "group": "plan",
+      "uses": [
+        "grilling",
+        "domain-modeling"
+      ],
+      "next": [
+        "brief"
+      ],
+      "summary": "Breaks a big idea into an initiative of epics on the tracker, each with a milestone, a branch and its blockers. New products default to a local-first v1 with a Go-live epic last."
+    },
+    "brief": {
+      "group": "plan",
+      "uses": [
+        "grilling",
+        "domain-modeling"
+      ],
+      "next": [
+        "wayfinder"
+      ],
+      "summary": "A short, high-level interview per epic that captures what you already want, then sets manual or autopilot."
+    },
+    "wayfinder": {
+      "group": "plan",
+      "uses": [
+        "grilling",
+        "domain-modeling",
+        "research",
+        "prototype",
+        "dig",
+        "to-spec"
+      ],
+      "next": [
+        "to-spec",
+        "to-tickets"
+      ],
+      "loop": true,
+      "summary": "Plans an epic as a map of decision tickets and resolves them until the way is clear. On autopilot the loop decides alone and writes a spec for approval."
+    },
+    "product-design": {
+      "group": "plan",
+      "uses": [
+        "prototype",
+        "to-spec",
+        "to-tickets"
+      ],
+      "next": [
+        "to-tickets"
+      ]
+    },
+    "to-spec": {
+      "group": "plan",
+      "next": [
+        "to-tickets"
+      ],
+      "loop": true
+    },
+    "to-tickets": {
+      "group": "plan",
+      "next": [
+        "implement"
+      ],
+      "loop": true,
+      "summary": "Cuts a spec into tracer-bullet tickets with blocking edges, labelled ready-for-agent."
+    },
+    "prototype": {
+      "group": "plan"
+    },
+    "implement": {
+      "group": "build",
+      "uses": [
+        "tdd",
+        "code-review"
+      ],
+      "loop": true
+    },
+    "implement-spec": {
+      "group": "build",
+      "uses": [
+        "tdd",
+        "code-review",
+        "to-spec",
+        "to-tickets"
+      ]
+    },
+    "tdd": {
+      "group": "build",
+      "uses": [
+        "codebase-design",
+        "code-review"
+      ]
+    },
+    "code-review": {
+      "group": "build",
+      "loop": true,
+      "summary": "Reviews changes against the repo's coding standards and against the originating issue or spec, in parallel."
+    },
+    "debug-and-fix": {
+      "group": "build",
+      "uses": [
+        "diagnosing-bugs",
+        "pr"
+      ],
+      "loop": true,
+      "summary": "Takes a bug from the debugging queue, diagnoses it (in a browser for UI bugs), fixes it with a regression test, and reports on the issue."
+    },
+    "diagnosing-bugs": {
+      "group": "build"
+    },
+    "verify-epic": {
+      "group": "build",
+      "next": [
+        "debug-and-fix"
+      ],
+      "loop": true,
+      "summary": "Tests an epic's PR in the running app against its tickets, spec and agreed screens; files failures as bugs and sets the merge-gate status."
+    },
+    "plan-work": {
+      "group": "build",
+      "next": [
+        "do-work"
+      ],
+      "summary": "Read-only planning for one issue, ending in Plan Mode with an explicit approach (test-first or direct)."
+    },
+    "do-work": {
+      "group": "build",
+      "next": [
+        "review-work"
+      ],
+      "summary": "Implements the plan approved in the same session; runs typecheck and tests with a capped self-fix loop. Never commits."
+    },
+    "review-work": {
+      "group": "build",
+      "summary": "A refactor-only review of a recent commit, without changing behaviour. Never commits."
+    },
+    "pr": {
+      "group": "build",
+      "summary": "Writes a pull request body."
+    },
+    "codebase-design": {
+      "group": "design"
+    },
+    "domain-modeling": {
+      "group": "design"
+    },
+    "improve-codebase-architecture": {
+      "group": "design",
+      "uses": [
+        "codebase-design",
+        "domain-modeling",
+        "grilling"
+      ]
+    },
+    "thermo-nuclear-code-quality-review": {
+      "group": "design"
+    },
+    "grilling": {
+      "group": "think"
+    },
+    "grill-me": {
+      "group": "think",
+      "uses": [
+        "grilling"
+      ]
+    },
+    "grill-with-docs": {
+      "group": "think",
+      "uses": [
+        "grilling",
+        "domain-modeling"
+      ]
+    },
+    "dig": {
+      "group": "think",
+      "uses": [
+        "research"
+      ],
+      "loop": true
+    },
+    "research": {
+      "group": "think"
+    },
+    "to-questionnaire": {
+      "group": "think"
+    },
+    "wait-what": {
+      "group": "think"
+    },
+    "teach": {
+      "group": "think"
+    },
+    "handoff": {
+      "group": "think"
+    },
+    "setup-imick-skills": {
+      "group": "ops",
+      "uses": [
+        "wizard"
+      ],
+      "next": [
+        "scope-decomposer"
+      ],
+      "summary": "Run once per project: issue tracker, label vocabulary, team and areas, domain docs, triage workflow, agent loop, epic gate, tracker page."
+    },
+    "ask-imick": {
+      "group": "ops"
+    },
+    "tracker": {
+      "group": "ops",
+      "summary": "Builds the tracker page: what waits on you, the epics' roadmap, each epic's board and blocking graph, and the backlog."
+    },
+    "wizard": {
+      "group": "ops"
+    },
+    "update-from-upstream": {
+      "group": "ops",
+      "summary": "Syncs the upstream skills here, merging their changes with your customizations, or imports a new one. Only in the skills repo."
+    },
+    "retro": {
+      "group": "ops",
+      "uses": [
+        "writing-for-agents"
+      ]
+    },
+    "writing-for-agents": {
+      "group": "ops"
+    },
+    "git-guardrails-claude-code": {
+      "group": "ops"
+    },
+    "setup-pre-commit": {
+      "group": "ops"
+    },
+    "migrate-to-shoehorn": {
+      "group": "ops"
+    },
+    "scaffold-exercises": {
+      "group": "ops"
+    },
+    "claude-handoff": {
+      "group": "wip"
+    },
+    "loop-me": {
+      "group": "wip"
+    },
+    "setup-ts-deep-modules": {
+      "group": "wip",
+      "summary": "Wires dependency-cruiser so each TypeScript package is a deep module."
+    },
+    "writing-fragments": {
+      "group": "wip",
+      "next": [
+        "writing-beats"
+      ]
+    },
+    "writing-beats": {
+      "group": "wip",
+      "next": [
+        "writing-shape"
+      ]
+    },
+    "writing-shape": {
+      "group": "wip"
+    }
+  },
+  "branches": [
+    {
+      "branch": "epic/NN-slug",
+      "holds": "Everything for one epic",
+      "mergesInto": "main, through the epic PR"
+    },
+    {
+      "branch": "agent/issue-n",
+      "holds": "One agent's ticket, briefly",
+      "mergesInto": "The epic branch"
+    },
+    {
+      "branch": "feat/n, fix/n",
+      "holds": "A ticket outside any epic",
+      "mergesInto": "main, through its PR"
+    },
+    {
+      "branch": "design/NN-slug",
+      "holds": "Agreed screenshots from /product-design",
+      "mergesInto": "Never"
+    }
+  ],
+  "settings": [
+    {
+      "file": "docs/agents/issue-tracker.md",
+      "says": "Where issues live"
+    },
+    {
+      "file": "docs/agents/triage-labels.md",
+      "says": "The label strings"
+    },
+    {
+      "file": "docs/agents/team.md",
+      "says": "Areas, owners, people"
+    },
+    {
+      "file": "docs/agents/domain.md",
+      "says": "Where the glossary and ADRs live"
+    },
+    {
+      "file": "docs/agents/preview.md",
+      "says": "Where verify-epic finds the running app"
+    },
+    {
+      "file": ".github/workflows/",
+      "says": "Triage; the epic gate and closing chain"
+    },
+    {
+      "file": ".sandcastle/",
+      "says": "The agent loop; secrets and the mode in .env"
+    }
+  ]
+}
