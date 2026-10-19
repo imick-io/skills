@@ -44,6 +44,7 @@
     "./skills/engineering/triage",
     "./skills/engineering/verify-epic",
     "./skills/engineering/wayfinder",
+    "./skills/engineering/whats-next",
     "./skills/engineering/wizard",
     "./skills/misc/git-guardrails-claude-code",
     "./skills/misc/migrate-to-shoehorn",

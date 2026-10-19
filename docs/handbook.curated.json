@@ -2561,6 +2561,16 @@
       "group": "ops",
       "summary": "Builds the tracker page: what waits on you, the epics' roadmap, each epic's board and blocking graph, and the backlog."
     },
+    "whats-next": {
+      "group": "ops",
+      "next": [
+        "setup-imick-skills",
+        "brief",
+        "wayfinder",
+        "scope-decomposer",
+        "triage"
+      ]
+    },
     "wizard": {
       "group": "ops"
     },

@@ -2846,6 +2846,25 @@
       "url": "https://github.com/imick-io/skills/tree/main/skills/engineering/wayfinder"
     },
     {
+      "name": "whats-next",
+      "group": "ops",
+      "summary": "What's next in a project using these skills - reads where it stands (setup, the agent loop, what waits on you on GitHub, local changes) and names the next one to three moves, each with its command.",
+      "description": "What's next in a project using these skills - reads where it stands (setup, the agent loop, what waits on you on GitHub, local changes) and names the next one to three moves, each with its command. Use when the user asks what's next, where things stand, what's waiting on them, or what to do now.",
+      "runs": [
+        "auto"
+      ],
+      "uses": [],
+      "next": [
+        "setup-imick-skills",
+        "brief",
+        "wayfinder",
+        "scope-decomposer",
+        "triage"
+      ],
+      "source": "iMick",
+      "url": "https://github.com/imick-io/skills/tree/main/skills/engineering/whats-next"
+    },
+    {
       "name": "wizard",
       "group": "ops",
       "summary": "Generate an interactive bash wizard that walks a human through steps only they can perform.",
