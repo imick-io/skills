@@ -21,7 +21,8 @@ The tracker operations are in the tracker doc's **Initiatives and epics** sectio
    - the **must-haves** ("invite a partner by email to a shared budget"),
    - the **no-gos** ("no bank connections in v1"),
    - the **big product calls** ("shared or single-user?", "monthly or weekly first?"),
-   - anything **already decided** (a service, a stack choice, a reference product).
+   - anything **already decided** (a service, a stack choice, a reference product),
+   - on a **local-first** initiative (its Destination says so), any real service this epic can't fake. By default it uses local stand-ins only; carry that into **Already decided** as "Local first: no hosted services or accounts; local stand-ins only", naming any core integration that is the exception.
 
    Leave everything an agent can decide alone (which date picker, the empty-state copy) to wayfinder. A few rounds is the norm. Done when nothing the human has in mind about this epic is left unsaid: ask "anything else you already know you want or don't want here?" before moving on.
 
@@ -54,6 +55,6 @@ The tracker operations are in the tracker doc's **Initiatives and epics** sectio
 
    > **Autopilot or manual** for this epic? On autopilot, the agent loop runs wayfinder on it by itself, decides what the brief leaves open (researching what it's unsure of), and stops at the spec for your approval. On manual, you run `/wayfinder` on it.
 
-   Then remove `needs-briefing` and `ready-for-human`, and add `autopilot` when chosen.
+   Then remove `needs-briefing` and `ready-for-human`, and add `autopilot` when chosen. On autopilot, in a project whose loop isn't already in fast mode, mention **fast** too: with the `fast` label the loop also answers what would wait on them when it's confident enough, approves a confident spec and merges the verified epic, pinging them in Slack only for what it can't settle.
 
 6. **Hand off.** Report the brief and the mode, then the next step: "The agent loop will plan it" (autopilot) or "Run `/wayfinder <epic>` when you're ready" (manual). If more epics still need briefing, name the next one.

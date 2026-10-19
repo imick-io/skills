@@ -20,7 +20,7 @@ A subagent resolves a ticket by type:
   3. Still below: decide anyway on the best answer, marked **assumed**.
 - **Research**: as in the main skill.
 - **Prototype**: build the prototype (call the Skill tool with "prototype"), judge it against the destination yourself, and decide, marked **assumed**.
-- **Task**: work that needs the human (an account, access, data only they have) can't be done here. Label it `ready-for-human`, assign the epic's owner, and treat everything it blocks as blocked.
+- **Task**: work that needs the human (an account, access, data only they have) can't be done here. On a **local-first** epic (its Brief or initiative says so), first look for a local stand-in behind a seam (SQLite or Docker Postgres, local disk, a dev login, console email, a mocked or test-mode payment): when one serves the destination, decide to use it and close the task, recording the real service as a Go-live item in the map's Notes. Only a core integration the Brief names stays a human task. Otherwise, label it `ready-for-human`, assign the epic's owner, and treat everything it blocks as blocked.
 
 Record each resolution as in the main skill, with the confidence on the first line of the resolution comment:
 

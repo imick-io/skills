@@ -21,15 +21,30 @@ An epic passes all four tests:
 
 There is no cap on the number of epics. Fog applies here as in wayfinder: an epic is created only when its destination can be stated sharply now. A part of the idea you can see but not yet bound goes into the initiative's **Not yet scoped** section, and graduates to an epic on a later run.
 
+## Local first
+
+A new product's first version is built to be tried, not hosted: the human wants to use it and decide whether they like it before paying for, signing up to or wiring any infrastructure. So by default **v1 runs entirely on the developer's machine**, and going live comes last.
+
+Infrastructure splits by **who can do it**:
+
+- **The agent alone**: a local database (SQLite, or Postgres in Docker Compose), migrations, seed data, local file storage, a dev login, email printed to the console, payments in test mode or mocked. This belongs inside the product epics that need it, each behind a seam the real service will slot into later.
+- **Only the human**: cloud accounts, billing, domains and DNS, production secrets, deploy keys. This is the **Go live** epic, last in build order, blocking nothing. When the human hasn't yet decided to go live, it stays in **Not yet scoped** instead.
+
+No product epic is ever blocked by Go live, and no product epic needs a human-only step to ship: work that can't be done without one is the agent loop's most common stall.
+
+The exception is a product whose core **is** the integration (a Stripe Connect marketplace, sign-in with one particular provider as the main flow): faking it would defeat trying it. Then that one service gets a narrow human task in the epic that needs it ("create a Stripe sandbox, put its keys in `.env`"), never a whole infrastructure epic up front.
+
+The human can opt out (the product already runs somewhere, or hosting is the point); record it in the initiative's Destination.
+
 ## Run
 
 The input is an idea in prose, an issue (often labelled `needs-scoping` by triage), or an existing initiative. An existing initiative means a **re-run**: see below.
 
 1. **Survey the code.** If the repo already has an app, dispatch a subagent to map what exists in the areas the idea touches, using the domain glossary. Epics cover only what's missing, named with the code's terms. Wait for its report before step 2.
 
-2. **Interview.** Call the Skill tool twice, for "grilling" and "domain-modeling". Grill **breadth-first and high-level**: the initiative's destination, the whole product surface, the boundaries between parts, which area owns each part, what comes first, and what is ruled out. Stop at boundaries; a question about how one part works belongs to that epic's map. Done when every part of the idea is either an epic that passes the four tests, a Not-yet-scoped entry, or out of scope.
+2. **Interview.** Call the Skill tool twice, for "grilling" and "domain-modeling". Grill **breadth-first and high-level**: the initiative's destination, the whole product surface, the boundaries between parts, which area owns each part, what comes first, and what is ruled out. For a new product, ask once whether v1 is **local first** (see above), recommending yes, and which services, if any, are the core integration. Stop at boundaries; a question about how one part works belongs to that epic's map. Done when every part of the idea is either an epic that passes the four tests, a Not-yet-scoped entry, or out of scope.
 
-3. **Propose** the decomposition in one message: the initiative's destination; the epics in build order, each with destination, area, what it covers, and its blockers; Not yet scoped; Out of scope. Revise with the user until they confirm.
+3. **Propose** the decomposition in one message: the initiative's destination, saying whether v1 is local first; the epics in build order, each with destination, area, what it covers, its blockers, and any human-only step it needs; Not yet scoped (Go live, until the human decides to go live); Out of scope. On a local-first initiative, a product epic blocked by infrastructure or needing a human-only step is a decomposition error: move that work to Go live or to a local stand-in before proposing. Revise with the user until they confirm.
 
 4. **Publish**, in this order:
    1. The **initiative**. From an existing issue, keep its text, append the sections below, and swap any triage labels (`needs-scoping`, `ready-for-human`) for `initiative`. Label it with every area its epics use, and assign the owner the user named.
@@ -46,6 +61,8 @@ Initiative:
 ## Destination
 
 <what exists when the whole initiative is done>
+
+**V1:** local first: runs on the developer's machine; hosting and accounts wait for Go live. <or: not local first, and why>
 
 ## Not yet scoped
 
@@ -67,7 +84,7 @@ Epic:
 
 ## Notes
 
-<what it covers; neighbouring epics it touches and how; skills its map should consult>
+<what it covers; neighbouring epics it touches and how; skills its map should consult; on a local-first initiative, the local stand-ins it uses (and the human-only step, for a core integration)>
 
 ## Not yet specified
 

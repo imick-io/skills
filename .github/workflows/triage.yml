@@ -81,8 +81,9 @@ jobs:
           labels=$(jq -r '[.labels[].name] | join(",")' <<< "$info")
           has() { case ",$labels," in *",$1,"*) return 0;; *) return 1;; esac; }
 
-          # Issues the skills create are already shaped.
+          # Issues the skills create are already shaped; backlog issues are parked.
           case ",$labels," in *,initiative,*|*,epic,*|*,wayfinder:*) skip "created by a skill";; esac
+          has backlog && skip "in the backlog"
           parent=$(gh api "repos/$REPO/issues/$ISSUE/parent" --jq '[.labels[].name] | join(",")' 2>/dev/null || true)
           case ",$parent," in *,epic,*|*,initiative,*|*,wayfinder:map,*) skip "under an epic or map";; esac
 

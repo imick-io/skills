@@ -23,7 +23,7 @@ const QUERY = `query($owner: String!, $name: String!, $after: String) {
     issues(first: 100, after: $after, orderBy: { field: CREATED_AT, direction: ASC }) {
       pageInfo { hasNextPage endCursor }
       nodes {
-        number title body state stateReason url closedAt
+        number title body state stateReason url closedAt createdAt
         labels(first: 20) { nodes { name } }
         milestone { title }
         assignees(first: 5) { nodes { login } }
@@ -51,6 +51,7 @@ function fetchIssues() {
     notPlanned: i.stateReason === "NOT_PLANNED",
     url: i.url,
     closedAt: i.closedAt,
+    createdAt: i.createdAt,
     labels: i.labels.nodes.map((l) => l.name),
     milestone: i.milestone?.title ?? null,
     assigned: i.assignees.nodes.length > 0,
@@ -75,6 +76,7 @@ const openBlockers = (i) => i.blockedBy.map((n) => byNumber.get(n)).filter((b) =
 // Who acts next on a ticket.
 function ticketStatus(i) {
   if (!i.open) return i.notPlanned ? "dropped" : "done";
+  if (has(i, "backlog")) return "backlog";
   if (has(i, "ready-for-review")) return "review";
   if (openBlockers(i).length) return "blocked";
   if (has(i, "ready-for-human")) return "you";
@@ -89,6 +91,7 @@ const planningOf = (e) => issues.filter((i) => isPlanning(i) && i.milestone && i
 
 function epicStatus(e) {
   if (!e.open) return "done";
+  if (has(e, "backlog")) return "backlog";
   if (has(e, "needs-briefing")) return "brief";
   const plans = planningOf(e);
   const spec = plans.find((p) => has(p, "spec") && p.open);
@@ -109,6 +112,7 @@ const EPIC_STATUS = {
   planning: "Agent is planning",
   building: "Building",
   ready: "Ready to plan",
+  backlog: "In the backlog",
 };
 
 const TICKET_STATUS = {
@@ -118,6 +122,7 @@ const TICKET_STATUS = {
   queued: "Agent queue",
   blocked: "Blocked",
   triage: "Needs triage",
+  backlog: "Backlog",
   done: "Done",
   dropped: "Dropped",
 };
@@ -191,7 +196,7 @@ function downstreamAll(n, seen = new Set()) {
 }
 
 const hitl = issues
-  .filter((i) => i.open && (has(i, "ready-for-human") || has(i, "ready-for-review")))
+  .filter((i) => i.open && !has(i, "backlog") && (has(i, "ready-for-human") || has(i, "ready-for-review")))
   .map((i) => {
     const blockers = openBlockers(i);
     return {
@@ -243,12 +248,29 @@ const specs = issues.filter((i) => has(i, "spec")).map((i) => {
   };
 });
 
+// Backlog: everything parked for later, of any kind. Not action items: nobody
+// acts on them until a person takes one out of the backlog.
+const WHAT = ["bug", "enhancement", "needs-scoping", "needs-info", "wontfix"];
+const backlog = issues
+  .filter((i) => i.open && has(i, "backlog"))
+  .map((i) => ({
+    number: i.number,
+    title: i.title,
+    url: i.url,
+    kind: has(i, "initiative") ? "initiative" : has(i, "epic") ? "epic" : "issue",
+    what: WHAT.find((w) => has(i, w)) ?? null,
+    areas: i.labels.filter((l) => l.startsWith("area:")).map((l) => l.slice(5)),
+    epic: epicOf(i)?.number ?? null,
+    createdAt: i.createdAt,
+  }));
+
 const data = {
   generatedAt: new Date().toISOString(),
   repo: `${REPO.owner}/${REPO.name}`,
   epics: epicData,
   tickets,
   hitl,
+  backlog,
   specs,
   titles: Object.fromEntries(issues.map((i) => [i.number, i.title])),
   urls: Object.fromEntries(issues.map((i) => [i.number, i.url])),
@@ -277,6 +299,7 @@ const html = `<!doctype html>
   --blocked: #7a7a73; --blocked-soft: #efefea;
   --done: #9a9a93; --done-soft: #f3f3f0;
   --triage: #a8323a; --triage-soft: #fbeaeb;
+  --backlog: #7a7a73; --backlog-soft: #ecece7;
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -289,6 +312,7 @@ const html = `<!doctype html>
     --blocked: #9b9b94; --blocked-soft: #2a2a27;
     --done: #6b6b66; --done-soft: #222220;
     --triage: #f08a90; --triage-soft: #3a1c1e;
+    --backlog: #8a8a83; --backlog-soft: #2a2a27;
   }
 }
 * { box-sizing: border-box; }
@@ -403,6 +427,7 @@ details.spec > .spec { border: 0; padding: 0; margin: 10px 0 0; }
 .hitl .noitems { margin: 8px 0 0 46px; font-size: 13px; color: var(--muted); }
 @media (max-width: 600px) { .hitl .sub, .hitl ul, .hitl .noitems, .hitl details summary { margin-left: 0; } }
 .pill.task { color: var(--you); background: var(--you-soft); }
+.pill.backlog { color: var(--backlog); background: var(--backlog-soft); }
 .pill.brief, .pill.spec { color: var(--queued); background: var(--queued-soft); }
 label.check { display: inline-flex; gap: 6px; align-items: center; font-size: 14px; }
 </style>
@@ -419,6 +444,7 @@ label.check { display: inline-flex; gap: 6px; align-items: center; font-size: 14
     <button role="tab" data-tab="specs" aria-selected="false">Specs to validate<span id="spec-count"></span></button>
     <button role="tab" data-tab="roadmap" aria-selected="false">Roadmap</button>
     <button role="tab" data-tab="epic" aria-selected="false">Epic board</button>
+    <button role="tab" data-tab="backlog" aria-selected="false">Backlog<span id="backlog-count"></span></button>
   </nav>
 
   <section id="actions">
@@ -445,6 +471,11 @@ label.check { display: inline-flex; gap: 6px; align-items: center; font-size: 14
     <div class="rm-scroll"><div class="rm" id="rm"></div></div>
     <h2>Progress</h2>
     <div class="table-scroll"><table id="epic-table"></table></div>
+  </section>
+
+  <section id="backlog" hidden>
+    <p class="meta" style="margin-top:20px">Parked for later: no triage, no agent, no planning, and not in your action items. To bring one back, remove the <code>backlog</code> label and give it a <b>who</b> label (or <code>needs-triage</code> to send it through triage again).</p>
+    <div id="backlog-body"></div>
   </section>
 
   <section id="epic" hidden>
@@ -478,7 +509,7 @@ $('when').textContent = new Date(DATA.generatedAt).toLocaleString();
 const tabs = [...document.querySelectorAll('nav.tabs button')];
 function showTab(name) {
   tabs.forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === name)));
-  ['actions', 'specs', 'roadmap', 'epic'].forEach((id) => { $(id).hidden = id !== name; });
+  ['actions', 'specs', 'roadmap', 'epic', 'backlog'].forEach((id) => { $(id).hidden = id !== name; });
   try { localStorage.setItem('tracker-tab', name); } catch {}
   renderDiagrams();
 }
@@ -584,8 +615,28 @@ function renderSpecs() {
 }
 renderSpecs();
 
+// ---- Backlog
+function renderBacklog() {
+  const list = DATA.backlog;
+  $('backlog-count').innerHTML = list.length ? ' <span class="meta">' + list.length + '</span>' : '';
+  const groups = [['initiative', 'Initiatives'], ['epic', 'Epics'], ['issue', 'Issues']];
+  let html = '';
+  for (const [kind, label] of groups) {
+    const rows = list.filter((b) => b.kind === kind).sort((a, b) => a.number - b.number);
+    if (!rows.length) continue;
+    html += '<h2>' + label + ' <span class="meta">' + rows.length + '</span></h2><div class="table-scroll"><table><tr><th>Issue</th><th>What</th><th>Area</th>' +
+      (kind === 'issue' ? '<th>Epic</th>' : '') + '<th>Opened</th></tr>' +
+      rows.map((b) => '<tr><td>' + ref(b.number) + ' ' + esc(b.title) + '</td><td>' + (b.what ? '<span class="pill backlog">' + esc(b.what) + '</span>' : '<span class="meta">—</span>') +
+        '</td><td>' + (b.areas.length ? esc(b.areas.join(', ')) : '<span class="meta">—</span>') + '</td>' +
+        (kind === 'issue' ? '<td>' + (b.epic ? ref(b.epic) + ' ' + esc(epicName(b.epic)) : '<span class="meta">—</span>') + '</td>' : '') +
+        '<td class="meta">' + new Date(b.createdAt).toLocaleDateString() + '</td></tr>').join('') + '</table></div>';
+  }
+  $('backlog-body').innerHTML = html || '<div class="empty">Nothing is parked. Add the <code>backlog</code> label to an issue to park it here.</div>';
+}
+renderBacklog();
+
 // ---- Roadmap
-const EPIC_COLORS = { done: 'done', brief: 'you', spec: 'you', held: 'blocked', waiting: 'blocked', planning: 'queued', building: 'working', ready: 'queued' };
+const EPIC_COLORS = { done: 'done', brief: 'you', spec: 'you', held: 'blocked', waiting: 'blocked', planning: 'queued', building: 'working', ready: 'queued', backlog: 'backlog' };
 $('epic-table').innerHTML = '<tr><th>Epic</th><th>Status</th><th>Tickets</th><th>Waits on</th></tr>' + DATA.epics.map((e) => {
   const pct = e.total ? Math.round((e.done / e.total) * 100) : 0;
   const counts = e.total ? Object.entries(e.counts).filter(([s, n]) => n && s !== 'done' && s !== 'dropped').map(([s, n]) => n + ' ' + DATA.ticketStatus[s].toLowerCase()).join(' · ') : '';
@@ -603,7 +654,7 @@ function classDefs() {
 }
 // Roadmap: epics in columns by build order, tickets listed inside planned
 // epics, arrows from an epic to the epics waiting on it.
-const LANE_ORDER = ['you', 'review', 'working', 'queued', 'triage', 'blocked', 'done', 'dropped'];
+const LANE_ORDER = ['you', 'review', 'working', 'queued', 'triage', 'blocked', 'backlog', 'done', 'dropped'];
 const epicLevel = {};
 function levelOf(e) {
   if (epicLevel[e.number] !== undefined) return epicLevel[e.number];
@@ -698,7 +749,7 @@ if (window.mermaid) mermaid.initialize({ startOnLoad: false, securityLevel: 'loo
 // ---- Epic board
 const planned = DATA.epics.filter((e) => e.total);
 $('epic-pick').innerHTML = planned.concat(DATA.epics.filter((e) => !e.total)).map((e) => '<option value="' + e.number + '">#' + e.number + ' ' + esc(e.title) + (e.total ? '' : ' (not planned)') + '</option>').join('');
-const LANES = [['you', 'Your turn', ['you', 'review']], ['working', 'Agent working', ['working']], ['queued', 'Agent queue', ['queued', 'triage']], ['blocked', 'Blocked', ['blocked']], ['done', 'Done', ['done', 'dropped']]];
+const LANES = [['you', 'Your turn', ['you', 'review']], ['working', 'Agent working', ['working']], ['queued', 'Agent queue', ['queued', 'triage']], ['blocked', 'Blocked', ['blocked']], ['backlog', 'Backlog', ['backlog']], ['done', 'Done', ['done', 'dropped']]];
 function renderBoard() {
   const n = Number($('epic-pick').value);
   const e = epicByNum[n];
@@ -732,7 +783,7 @@ setInterval(() => { if (Date.now() - loadedAt > 180_000 && Date.now() - lastInpu
 try { const y = sessionStorage.getItem('tracker-scroll'); if (y) { sessionStorage.removeItem('tracker-scroll'); requestAnimationFrame(() => scrollTo(0, Number(y))); } } catch {}
 
 let startTab = 'actions';
-try { const t = localStorage.getItem('tracker-tab'); if (['actions', 'specs', 'roadmap', 'epic'].includes(t)) startTab = t; } catch {}
+try { const t = localStorage.getItem('tracker-tab'); if (['actions', 'specs', 'roadmap', 'epic', 'backlog'].includes(t)) startTab = t; } catch {}
 showTab(startTab);
 </script>
 </body>

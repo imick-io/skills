@@ -45,6 +45,8 @@ A triaged issue carries exactly one **what** role and exactly one **who** role, 
 
 `needs-triage` is transient: triage hasn't finished on this issue yet. An untriaged or half-triaged issue carries it; a triaged one never does.
 
+`backlog` parks an issue for later. It keeps its **what** role and carries no **who** role, so it is in nobody's inbox: no agent builds it, the loop never plans it, and triage leaves it alone. Taking it out of the backlog means removing the label and giving it a **who** role again (or sending it back through triage with `needs-triage`).
+
 These are canonical role names. The actual label strings are mapped in `docs/agents/triage-labels.md`. If it doesn't exist, tell the user to run `/setup-imick-skills`. If an issue carries roles outside the pairings above, flag it and ask before doing anything else.
 
 `ready-for-agent` and `ready-for-agent-debugging` are the agents' inbox; `ready-for-human` and `ready-for-review` are the people's inbox, and `who` is about who acts next, not who builds. Triage itself never sets the two pairings marked as set by `/debug-and-fix`.
@@ -58,7 +60,7 @@ Read `docs/agents/team.md`. Unless it says the repo has a single area:
 
 ## Skip
 
-Issues the other skills created are already shaped and never go through triage: anything labelled `initiative`, `epic` or `wayfinder:*`, and any issue under an epic. Tell the maintainer and stop.
+Issues the other skills created are already shaped and never go through triage: anything labelled `initiative`, `epic` or `wayfinder:*`, and any issue under an epic. Neither do issues labelled `backlog`, unless the maintainer asks to take one out. Tell the maintainer and stop.
 
 ## Invocation
 
@@ -104,7 +106,7 @@ Show counts and a one-line summary per item. Let the maintainer pick.
 
 ## Quick override
 
-If the maintainer says "move #42 to enhancement / ready-for-agent", trust them and apply it directly. Confirm what you're about to do (labels, comment, assignment), then act. Skip grilling. Moving to `ready-for-agent` without a grilling session: ask whether they want an agent brief written.
+If the maintainer says "move #42 to enhancement / ready-for-agent", trust them and apply it directly. "Backlog #42" adds `backlog`, removes its **who** role and `needs-triage`, unassigns it, and posts one line saying it is parked; it keeps (or gets) its **what** role. Confirm what you're about to do (labels, comment, assignment), then act. Skip grilling. Moving to `ready-for-agent` without a grilling session: ask whether they want an agent brief written.
 
 ## Needs-info template
 
