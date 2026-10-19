@@ -99,8 +99,20 @@ function epicStatus(e) {
   const tickets = ticketsOf(e);
   if (openBlockers(e).length) return tickets.length ? "held" : "waiting";
   if (has(e, "agent:planning") || plans.some((p) => p.open && has(p, "wayfinder:map"))) return "planning";
+  if (tickets.length && tickets.every((t) => !t.open) && !plans.some((p) => p.open)) return "merge";
   if (tickets.length) return "building";
   return "ready";
+}
+
+// The epic's open PR (the loop opens it once no ticket is left), for the
+// "merge" status. One `gh` call per finished epic; rare.
+function epicPr(e) {
+  const branch = e.body.match(/`(epic\/[^`]+)`/)?.[1];
+  if (!branch) return null;
+  try {
+    const out = execFileSync("gh", ["pr", "list", "--head", branch, "--state", "open", "--json", "number,url,title", "--limit", "1"], { encoding: "utf8" });
+    return JSON.parse(out)[0] ?? null;
+  } catch { return null; }
 }
 
 const EPIC_STATUS = {
@@ -110,6 +122,7 @@ const EPIC_STATUS = {
   held: "Planned; held until blockers finish",
   waiting: "Waiting on earlier epics",
   planning: "Agent is planning",
+  merge: "Built and verified; merge its PR",
   building: "Building",
   ready: "Ready to plan",
   backlog: "In the backlog",
@@ -195,7 +208,28 @@ function downstreamAll(n, seen = new Set()) {
   return seen;
 }
 
-const hitl = issues
+// A finished epic: every ticket done, nothing left to plan, its PR waits for
+// a person's merge.
+const mergeItems = epics
+  .filter((e) => epicStatus(e) === "merge")
+  .map((e) => {
+    const pr = epicPr(e);
+    return {
+      number: e.number,
+      title: e.title,
+      url: pr?.url ?? e.url,
+      kind: "merge",
+      assignees: e.assignees,
+      epic: e.number,
+      canStart: true,
+      waitsOn: [],
+      unblocks: blocksDirect.get(e.number),
+      holdsUp: downstreamAll(e.number).size,
+      items: [{ done: false, text: pr ? `Merge PR #${pr.number} ${pr.title}` : "Merge the epic's PR (none open yet: the loop opens it on its next pass)" }],
+    };
+  });
+
+const hitl = mergeItems.concat(issues
   .filter((i) => i.open && !has(i, "backlog") && (has(i, "ready-for-human") || has(i, "ready-for-review")))
   .map((i) => {
     const blockers = openBlockers(i);
@@ -212,7 +246,7 @@ const hitl = issues
       holdsUp: downstreamAll(i.number).size,
       items: checklist(i.body),
     };
-  });
+  }));
 
 // Specs: an autopilot epic's plan, waiting for a person to approve it
 // (the `spec-approved` label) before tickets are cut.
@@ -429,6 +463,7 @@ details.spec > .spec { border: 0; padding: 0; margin: 10px 0 0; }
 .pill.task { color: var(--you); background: var(--you-soft); }
 .pill.backlog { color: var(--backlog); background: var(--backlog-soft); }
 .pill.brief, .pill.spec { color: var(--queued); background: var(--queued-soft); }
+.pill.merge { color: var(--you); background: var(--you-soft); }
 label.check { display: inline-flex; gap: 6px; align-items: center; font-size: 14px; }
 </style>
 </head>
@@ -521,7 +556,7 @@ function card(t, extra) {
 }
 
 // ---- Action items (HITL, by assignee)
-const KIND = { task: 'Task', review: 'Review', brief: 'Epic brief', spec: 'Spec approval' };
+const KIND = { task: 'Task', review: 'Review', brief: 'Epic brief', spec: 'Spec approval', merge: 'Merge the epic' };
 function md(text) {
   return esc(text)
     .replace(/\`([^\`]+)\`/g, '<code>$1</code>')
@@ -636,7 +671,7 @@ function renderBacklog() {
 renderBacklog();
 
 // ---- Roadmap
-const EPIC_COLORS = { done: 'done', brief: 'you', spec: 'you', held: 'blocked', waiting: 'blocked', planning: 'queued', building: 'working', ready: 'queued', backlog: 'backlog' };
+const EPIC_COLORS = { done: 'done', brief: 'you', spec: 'you', merge: 'you', held: 'blocked', waiting: 'blocked', planning: 'queued', building: 'working', ready: 'queued', backlog: 'backlog' };
 $('epic-table').innerHTML = '<tr><th>Epic</th><th>Status</th><th>Tickets</th><th>Waits on</th></tr>' + DATA.epics.map((e) => {
   const pct = e.total ? Math.round((e.done / e.total) * 100) : 0;
   const counts = e.total ? Object.entries(e.counts).filter(([s, n]) => n && s !== 'done' && s !== 'dropped').map(([s, n]) => n + ' ' + DATA.ticketStatus[s].toLowerCase()).join(' · ') : '';
@@ -720,7 +755,7 @@ function legend(id, keys) {
   $(id).innerHTML = keys.map((k) => pill(k)).join(' ') + ' <span>Arrows point from a blocker to what it blocks. Click a box to open the issue.</span>';
 }
 legend('roadmap-legend', []);
-$('roadmap-legend').innerHTML = '<span>Epic:</span> ' + Object.entries({ working: 'Building', queued: 'Planning / ready to plan', you: 'Needs your brief', blocked: 'Waiting on earlier epics', done: 'Done' }).map(([k, v]) => '<span class="pill ' + k + '">' + v + '</span>').join(' ') +
+$('roadmap-legend').innerHTML = '<span>Epic:</span> ' + Object.entries({ working: 'Building', queued: 'Planning / ready to plan', you: 'Needs your brief, approval or merge', blocked: 'Waiting on earlier epics', done: 'Done' }).map(([k, v]) => '<span class="pill ' + k + '">' + v + '</span>').join(' ') +
   '<br><span>Ticket:</span> ' + ['you', 'review', 'working', 'queued', 'blocked', 'done'].map((k) => pill(k)).join(' ') +
   '<br><span>Columns run left to right in build order; arrows point to the epics that wait on another. Hover a ticket for what it waits on; click to open it.</span>';
 ['rm-tickets', 'rm-hide-done'].forEach((id) => {
