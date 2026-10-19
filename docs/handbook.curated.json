@@ -41,6 +41,7 @@
     {
       "id": "main",
       "title": "The flow, by who acts",
+      "description": "Follow the arrows from the top. Each column is who acts: you in a Claude session, the agent loop running unattended, or a GitHub workflow. Dashed arrows are feedback.",
       "rows": 12,
       "columns": {
         "youL": 118,
@@ -548,6 +549,8 @@
     {
       "id": "fast",
       "title": "The fast track",
+      "description": "The same flow with fast mode on (`AGENTS_MODE=fast`, or the `fast` label on an epic). The loop takes the steps that waited on you: it approves its own spec, answers what's stuck, resolves conflicts and merges the verified epic. You come in only through the dashed arrows, when it asks.",
+      "note": "Below `AGENTS_THRESHOLD` (70 by default), it asks you instead of deciding. It always asks before spending money, handling real credentials or personal data, deleting or publishing anything.",
       "rows": 13,
       "columns": {
         "you": 145,
@@ -1071,6 +1074,8 @@
     {
       "id": "supersonic",
       "title": "Supersonic",
+      "description": "Fast mode without the waiting, for throwaway MVPs (`AGENTS_MODE=supersonic`, or the `supersonic` label). `/scope-decomposer` writes every epic's brief in its one interview. Below the threshold, a call that can be undone is assumed instead of asked, and the spec is always approved. The assumptions reach you in one Slack digest a day; comment on an issue to change a call.",
+      "note": "It still stops and waits for money, credentials, personal data, deleting or publishing: those can't be undone. A wrong guess elsewhere costs rework, since your comment becomes a follow-up ticket. Fine for an MVP; not for production work.",
       "rows": 12,
       "columns": {
         "you": 145,
