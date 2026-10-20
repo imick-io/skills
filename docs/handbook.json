@@ -93,7 +93,7 @@
           "row": 1,
           "lane": "gh",
           "title": "Auto-triage",
-          "sub": "labels what it is + who acts",
+          "sub": "labels what it is + who acts, in Actions or the loop",
           "pills": [
             {
               "role": "what",

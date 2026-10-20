@@ -11,7 +11,7 @@ Triage is the **front desk** for work that arrives raw: bug reports, feature req
 It runs in two modes:
 
 - **Manual**: a maintainer invokes `/triage` and directs the work. This file.
-- **Unattended**: the triage workflow runs it on each new issue, with nobody to ask. Read [UNATTENDED.md](UNATTENDED.md) when invoked that way.
+- **Unattended**: the triage workflow, or the agent loop with `AGENTS_TRIAGE=1`, runs it on each new issue, with nobody to ask. Read [UNATTENDED.md](UNATTENDED.md) when invoked that way.
 
 If this repo treats external pull requests as a request surface (see the issue-tracker config), triage covers them too: **a PR is an issue with attached code**, with the same roles. Resolve a bare `#42` to an issue or PR per the tracker config.
 

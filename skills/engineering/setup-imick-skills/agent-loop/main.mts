@@ -26,6 +26,11 @@
 // review, and cut tickets once you approve it. Other epics are planned by hand.
 //
 // One pass:
+//   0. Triage (AGENTS_TRIAGE=1, in place of the GitHub triage workflow): new
+//      issues with no triage label, `needs-info` issues the reporter answered
+//      since the last triage note, and anything left on `needs-triage` get an
+//      unattended /triage run each, so what comes out ready-for-agent is
+//      built in the same pass.
 //   1. Queue: open, unassigned, unblocked issues labelled ready-for-agent or
 //      ready-for-agent-debugging. Specs are skipped (they're read by
 //      /to-tickets, never built directly).
@@ -89,6 +94,10 @@ const MAX_PARALLEL = Number(process.env.AGENTS_MAX_PARALLEL ?? 3);
 const PLANNER = process.env.AGENTS_PLANNER_MODEL ?? "claude-opus-5-5";
 const WORKER = process.env.AGENTS_WORKER_MODEL ?? "claude-sonnet-5";
 const ALERTS = process.env.SLACK_ALERTS_WEBHOOK_URL;
+const FEED = process.env.SLACK_FEED_WEBHOOK_URL;
+// Triage inside the loop instead of the GitHub Actions workflow: no Actions
+// minutes, but issues are only triaged while the loop runs. Don't run both.
+const TRIAGE = ["1", "true", "yes"].includes((process.env.AGENTS_TRIAGE ?? "").toLowerCase());
 // Graceful stop. `npm run agents:stop` creates this file from any terminal; the
 // loop reads it wherever it would start new work, finishes what is in flight
 // and removes it on exit. Starting the loop clears any file left behind.
@@ -141,6 +150,8 @@ const LABEL = {
   autopilot: "autopilot",
   briefing: "needs-briefing",
   backlog: process.env.AGENTS_LABEL_BACKLOG ?? "backlog",
+  triage: "needs-triage",
+  needsInfo: process.env.AGENTS_LABEL_NEEDS_INFO ?? "needs-info",
   fast: "fast",
   supersonic: "supersonic",
   asked: "agent:asked",
@@ -357,7 +368,8 @@ const planSchema = z.object({ issues: z.array(z.object({ number: z.number() })) 
 async function pass(): Promise<number> {
   epicCache.clear();
   epicBlockedCache.clear();
-  const unblocked = stopRequested() ? 0 : await unblock();
+  const triaged = stopRequested() ? 0 : await triage();
+  const unblocked = triaged + (stopRequested() ? 0 : await unblock());
   const planned = unblocked + (PLANNING && !stopRequested() ? await planEpics() : 0);
   if (stopRequested()) return planned;
   const ready = readyTickets();
@@ -661,6 +673,135 @@ async function mergeEpic(pr: number, epic: number): Promise<number> {
     await ask(`Epic #${epic} is verified, but GitHub refused to merge PR #${pr}. Merge it yourself: https://github.com/${repo}/pull/${pr}`);
   }
   return 0;
+}
+
+// ---------------------------------------------------------------------------
+// Triage (AGENTS_TRIAGE=1)
+// ---------------------------------------------------------------------------
+
+// The GitHub workflow reacts to events; the loop polls state instead, which
+// needs no memory between passes and catches what happened while it was off.
+// The same skips as the workflow's gate apply: what a skill created (epics,
+// specs, maps, tickets under an epic) is already shaped, backlog is parked,
+// and only the repo's own people get a new issue triaged.
+type OpenIssue = {
+  number: number;
+  title: string;
+  authorAssociation: string;
+  author: { login: string } | null;
+  lastEditedAt: string | null;
+  editor: { login: string } | null;
+  labels: { nodes: { name: string }[] };
+  parent: { labels: { nodes: { name: string }[] } } | null;
+  comments: { nodes: { body: string; createdAt: string; authorAssociation: string; author: { login: string } | null }[] };
+};
+type TriageJob = { n: number; title: string; why: string };
+
+const TRUSTED = ["OWNER", "MEMBER", "COLLABORATOR"];
+// Any of these means a person or an earlier triage already decided.
+const TRIAGED = ["bug", "enhancement", "needs-scoping", LABEL.needsInfo, "wontfix", LABEL.build, LABEL.bug, LABEL.human, LABEL.review];
+const SHAPED = [LABEL.epic, "initiative", LABEL.spec, LABEL.backlog];
+const shaped = (labels: string[]) => labels.some((l) => SHAPED.includes(l) || l.startsWith("wayfinder:"));
+const TRIAGE_SKILL = ".claude/skills/triage/UNATTENDED.md";
+// Triage that didn't finish (no decision, or no comment) isn't retried until
+// the loop restarts: retrying every pass would keep the loop from idling.
+const triageFailed = new Set<number>();
+let triageSkillMissing = false;
+
+function openIssues(): OpenIssue[] {
+  const [owner, name] = repo.split("/");
+  const query = `query($owner: String!, $name: String!, $endCursor: String) {
+    repository(owner: $owner, name: $name) {
+      issues(states: OPEN, first: 100, after: $endCursor) {
+        pageInfo { hasNextPage endCursor }
+        nodes {
+          number title authorAssociation author { login } lastEditedAt editor { login }
+          labels(first: 30) { nodes { name } }
+          parent { labels(first: 20) { nodes { name } } }
+          comments(last: 1) { nodes { body createdAt authorAssociation author { login } } }
+        }
+      }
+    }
+  }`;
+  return gh("api", "graphql", "--paginate", "-F", `owner=${owner}`, "-F", `name=${name}`, "-f", `query=${query}`,
+    "--jq", ".data.repository.issues.nodes[]")
+    .split("\n").filter(Boolean).map((line) => JSON.parse(line));
+}
+
+function triageJobs(): TriageJob[] {
+  const jobs: TriageJob[] = [];
+  for (const i of openIssues()) {
+    const labels = i.labels.nodes.map((l) => l.name);
+    if (triageFailed.has(i.number) || shaped(labels)) continue;
+    const parent = i.parent?.labels.nodes.map((l) => l.name) ?? [];
+    if (parent.some((l) => [LABEL.epic, "initiative", LABEL.map].includes(l))) continue;
+    const reporter = i.author?.login;
+    const job = (why: string) => jobs.push({ n: i.number, title: i.title, why });
+
+    if (labels.includes(LABEL.triage)) { job("an earlier triage didn't finish, or someone asked for it with needs-triage"); continue; }
+    if (!labels.some((l) => TRIAGED.includes(l))) {
+      if (TRUSTED.includes(i.authorAssociation)) job("a new issue");
+      continue;
+    }
+    if (!labels.includes(LABEL.needsInfo)) continue;
+    // Waiting on information: a reply, or an edit made after the last triage
+    // note, by the reporter or one of the repo's people, re-triages it.
+    const last = i.comments.nodes[0];
+    if (!last) continue;
+    if (!isAiComment(last.body)) {
+      if (TRUSTED.includes(last.authorAssociation) || last.author?.login === reporter) job("the reporter answered the triage notes");
+    } else if (i.lastEditedAt && i.lastEditedAt > last.createdAt && (i.editor?.login === reporter || TRUSTED.includes(i.authorAssociation))) {
+      job("the issue was edited after the triage notes");
+    }
+  }
+  return jobs;
+}
+
+async function triage(): Promise<number> {
+  if (!TRIAGE) return 0;
+  if (!existsSync(TRIAGE_SKILL)) {
+    if (!triageSkillMissing) await alert(`AGENTS_TRIAGE is on, but ${TRIAGE_SKILL} is missing: commit the triage skill to the repo (\`npx skills@latest add imick-io/skills\`).`);
+    triageSkillMissing = true;
+    return 0;
+  }
+  const jobs = triageJobs().slice(0, MAX_PARALLEL);
+  if (!jobs.length) return 0;
+  try { gh("label", "create", LABEL.triage, "--color", "ededed", "--description", "Triage hasn't finished", "--force"); } catch { /* exists */ }
+  log(`triaging ${jobs.map((j) => `#${j.n}`).join(", ")}`);
+
+  const settled = await Promise.allSettled(jobs.map(async (j) => {
+    gh("issue", "edit", String(j.n), "--add-label", LABEL.triage);
+    await sandcastle.run({
+      sandbox: docker(),
+      name: `triage #${j.n}`,
+      maxIterations: 1,
+      agent: sandcastle.claudeCode(WORKER),
+      promptFile: "./.sandcastle/triage-prompt.md",
+      promptArgs: { ISSUE: String(j.n), TITLE: j.title, WHY: j.why },
+    });
+    const after = ghJson<{ labels: { name: string }[]; comments: { body: string }[] }>("issue", "view", String(j.n), "--json", "labels,comments");
+    const labels = after.labels.map((l) => l.name);
+    if (labels.includes(LABEL.triage) || !isAiComment(after.comments.at(-1)?.body ?? "")) {
+      throw new Error("it finished without a decision and a triage comment; the issue stays as it is");
+    }
+    log(`#${j.n} triaged → ${labels.join(", ")}`);
+    if (FEED) {
+      await fetch(FEED, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: `[${repo}] <${issueUrl(j.n)}|#${j.n} ${j.title}> → ${labels.join(" · ")}` }),
+      }).catch(() => {});
+    }
+  }));
+  let done = 0;
+  for (const [n, outcome] of settled.entries()) {
+    if (outcome.status === "fulfilled") { done++; continue; }
+    const reason = String(outcome.reason);
+    if (/usage limit|rate limit|429/i.test(reason)) throw new Error(`usage limit: ${reason}`);
+    triageFailed.add(jobs[n]!.n);
+    await alert(`Triage failed on #${jobs[n]!.n}: ${reason.slice(0, 300)}. The loop leaves it until it restarts. ${issueUrl(jobs[n]!.n)}`);
+  }
+  return done;
 }
 
 // ---------------------------------------------------------------------------
