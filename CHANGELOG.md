@@ -1,5 +1,38 @@
 # imick-skills
 
+## 1.6.0
+
+### Minor Changes
+
+- [#28](https://github.com/imick-io/skills/pull/28) [`95ad776`](https://github.com/imick-io/skills/commit/95ad776a01daef1ae2fecdd8ab4f75f8d4885243) Thanks [@imick-io](https://github.com/imick-io)! - Agent loop: stop it nicely, and Ctrl-C no longer breaks the next run.
+  
+  - `npm run agents:stop` (new script, see `setup-imick-skills` section F) asks a running loop to start nothing new, let its in-flight tickets land, then exit and post to Slack, so you can close the machine once the message arrives. Starting the loop clears a leftover stop request.
+  - Ctrl-C still quits at once, but the loop first releases the tickets it had claimed and the `agent:planning` / `agent:unblocking` labels it had set, so the next start picks the work back up instead of skipping it as "someone's on it".
+  - The loop now runs on Node's own type stripping instead of `tsx`: tsx ran it in a child process and hard-killed that child on Ctrl-C whenever the loop was inside a `gh` or `git` call, which is why claims kept being left behind. Existing setups: change the `agents` script to `node --env-file-if-exists=.sandcastle/.env .sandcastle/main.mts`, add `agents:stop`, add `STOP` to `.sandcastle/.gitignore`, and copy the new `main.mts`.
+  - Tracker: a finished epic (every ticket closed, nothing left to plan) now shows as "Built and verified; merge its PR" instead of "Building", and appears in your action items with a link to its PR.
+
+- [#30](https://github.com/imick-io/skills/pull/30) [`d020054`](https://github.com/imick-io/skills/commit/d020054c8dff38c51fe8d0535d95e9ac548af38b) Thanks [@imick-io](https://github.com/imick-io)! - Triage can now run inside the agent loop instead of GitHub Actions. `/setup-imick-skills` asks where automatic triage runs: **GitHub Actions** (reacts within a minute, around the clock, with the triage agent limited to `gh issue` commands, but uses Actions minutes) or **the agent loop** (no Actions minutes or billing, but issues are only triaged while the loop runs, up to its idle wait later, with the sandbox's full permissions, so keep it to repos where only trusted people file issues).
+  
+  With `AGENTS_TRIAGE=1` in `.sandcastle/.env`, each pass starts by triaging, before it builds:
+  
+  - new issues with no triage label, filed by the repo's own people,
+  - `needs-info` issues whose newest comment is a reply from the reporter or a collaborator, or that were edited after the last triage note,
+  - anything on `needs-triage`: a triage that didn't finish, or one you ask for by adding the label.
+  
+  It skips what the workflow skips: epics, initiatives, specs, wayfinder issues, backlog, and tickets under an epic. It needs no state between passes, so it also catches what was filed or answered while the loop was off. With `SLACK_FEED_WEBHOOK_URL` set, every decision goes to the feed channel, like the workflow's. A triage that ends without a decision and a comment is alerted once and left alone until the loop restarts.
+  
+  In a project already running the loop: copy `agent-loop/main.mts` over `.sandcastle/main.mts` (keeping local changes) and `agent-loop/triage-prompt.md` into `.sandcastle/`, make sure the `triage` skill is committed in the repo, add `AGENTS_TRIAGE=1` to `.sandcastle/.env`, and strip `.github/workflows/triage.yml` down to its `workflow_dispatch` trigger so the two never triage the same issue. Restart the loop.
+
+- [#26](https://github.com/imick-io/skills/pull/26) [`e1f1c65`](https://github.com/imick-io/skills/commit/e1f1c6506ef285f9c4c914de41a3e91dc2b06db5) Thanks [@imick-io](https://github.com/imick-io)! - New `whats-next` skill: ask "what's next?" (or `/whats-next`) in a project using these skills, and it reads where the project stands and names your next one to three moves, each with its command or link. It checks setup, whether your skills and `.sandcastle/` files are behind upstream, the agent loop (config by key name only, mode, Docker, whether it's running, its last log), uncommitted or unpushed work the loop's agents can't see, and what waits on you on GitHub: `agent:asked` questions, specs to approve, `ready-for-human` items ordered by what they block, epics to brief, reviews and open PRs. It only reads, and offers to do the first move when an agent can.
+  
+  To add it to a project: `npx skills@latest add imick-io/skills --skill whats-next`.
+
+### Patch Changes
+
+- [#29](https://github.com/imick-io/skills/pull/29) [`9568b53`](https://github.com/imick-io/skills/commit/9568b53b22c13a3a5436396188d12029c5ab3635) Thanks [@imick-io](https://github.com/imick-io)! - Agent loop fix: finished work interrupted before it landed is now reviewed and landed on the next pass, instead of being handed to a person. If the loop stopped or restarted between a ticket's build and its landing, the rerun found the work already committed, made no new commits, and the loop moved the ticket to `ready-for-human` with no comment. The loop now checks for commits on the ticket's branch that its base doesn't have yet, not just the latest run's commits.
+  
+  In a project already running the loop, port the change to `.sandcastle/main.mts`, or copy `agent-loop/main.mts` over it while keeping any local changes, and restart the loop.
+
 ## 1.5.0
 
 ### Minor Changes
