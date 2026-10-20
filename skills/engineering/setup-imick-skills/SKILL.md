@@ -12,7 +12,7 @@ Scaffold the per-repo configuration that the engineering skills assume:
 - **Triage labels**: the strings used for the five canonical triage roles
 - **Domain docs**: where `GLOSSARY.md` and ADRs live, and the consumer rules for reading them
 - **Team and areas**: the parts of the product, who owns each, and the people on each team
-- **Automatic triage** (optional, GitHub only): a workflow that triages each new issue
+- **Automatic triage** (optional, GitHub only): triages each new issue, in a GitHub Actions workflow or inside the agent loop
 - **Agent loop** (optional, GitHub only): Sandcastle agents that work the ready tickets
 - **Epic PRs** (optional, GitHub only): the epic-gate merge check and the closing chain
 
@@ -72,9 +72,18 @@ Offer **multi-context** (a root `GLOSSARY-MAP.md` pointing to per-context `GLOSS
 
 **Section E: Automatic triage.** GitHub only; skip otherwise. Check `.github/workflows/` for an existing `triage.yml` first. Ask:
 
-> Install automatic triage? A workflow triages each new issue, re-triages `needs-info` issues when the reporter replies, and reports to Slack if you want. (recommended: **yes** for repos where others file issues)
+> Install automatic triage? It triages each new issue, re-triages `needs-info` issues when the reporter replies, and reports to Slack if you want. (recommended: **yes** for repos where others file issues)
 
-On **yes**, ask one more question:
+On **yes**, ask where it runs:
+
+> Run triage in **GitHub Actions** or **inside the agent loop**? (recommended: **GitHub Actions** when people other than you file issues or the repo is public; **the agent loop** otherwise)
+>
+> - **GitHub Actions**: reacts within a minute, around the clock, and the triage agent can only run `gh issue` commands. Uses Actions minutes: a private repo on the free plan gets 2,000 a month, then needs billing.
+> - **The agent loop**: no Actions minutes or billing. The loop triages at the start of each pass, so only while it runs, and up to its idle wait (45 minutes) after the issue or the reply. The agent has the sandbox's full permissions, so keep this to repos where only trusted people file issues. Needs Section F.
+
+**Agent loop** chosen: don't write the workflow and don't set any triage secrets. Create every role label from `triage-labels.md` (`gh label create "<label>" --force`), note `AGENTS_TRIAGE=1` for Section F's `.env` step, and make sure the `triage` skill is committed in the repo (the sandbox sees only the repo). If `.github/workflows/triage.yml` already exists, strip its `issues`, `issue_comment` and `schedule` triggers and keep `workflow_dispatch`, so both never triage the same issue but one issue can still be triaged by hand. If the user then declines Section F, come back here and ask again between GitHub Actions and no triage.
+
+**GitHub Actions** chosen: ask one more question:
 
 > Pin a released version (`v1`, recommended), or follow `main` (every change to the skills repo applies immediately)?
 
@@ -96,17 +105,18 @@ Then, besides the files in step 4:
 On **yes**:
 
 1. **Docker**: check `docker info` succeeds; if not, ask the user to start Docker Desktop (or install it) and wait.
-2. **Scaffold**: `npx @ai-hero/sandcastle init --agent claude-code --sandbox docker --template blank --issue-tracker github-issues --create-label false --build-image false --install-template-deps false`, then replace its files with this skill's [agent-loop/](./agent-loop/) folder: `main.mts`, every `*-prompt.md`, `Dockerfile` and `.env.example`, all into `.sandcastle/`. Delete the scaffold's `prompt.md` and its `main.ts` (a `"type": "module"` project gets `main.ts` instead of `main.mts`).
+2. **Scaffold**: `npx @ai-hero/sandcastle init --agent claude-code --sandbox docker --template blank --issue-tracker github-issues --create-label false --build-image false --install-template-deps false`, then replace its files with this skill's [agent-loop/](./agent-loop/) folder: `main.mts`, every `*-prompt.md` (`triage-prompt.md` included), `Dockerfile` and `.env.example`, all into `.sandcastle/`. Delete the scaffold's `prompt.md` and its `main.ts` (a `"type": "module"` project gets `main.ts` instead of `main.mts`).
 3. **Dependencies and scripts**: install `@ai-hero/sandcastle` and `zod` as dev dependencies with the project's package manager (not `tsx`: the loop runs on Node's own type stripping, Node 22.6 or later, so Ctrl-C reaches it; remove `tsx` if an earlier setup added it for this), and add the scripts `"agents": "node --env-file-if-exists=.sandcastle/.env .sandcastle/main.mts"`, `"agents:awake": "caffeinate -i npm run agents"` (with the project's package manager in place of `npm run`; macOS only: the Mac doesn't idle-sleep while the loop runs) and `"agents:stop": "touch .sandcastle/STOP"` (asks a running loop to finish its in-flight tickets and exit, so the machine can be closed; starting the loop clears a leftover stop file). Add `STOP` to `.sandcastle/.gitignore`.
 4. **Image**: `npx sandcastle docker build-image`.
 5. **Secrets**: tell the user to copy `.sandcastle/.env.example` to `.sandcastle/.env` (gitignored) and fill it themselves; never ask for or handle the values:
    - `CLAUDE_CODE_OAUTH_TOKEN`: the same clipboard routine as Section E, writing to the file instead of a secret.
    - `GH_TOKEN`: a fine-grained token for this repo with **Issues: read and write**, **Metadata: read**, and for `verify-epic` **Commit statuses: read and write**, **Deployments: read** and **Pull requests: read**. Agents in the sandbox use it to read tickets and comment; pushing and PRs happen on the host with the user's own `gh` login.
    - optional `SLACK_USER_ID`, so the alerts that need an answer mention the user.
+   - `AGENTS_TRIAGE=1` when Section E chose triage inside the loop, and optionally `SLACK_FEED_WEBHOOK_URL` for every triage decision (the same feed channel as the workflow's).
 6. **Fast or supersonic**: ask whether this project values speed over review (a personal project, an MVP). If so, add `AGENTS_MODE=fast` to `.sandcastle/.env`: the loop then answers what waits on the user when it's confident enough (asking them in Slack otherwise), approves confident autopilot specs and merges verified epics. For a throwaway MVP, offer `AGENTS_MODE=supersonic` instead: `/scope-decomposer` briefs every epic in its one interview, reversible calls below the threshold are assumed instead of asked, specs are always approved, and a daily Slack digest lists the assumptions; add `.sandcastle/digest.json` to `.gitignore`. Both use `AGENTS_THRESHOLD` (70 by default). Otherwise mention the `fast` and `supersonic` labels, which do the same for one epic. Neither mode touches `backlog` issues or epics.
 7. **Labels**: make sure `ready-for-agent`, `ready-for-agent-debugging`, `ready-for-human`, `ready-for-review` and `backlog` exist.
 
-The loop needs the skills it calls committed in the repo (`implement`, `tdd`, `code-review`, `debug-and-fix`, `diagnosing-bugs`, `verify-epic`, and their dependencies; for planning `autopilot` epics also `wayfinder`, `dig`, `research`, `to-spec`, `to-tickets` and `prototype`; for fast or supersonic mode also `dig` and `wayfinder`): agents in the sandbox see only the repo. Check `.claude/skills/` and offer `npx skills@latest add imick-io/skills` for any missing.
+The loop needs the skills it calls committed in the repo (`implement`, `tdd`, `code-review`, `debug-and-fix`, `diagnosing-bugs`, `verify-epic`, and their dependencies; for planning `autopilot` epics also `wayfinder`, `dig`, `research`, `to-spec`, `to-tickets` and `prototype`; for fast or supersonic mode also `dig` and `wayfinder`; for triage inside the loop also `triage`): agents in the sandbox see only the repo. Check `.claude/skills/` and offer `npx skills@latest add imick-io/skills` for any missing.
 
 **Section G: Epic PRs.** GitHub only, and only when the repo uses epics (`/scope-decomposer`). Ask:
 
