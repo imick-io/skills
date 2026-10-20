@@ -340,6 +340,14 @@ function prepareBranch(t: Ticket, epicPath?: string) {
   git(undefined, "branch", t.branch, epicPath ? t.epic!.branch : "origin/main");
 }
 
+// Commits on the ticket's branch that its base doesn't have yet. Not just
+// the latest run's commits: a pass interrupted between build and land (the
+// loop restarted) leaves finished work on the branch, and the rerun has
+// nothing new to commit. That work still needs reviewing and landing.
+function unlanded(t: Ticket): number {
+  return Number(git(undefined, "rev-list", "--count", `${t.epic ? t.epic.branch : "origin/main"}..${t.branch}`));
+}
+
 // ---------------------------------------------------------------------------
 // One pass
 // ---------------------------------------------------------------------------
@@ -391,22 +399,22 @@ async function pass(): Promise<number> {
     work.map(async ({ t }) => {
       const box = await sandcastle.createSandbox({ branch: t.branch, sandbox: docker(), hooks, copyToWorktree });
       try {
-        const done = await box.run({
+        await box.run({
           name: `#${t.number}`,
           maxIterations: 100,
           agent: sandcastle.claudeCode(WORKER),
           promptFile: t.kind === "bug" ? "./.sandcastle/bug-prompt.md" : "./.sandcastle/implement-prompt.md",
           promptArgs: { ISSUE: String(t.number), TITLE: t.title, BRANCH: t.branch },
         });
-        if (!done.commits.length) return 0;
-        const review = await box.run({
+        if (!unlanded(t)) return 0;
+        await box.run({
           name: `#${t.number} review`,
           maxIterations: 1,
           agent: sandcastle.claudeCode(WORKER),
           promptFile: "./.sandcastle/review-prompt.md",
           promptArgs: { ISSUE: String(t.number), BRANCH: t.branch, BASE: t.epic ? `origin/${t.epic.branch}` : "origin/main" },
         });
-        return done.commits.length + review.commits.length;
+        return unlanded(t);
       } finally {
         await box.close();
       }
