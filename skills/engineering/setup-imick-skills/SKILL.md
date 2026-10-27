@@ -132,7 +132,14 @@ On **yes**:
 
 > Add the tracker page? `node tracker/build.mjs` builds a page from this repo's issues: what waits on you next, specs to approve, the epics' roadmap, and each epic's board with what blocks what. The agent loop rebuilds it before and after every pass. (recommended: **yes** with the agent loop or epics)
 
-On **yes**: copy the `tracker` skill's [build.mjs](../tracker/build.mjs) to `tracker/build.mjs`, add `tracker/index.html` to `.gitignore`, and run `node tracker/build.mjs` once to show it.
+On **yes**: copy the `tracker` skill's [build.mjs](../tracker/build.mjs) to `tracker/build.mjs`, add `tracker/index.html` and `tracker/.vercel` to `.gitignore`, and run `node tracker/build.mjs` once to show it. Then ask:
+
+> Keep the tracker **local only**, or also host it on **Vercel**? (recommended: **local only** for a solo project; **Vercel** when others follow the work, or you want it current while the loop is off)
+>
+> - **Local only**: `tracker/index.html` on your machine, rebuilt by the loop every pass or by hand.
+> - **Vercel**: a page built from GitHub on every visit, behind a password. Needs the Vercel CLI logged in, a read-only GitHub token and a password, which you set yourself.
+
+On **Vercel**: follow the `tracker` skill's **Hosting on Vercel** steps.
 
 ### 3. Confirm and edit
 

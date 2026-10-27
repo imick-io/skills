@@ -4,14 +4,17 @@
 //
 //   node tracker/build.mjs          build and open
 //   node tracker/build.mjs --no-open
+//
+// Hosted on Vercel, `render()` builds the page on request instead (see
+// tracker/api/index.mjs): with GITHUB_TOKEN set it calls GitHub's GraphQL API
+// directly, since there is no `gh` there, and the repo comes from
+// TRACKER_REPO (owner/name) or Vercel's git env vars.
 
 import { execFileSync } from "node:child_process";
 import { writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
-const { owner, name } = JSON.parse(execFileSync("gh", ["repo", "view", "--json", "owner,name"], { encoding: "utf8" }));
-const REPO = { owner: owner.login, name };
 const OUT = join(dirname(fileURLToPath(import.meta.url)), "index.html");
 
 // ---------------------------------------------------------------------------
@@ -34,13 +37,46 @@ const QUERY = `query($owner: String!, $name: String!, $after: String) {
   }
 }`;
 
-function fetchIssues() {
+async function resolveRepo() {
+  const slug = process.env.TRACKER_REPO
+    ?? (process.env.VERCEL_GIT_REPO_OWNER && `${process.env.VERCEL_GIT_REPO_OWNER}/${process.env.VERCEL_GIT_REPO_SLUG}`);
+  if (slug) { const [owner, name] = slug.split("/"); return { owner, name }; }
+  const { owner, name } = JSON.parse(execFileSync("gh", ["repo", "view", "--json", "owner,name"], { encoding: "utf8" }));
+  return { owner: owner.login, name };
+}
+
+async function graphql(query, variables) {
+  const token = process.env.GITHUB_TOKEN;
+  if (token) {
+    const res = await fetch("https://api.github.com/graphql", {
+      method: "POST",
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      body: JSON.stringify({ query, variables }),
+    });
+    const json = await res.json();
+    if (!res.ok || json.errors) throw new Error(`GitHub GraphQL: ${res.status} ${JSON.stringify(json.errors ?? json)}`);
+    return json.data;
+  }
+  const args = ["api", "graphql", "-f", `query=${query}`];
+  for (const [k, v] of Object.entries(variables)) if (v != null) args.push("-F", `${k}=${v}`);
+  return JSON.parse(execFileSync("gh", args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 })).data;
+}
+
+// Open PRs by head branch, for an epic's "merge" status.
+async function fetchOpenPrs(REPO) {
+  const data = await graphql(`query($owner: String!, $name: String!) {
+    repository(owner: $owner, name: $name) {
+      pullRequests(first: 100, states: OPEN) { nodes { number url title headRefName } }
+    }
+  }`, { owner: REPO.owner, name: REPO.name });
+  return new Map(data.repository.pullRequests.nodes.map((p) => [p.headRefName, { number: p.number, url: p.url, title: p.title }]));
+}
+
+async function fetchIssues(REPO) {
   const all = [];
   let after = null;
   do {
-    const args = ["api", "graphql", "-f", `query=${QUERY}`, "-F", `owner=${REPO.owner}`, "-F", `name=${REPO.name}`];
-    if (after) args.push("-F", `after=${after}`);
-    const page = JSON.parse(execFileSync("gh", args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 })).data.repository.issues;
+    const page = (await graphql(QUERY, { owner: REPO.owner, name: REPO.name, after })).repository.issues;
     all.push(...page.nodes);
     after = page.pageInfo.hasNextPage ? page.pageInfo.endCursor : null;
   } while (after);
@@ -66,7 +102,9 @@ function fetchIssues() {
 // Classify
 // ---------------------------------------------------------------------------
 
-const issues = fetchIssues();
+export async function render() {
+const REPO = await resolveRepo();
+const [issues, openPrs] = await Promise.all([fetchIssues(REPO), fetchOpenPrs(REPO)]);
 const byNumber = new Map(issues.map((i) => [i.number, i]));
 const has = (i, label) => i.labels.includes(label);
 const isPlanning = (i) => i.labels.some((l) => l.startsWith("wayfinder:")) || has(i, "spec");
@@ -105,14 +143,11 @@ function epicStatus(e) {
 }
 
 // The epic's open PR (the loop opens it once no ticket is left), for the
-// "merge" status. One `gh` call per finished epic; rare.
+// "merge" status.
 function epicPr(e) {
   const branch = e.body.match(/`(epic\/[^`]+)`/)?.[1];
   if (!branch) return null;
-  try {
-    const out = execFileSync("gh", ["pr", "list", "--head", branch, "--state", "open", "--json", "number,url,title", "--limit", "1"], { encoding: "utf8" });
-    return JSON.parse(out)[0] ?? null;
-  } catch { return null; }
+  return openPrs.get(branch) ?? null;
 }
 
 const EPIC_STATUS = {
@@ -825,8 +860,14 @@ showTab(startTab);
 </html>
 `;
 
-writeFileSync(OUT, html);
-console.log(`Wrote ${OUT} (${issues.length} issues)`);
-if (!process.argv.includes("--no-open")) {
-  try { execFileSync(process.platform === "darwin" ? "open" : "xdg-open", [OUT]); } catch {}
+return { html, count: issues.length };
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  const { html, count } = await render();
+  writeFileSync(OUT, html);
+  console.log(`Wrote ${OUT} (${count} issues)`);
+  if (!process.argv.includes("--no-open")) {
+    try { execFileSync(process.platform === "darwin" ? "open" : "xdg-open", [OUT]); } catch {}
+  }
 }
