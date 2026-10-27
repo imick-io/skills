@@ -2571,6 +2571,13 @@
         "triage"
       ]
     },
+    "why-sleeping": {
+      "group": "ops",
+      "next": [
+        "brief",
+        "triage"
+      ]
+    },
     "wizard": {
       "group": "ops"
     },

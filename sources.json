@@ -232,6 +232,11 @@
       "source": "own"
     },
     {
+      "local_path": "skills/engineering/why-sleeping",
+      "local_name": "why-sleeping",
+      "source": "own"
+    },
+    {
       "local_path": "skills/engineering/wizard",
       "local_name": "wizard",
       "source": "mattpocock",
