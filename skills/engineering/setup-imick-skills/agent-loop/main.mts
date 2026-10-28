@@ -83,7 +83,8 @@
 import * as sandcastle from "@ai-hero/sandcastle";
 import { docker } from "@ai-hero/sandcastle/sandboxes/docker";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { hostname } from "node:os";
 import { setTimeout as sleep } from "node:timers/promises";
 import { z } from "zod";
 
@@ -105,6 +106,8 @@ const RETRY_MINUTES = Number(process.env.AGENTS_RETRY_MINUTES ?? 5);
 // epic wherever they need its work (/to-tickets does). Autopilot planning of
 // a blocked epic then goes ahead too, so it has tickets to start.
 const EPIC_GATE = process.env.AGENTS_EPIC_GATE === "ticket" ? "ticket" : "epic";
+// A pending epic check older than this is taken to have died, and run again.
+const CHECK_STALE_MINUTES = 60;
 const VERIFY_SKIP = (process.env.AGENTS_VERIFY_SKIP ?? ".sandcastle/**,.claude/**,docs/**,*.md,tracker/**")
   .split(",").map((g) => g.trim()).filter(Boolean);
 const LIMIT_SLEEP_MINUTES = Number(process.env.AGENTS_LIMIT_SLEEP_MINUTES ?? 60);
@@ -246,33 +249,6 @@ const freeBranch = (branch: string) => {
 };
 const log = (msg: string) => console.log(`[agents ${new Date().toISOString()}] ${msg}`);
 const isLimit = (reason: string) => /usage limit|rate limit|429/i.test(reason);
-
-// A run can print its completion signal and then hang until the idle timeout
-// (seen after an agent left a server running). Its work is done by then: the
-// commits and statuses are in place. When the run's log has the signal, the
-// timeout counts as success. Runs whose result the loop reads (a plan, an
-// unblock outcome) aren't wrapped: their output is lost with the error.
-const LOGS = ".sandcastle/logs";
-const COMPLETE = "<promise>COMPLETE</promise>";
-async function finished<T>(name: string, run: () => Promise<T>): Promise<T | undefined> {
-  const since = Date.now();
-  try {
-    return await run();
-  } catch (error) {
-    if (!/AgentIdleTimeout|idle for \d+ seconds/i.test(String(error)) || !signalled(name, since)) throw error;
-    log(`warning: ${name} signalled completion, then hung until the idle timeout; counted as done`);
-    return undefined;
-  }
-}
-// Sandcastle names a run's log `<branch>-<name>.log` under .sandcastle/logs.
-function signalled(name: string, since: number): boolean {
-  if (!existsSync(LOGS)) return false;
-  const suffix = `-${name.toLowerCase().replace(/[^a-z0-9_.-]/g, "-")}.log`;
-  return readdirSync(LOGS).some((f) => {
-    const path = `${LOGS}/${f}`;
-    return f.endsWith(suffix) && statSync(path).mtimeMs >= since && readFileSync(path, "utf8").includes(COMPLETE);
-  });
-}
 const repo = gh("repo", "view", "--json", "nameWithOwner", "--jq", ".nameWithOwner");
 const me = gh("api", "user", "--jq", ".login");
 
@@ -589,21 +565,21 @@ function settle(t: Ticket, commits: number, epicPath?: string) {
 async function build(t: Ticket): Promise<number> {
   const box = await sandcastle.createSandbox({ branch: t.branch, sandbox: container(), hooks });
   try {
-    await finished(`#${t.number}`, () => box.run({
+    await box.run({
       name: `#${t.number}`,
       maxIterations: 100,
       agent: sandcastle.claudeCode(WORKER),
       promptFile: t.kind === "bug" ? "./.sandcastle/bug-prompt.md" : "./.sandcastle/implement-prompt.md",
       promptArgs: { ISSUE: String(t.number), TITLE: t.title, BRANCH: t.branch },
-    }));
+    });
     if (!unlanded(t)) return 0;
-    await finished(`#${t.number} review`, () => box.run({
+    await box.run({
       name: `#${t.number} review`,
       maxIterations: 1,
       agent: sandcastle.claudeCode(WORKER),
       promptFile: "./.sandcastle/review-prompt.md",
       promptArgs: { ISSUE: String(t.number), BRANCH: t.branch, BASE: t.epic ? `origin/${t.epic.branch}` : "origin/main" },
-    }));
+    });
     return unlanded(t);
   } finally {
     await box.close();
@@ -715,14 +691,14 @@ async function planEpics(): Promise<number> {
       const box = await sandcastle.createSandbox({ branch, sandbox: container(), hooks });
       let commits = 0;
       try {
-        const done = await finished(`plan #${j.epic.number}`, () => box.run({
+        const done = await box.run({
           name: `plan #${j.epic.number}`,
           maxIterations: 1,
           agent: sandcastle.claudeCode(PLANNER),
           promptFile: "./.sandcastle/autopilot-prompt.md",
           promptArgs: { INSTRUCTIONS: instructions(j), BRANCH: branch, EPIC_BRANCH: j.epic.branch },
-        }));
-        commits = done ? done.commits.length : Number(git(undefined, "rev-list", "--count", `${j.epic.branch}..${branch}`));
+        });
+        commits = done.commits.length;
       } finally {
         await box.close();
       }
@@ -793,14 +769,21 @@ async function verifyEpic(e: { number: number; title: string; body: string; labe
     if (!pr) return 0;
   }
   git(undefined, "fetch", "--quiet", "origin", branch);
-  let verified = verifyState(pr.headRefOid);
+  const status = verifyStatus(pr.headRefOid);
+  let verified = status.state;
   if (!verified && carryVerified(pr.number, pr.headRefOid)) verified = "success";
   if (verified === "success" && unblocks(modeOf(e.labels.map((l) => l.name)))) return mergeEpic(pr.number, e.number);
   if (verified === "success" || verified === "failure") return 0; // this commit is done
+  // Pending: another loop (or this one before a restart) is checking it. A
+  // check that never finished frees the commit after CHECK_STALE_MINUTES.
+  if (verified === "pending" && Date.now() - Date.parse(status.updatedAt) < CHECK_STALE_MINUTES * 60_000) return 0;
 
   const verifyBranch = `agent/verify-${e.number}`;
   freeBranch(verifyBranch);
   git(undefined, "branch", "-f", verifyBranch, `origin/${branch}`);
+  // Claim the commit before the sandbox starts, so another loop skips it.
+  gh("api", `repos/${repo}/statuses/${pr.headRefOid}`, "-f", "state=pending", "-f", "context=verify-epic",
+    "-f", `description=Verifying (agent loop on ${hostname()})`);
   log(`verifying epic #${e.number} (PR #${pr.number} at ${pr.headRefOid.slice(0, 7)})`);
   // The check runs beside the tickets, not before the next pass: tickets in
   // other epics keep building while it runs.
@@ -810,7 +793,7 @@ async function verifyEpic(e: { number: number; title: string; body: string; labe
 
 async function check(epic: number, pr: { number: number; headRefOid: string }, verifyBranch: string) {
   try {
-    await finished(`verify #${epic}`, () => sandcastle.run({
+    await sandcastle.run({
       hooks,
       sandbox: container(),
       name: `verify #${epic}`,
@@ -819,15 +802,20 @@ async function check(epic: number, pr: { number: number; headRefOid: string }, v
       agent: sandcastle.claudeCode(WORKER),
       promptFile: "./.sandcastle/verify-prompt.md",
       promptArgs: { PR: String(pr.number), EPIC: String(epic), SHA: pr.headRefOid, BRANCH: verifyBranch },
-    }));
+    });
   } finally {
     freeBranch(verifyBranch); // a run that died keeps its worktree otherwise
     tryGit(undefined, "branch", "-D", verifyBranch);
   }
 }
 
-const verifyState = (sha: string) =>
-  gh("api", `repos/${repo}/commits/${sha}/status`, "--jq", '[.statuses[] | select(.context=="verify-epic")][0].state // ""');
+// The commit's verify-epic status: its state ("" when none) and when it was set.
+function verifyStatus(sha: string): { state: string; updatedAt: string } {
+  const found = gh("api", `repos/${repo}/commits/${sha}/status`, "--jq", '[.statuses[] | select(.context=="verify-epic")][0] // {} | "\\(.state // "") \\(.updated_at // "")"');
+  const [state = "", updatedAt = ""] = found.split(" ");
+  return { state, updatedAt };
+}
+const verifyState = (sha: string) => verifyStatus(sha).state;
 
 // A new head commit that only changes loop or docs files (AGENTS_VERIFY_SKIP)
 // since the newest verified commit inherits its green status, without a run.
@@ -971,14 +959,14 @@ async function triage(): Promise<number> {
 
   const settled = await Promise.allSettled(jobs.map(async (j) => {
     gh("issue", "edit", String(j.n), "--add-label", LABEL.triage);
-    await finished(`triage #${j.n}`, () => sandcastle.run({
+    await sandcastle.run({
       sandbox: container(),
       name: `triage #${j.n}`,
       maxIterations: 1,
       agent: sandcastle.claudeCode(WORKER),
       promptFile: "./.sandcastle/triage-prompt.md",
       promptArgs: { ISSUE: String(j.n), TITLE: j.title, WHY: j.why },
-    }));
+    });
     const after = ghJson<{ labels: { name: string }[]; comments: { body: string }[] }>("issue", "view", String(j.n), "--json", "labels,comments");
     const labels = after.labels.map((l) => l.name);
     if (labels.includes(LABEL.triage) || !isAiComment(after.comments.at(-1)?.body ?? "")) {
@@ -1195,14 +1183,14 @@ async function resolveConflicts(issue: Issue, epic: Epic) {
     const box = await sandcastle.createSandbox({ branch, sandbox: container(), hooks });
     let commits = 0;
     try {
-      const done = await finished(`conflicts #${epic.number}`, () => box.run({
+      const done = await box.run({
         name: `conflicts #${epic.number}`,
         maxIterations: 20,
         agent: sandcastle.claudeCode(PLANNER),
         promptFile: "./.sandcastle/conflicts-prompt.md",
         promptArgs: { ISSUE: String(n), BRANCH: branch, EPIC: String(epic.number), EPIC_BRANCH: epic.branch, FILES: files },
-      }));
-      commits = done ? done.commits.length : Number(git(undefined, "rev-list", "--count", `${base}..${branch}`)) - 1; // less the WIP merge
+      });
+      commits = done.commits.length;
     } finally {
       await box.close();
     }
@@ -1285,6 +1273,31 @@ function syncTracker() {
     log(`tracker rebuild failed: ${String(error).slice(0, 200)}`);
   }
 }
+
+// One loop per checkout. Two loops in the same folder share its worktrees:
+// one freeing a branch for its run deletes the folder the other's agent works
+// in, which then sits silent until the idle timeout (EveryShelf, 2026-10-28).
+// Loops on different machines are fine: claims and check statuses keep them apart.
+const LOCK = ".sandcastle/loop.pid";
+const alive = (pid: number) => {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === "EPERM";
+  }
+};
+const holder = Number(existsSync(LOCK) ? readFileSync(LOCK, "utf8").trim() : 0);
+if (holder && holder !== process.pid && alive(holder)) {
+  console.error(`[agents] Another agent loop (pid ${holder}) is already running in this folder. Stop it first (\`npm run agents:stop\`, or \`kill -INT ${holder}\`), or run this one from another clone.`);
+  process.exit(1);
+}
+writeFileSync(LOCK, String(process.pid));
+process.on("exit", () => {
+  try {
+    if (readFileSync(LOCK, "utf8").trim() === String(process.pid)) rmSync(LOCK, { force: true });
+  } catch { /* already gone */ }
+});
 
 // Starting the loop is the clearest sign you want it running: a stop file
 // left by an earlier request (or a stop asked for while nothing ran) is cleared.
