@@ -196,7 +196,7 @@ const CACHE = ".sandcastle/cache";
 const SANDBOX_CACHE = "/home/agent/.pkg-cache";
 mkdirSync(CACHE, { recursive: true });
 const install =
-  existsSync("pnpm-lock.yaml") ? `CI=true pnpm install --frozen-lockfile --store-dir ${SANDBOX_CACHE}/pnpm-store`
+  existsSync("pnpm-lock.yaml") ? "CI=true pnpm install --frozen-lockfile"
   : existsSync("yarn.lock") ? `YARN_CACHE_FOLDER=${SANDBOX_CACHE}/yarn yarn install --immutable`
   : existsSync("package-lock.json") ? `npm ci --cache ${SANDBOX_CACHE}/npm`
   : `npm install --cache ${SANDBOX_CACHE}/npm`;
@@ -214,7 +214,16 @@ const hooks = {
 };
 const container = () => docker({
   mounts: [{ hostPath: CACHE, sandboxPath: SANDBOX_CACHE }],
-  env: { COREPACK_HOME: `${SANDBOX_CACHE}/corepack`, COREPACK_ENABLE_DOWNLOAD_PROMPT: "0" },
+  // pnpm's store goes in the environment, not on the install's command line:
+  // pnpm 11 checks the dependencies before every `pnpm <script>`, and a store
+  // other than the one the install used makes it reinstall, which fails without
+  // a TTY. pnpm 11 reads only pnpm_config_*, pnpm 9 and 10 only npm_config_*.
+  env: {
+    COREPACK_HOME: `${SANDBOX_CACHE}/corepack`,
+    COREPACK_ENABLE_DOWNLOAD_PROMPT: "0",
+    pnpm_config_store_dir: `${SANDBOX_CACHE}/pnpm-store`,
+    npm_config_store_dir: `${SANDBOX_CACHE}/pnpm-store`,
+  },
 });
 
 // ---------------------------------------------------------------------------
