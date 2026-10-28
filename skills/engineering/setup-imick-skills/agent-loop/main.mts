@@ -29,22 +29,25 @@
 //   0. Triage (AGENTS_TRIAGE=1, in place of the GitHub triage workflow): new
 //      issues with no triage label, `needs-info` issues the reporter answered
 //      since the last triage note, and anything left on `needs-triage` get an
-//      unattended /triage run each, so what comes out ready-for-agent is
-//      built in the same pass.
+//      unattended /triage run each, after the tickets have started; what
+//      comes out ready-for-agent is picked up by the next pass, at once.
 //   1. Queue: open, unassigned, unblocked issues labelled ready-for-agent or
 //      ready-for-agent-debugging. Specs are skipped (they're read by
 //      /to-tickets, never built directly).
-//   2. Plan: an agent picks the tickets that can safely run in parallel.
+//   2. Plan: an agent picks the tickets that can safely run in parallel,
+//      beside the ones already building, to fill the free slots.
 //   3. Claim each one (assignee = claimed), prepare its branch: tickets under
 //      an epic branch off the epic branch, after `main` is merged into it;
 //      the others branch off `main`.
 //   4. Execute + review: one Docker sandbox per ticket, running /implement or
-//      /debug-and-fix, then a review pass.
+//      /debug-and-fix, then a review pass. Each ticket is its own job: the
+//      pass doesn't wait for it, and the loop passes again as soon as one
+//      lands, so a free slot is refilled without waiting for a whole batch.
 //   5. Land: epic tickets merge into the epic branch and close; the others
 //      get a PR with "Fixes #n". An epic with no open tickets left gets its
 //      PR to main ("Closes #epic").
 //   6. Verify: an epic PR whose milestone is empty is checked with
-//      /verify-epic, once per commit; its failures become tickets that the
+//      /verify-epic, once per commit, beside the tickets; its failures become tickets that the
 //      next pass picks up, and its status feeds the epic-gate merge check. A
 //      commit that only changes loop or docs files (AGENTS_VERIFY_SKIP) keeps
 //      the last green status instead of running the check again.
@@ -80,7 +83,8 @@
 import * as sandcastle from "@ai-hero/sandcastle";
 import { docker } from "@ai-hero/sandcastle/sandboxes/docker";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { hostname } from "node:os";
 import { setTimeout as sleep } from "node:timers/promises";
 import { z } from "zod";
 
@@ -96,6 +100,14 @@ const IDLE_MINUTES = Number(process.env.AGENTS_IDLE_MINUTES ?? 45);
 const RETRY_MINUTES = Number(process.env.AGENTS_RETRY_MINUTES ?? 5);
 // A verified epic stays verified when every file changed since then matches
 // one of these globs: a merge of loop or docs changes doesn't need a new check.
+// What an epic blocked by other epics holds back. `epic` (default): all its
+// tickets wait. `ticket`: only tickets with blockers of their own wait, so the
+// rest start early; for tickets cut with a `blocked by` link to the other
+// epic wherever they need its work (/to-tickets does). Autopilot planning of
+// a blocked epic then goes ahead too, so it has tickets to start.
+const EPIC_GATE = process.env.AGENTS_EPIC_GATE === "ticket" ? "ticket" : "epic";
+// A pending epic check older than this is taken to have died, and run again.
+const CHECK_STALE_MINUTES = 60;
 const VERIFY_SKIP = (process.env.AGENTS_VERIFY_SKIP ?? ".sandcastle/**,.claude/**,docs/**,*.md,tracker/**")
   .split(",").map((g) => g.trim()).filter(Boolean);
 const LIMIT_SLEEP_MINUTES = Number(process.env.AGENTS_LIMIT_SLEEP_MINUTES ?? 60);
@@ -237,33 +249,6 @@ const freeBranch = (branch: string) => {
 };
 const log = (msg: string) => console.log(`[agents ${new Date().toISOString()}] ${msg}`);
 const isLimit = (reason: string) => /usage limit|rate limit|429/i.test(reason);
-
-// A run can print its completion signal and then hang until the idle timeout
-// (seen after an agent left a server running). Its work is done by then: the
-// commits and statuses are in place. When the run's log has the signal, the
-// timeout counts as success. Runs whose result the loop reads (a plan, an
-// unblock outcome) aren't wrapped: their output is lost with the error.
-const LOGS = ".sandcastle/logs";
-const COMPLETE = "<promise>COMPLETE</promise>";
-async function finished<T>(name: string, run: () => Promise<T>): Promise<T | undefined> {
-  const since = Date.now();
-  try {
-    return await run();
-  } catch (error) {
-    if (!/AgentIdleTimeout|idle for \d+ seconds/i.test(String(error)) || !signalled(name, since)) throw error;
-    log(`warning: ${name} signalled completion, then hung until the idle timeout; counted as done`);
-    return undefined;
-  }
-}
-// Sandcastle names a run's log `<branch>-<name>.log` under .sandcastle/logs.
-function signalled(name: string, since: number): boolean {
-  if (!existsSync(LOGS)) return false;
-  const suffix = `-${name.toLowerCase().replace(/[^a-z0-9_.-]/g, "-")}.log`;
-  return readdirSync(LOGS).some((f) => {
-    const path = `${LOGS}/${f}`;
-    return f.endsWith(suffix) && statSync(path).mtimeMs >= since && readFileSync(path, "utf8").includes(COMPLETE);
-  });
-}
 const repo = gh("repo", "view", "--json", "nameWithOwner", "--jq", ".nameWithOwner");
 const me = gh("api", "user", "--jq", ".login");
 
@@ -304,7 +289,8 @@ const epicCache = new Map<string, Epic | undefined>();
 const epicBlockedCache = new Map<number, boolean>();
 
 // An epic waiting on other epics holds back its tickets too, even those with
-// no blockers inside its milestone: they'd be built on missing foundations.
+// no blockers inside its milestone: they'd be built on missing foundations
+// (unless AGENTS_EPIC_GATE=ticket).
 function epicBlocked(epic: Epic): boolean {
   if (!epicBlockedCache.has(epic.number)) {
     const n = Number(gh("api", `repos/${repo}/issues/${epic.number}`, "--jq", ".issue_dependencies_summary.blocked_by // 0"));
@@ -342,7 +328,7 @@ function readyTickets(): Ticket[] {
       const blocked = Number(gh("api", `repos/${repo}/issues/${issue.number}`, "--jq", ".issue_dependencies_summary.blocked_by // 0"));
       if (blocked > 0) continue;
       const epic = epicFor(issue.milestone?.title);
-      if (epic && epicBlocked(epic)) continue;
+      if (epic && EPIC_GATE === "epic" && epicBlocked(epic)) continue;
       tickets.push({
         number: issue.number,
         title: issue.title,
@@ -429,107 +415,175 @@ function unlanded(t: Ticket): number {
 
 const planSchema = z.object({ issues: z.array(z.object({ number: z.number() })) });
 
+// The loop keeps up to AGENTS_MAX_PARALLEL tickets building at once, as a
+// pool: each ticket is a job of its own, and when one lands its slot is
+// refilled at once, instead of waiting for the slowest ticket of a batch.
+// Epic checks run beside them, one per epic. A job never throws: it releases
+// its ticket and notes a usage limit for the next pass to act on.
+const running = new Map<number, Promise<void>>(); // ticket number → its job
+const checking = new Map<number, Promise<void>>(); // epic number → its check
+let limitReason: string | undefined;
+
+// A finished job wakes the loop's wait, so a free slot is refilled at once.
+let woken = false;
+let wakeUp = () => {};
+function wake() {
+  woken = true;
+  wakeUp();
+}
+
+function background(what: string, job: () => Promise<void>, done: () => void): Promise<void> {
+  return job()
+    .catch(async (error) => {
+      const reason = String(error);
+      if (isLimit(reason)) limitReason = reason;
+      else await alert(`${what} failed: ${reason.slice(0, 300)}`);
+    })
+    .catch(() => {}) // even the alert failing must not reject
+    .finally(() => {
+      done();
+      wake();
+    });
+}
+
 async function pass(): Promise<number> {
+  if (limitReason) {
+    const reason = limitReason;
+    limitReason = undefined;
+    throw new Error(`usage limit: ${reason}`);
+  }
   epicCache.clear();
   epicBlockedCache.clear();
-  const triaged = stopRequested() ? 0 : await triage();
-  const unblocked = triaged + (stopRequested() ? 0 : await unblock());
-  const planned = unblocked + (PLANNING && !stopRequested() ? await planEpics() : 0);
-  if (stopRequested()) return planned;
-  const ready = readyTickets();
-  if (!ready.length) return planned + (await verifyEpics());
+  // Tickets first: their slots are the loop's throughput. What triage,
+  // unblocking and planning make ready is picked up by the next pass, which
+  // starts at once because they count as work.
+  const started = stopRequested() ? 0 : await fill();
+  let other = stopRequested() ? 0 : await verifyEpics();
+  if (!stopRequested()) other += await triage();
+  if (!stopRequested()) other += await unblock();
+  if (PLANNING && !stopRequested()) other += await planEpics();
+  changedQueue = other > 0;
+  return started + other;
+}
+// Whether the last pass may have made new tickets ready (triage, unblocking,
+// planning, a check's gaps): then the next pass runs at once, even with
+// every slot busy, instead of waiting for a ticket to land.
+let changedQueue = false;
 
-  const plan = await sandcastle.run({
-    hooks,
-    sandbox: container(),
-    name: "planner",
-    maxIterations: 1,
-    agent: sandcastle.claudeCode(PLANNER),
-    promptFile: "./.sandcastle/plan-prompt.md",
-    promptArgs: {
-      MAX_PARALLEL: String(MAX_PARALLEL),
-      TICKETS: ready.map((t) => `- #${t.number} (${t.kind}${t.epic ? `, epic #${t.epic.number}` : ""}): ${t.title}`).join("\n"),
-    },
-    output: sandcastle.Output.object({ tag: "plan", schema: planSchema }),
-  });
-  const picked = planSchema.parse(plan.output).issues
-    .map((p) => ready.find((t) => t.number === p.number))
-    .filter((t): t is Ticket => !!t)
-    .slice(0, MAX_PARALLEL);
+// Start ready tickets in the free slots. Returns how many started.
+async function fill(): Promise<number> {
+  const free = MAX_PARALLEL - running.size;
+  if (free <= 0) return 0;
+  const ready = readyTickets(); // unassigned only: running tickets are claimed
+  if (!ready.length) return 0;
+
+  const busy = [...inFlight];
+  // One ready ticket and nothing building: nothing to choose between.
+  const picked = ready.length === 1 && !busy.length ? ready : await plan(ready, busy, free);
 
   const epicPaths = new Map<number, string | undefined>();
-  const work: { t: Ticket; epicPath?: string }[] = [];
-  for (const t of picked) {
+  let started = 0;
+  for (const t of picked.slice(0, free)) {
     if (t.epic && !epicPaths.has(t.epic.number)) epicPaths.set(t.epic.number, prepareEpic(t.epic));
     const epicPath = t.epic ? epicPaths.get(t.epic.number) : undefined;
     if (t.epic && !epicPath) continue; // epic paused on a conflict with main
     if (stopRequested()) break; // claim nothing more once a stop is asked for
     if (!claim(t)) continue;
     prepareBranch(t, epicPath);
-    work.push({ t, epicPath });
     inFlight.add(t);
+    running.set(t.number, background(`#${t.number}`, () => work(t, epicPath), () => {
+      inFlight.delete(t);
+      running.delete(t.number);
+    }));
+    started++;
   }
-  log(`working ${work.map(({ t }) => `#${t.number}`).join(", ") || "nothing"}`);
+  const others = busy.length ? ` (already building ${busy.map((t) => `#${t.number}`).join(", ")})` : "";
+  log(`started ${started ? picked.slice(0, started).map((t) => `#${t.number}`).join(", ") : "nothing"}${others}`);
+  return started;
+}
 
-  const settled = await Promise.allSettled(
-    work.map(async ({ t }) => {
-      const box = await sandcastle.createSandbox({ branch: t.branch, sandbox: container(), hooks });
-      try {
-        await finished(`#${t.number}`, () => box.run({
-          name: `#${t.number}`,
-          maxIterations: 100,
-          agent: sandcastle.claudeCode(WORKER),
-          promptFile: t.kind === "bug" ? "./.sandcastle/bug-prompt.md" : "./.sandcastle/implement-prompt.md",
-          promptArgs: { ISSUE: String(t.number), TITLE: t.title, BRANCH: t.branch },
-        }));
-        if (!unlanded(t)) return 0;
-        await finished(`#${t.number} review`, () => box.run({
-          name: `#${t.number} review`,
-          maxIterations: 1,
-          agent: sandcastle.claudeCode(WORKER),
-          promptFile: "./.sandcastle/review-prompt.md",
-          promptArgs: { ISSUE: String(t.number), BRANCH: t.branch, BASE: t.epic ? `origin/${t.epic.branch}` : "origin/main" },
-        }));
-        return unlanded(t);
-      } finally {
-        await box.close();
-      }
-    }),
-  );
+// The planner picks, among the ready tickets, the ones that can be built
+// beside each other and beside the tickets already building. It only reads
+// tickets and code, so its sandbox skips the install and the services.
+async function plan(ready: Ticket[], busy: Ticket[], free: number): Promise<Ticket[]> {
+  const line = (t: Ticket) => `- #${t.number} (${t.kind}${t.epic ? `, epic #${t.epic.number}` : ""}): ${t.title}`;
+  const run = await sandcastle.run({
+    sandbox: container(),
+    name: "planner",
+    maxIterations: 1,
+    agent: sandcastle.claudeCode(PLANNER),
+    promptFile: "./.sandcastle/plan-prompt.md",
+    promptArgs: {
+      MAX_PARALLEL: String(free),
+      TICKETS: ready.map(line).join("\n"),
+      RUNNING: busy.length ? busy.map(line).join("\n") : "- none",
+    },
+    output: sandcastle.Output.object({ tag: "plan", schema: planSchema }),
+  });
+  return planSchema.parse(run.output).issues
+    .map((p) => ready.find((t) => t.number === p.number))
+    .filter((t): t is Ticket => !!t);
+}
 
-  for (const [i, outcome] of settled.entries()) {
-    const { t, epicPath } = work[i]!;
-    inFlight.delete(t);
-    if (outcome.status === "rejected") {
-      const reason = String(outcome.reason);
-      freeBranch(t.branch); // a sandbox that died leaves its worktree; the branch and its commits stay
-      release(t, reason);
-      if (isLimit(reason)) throw new Error(`usage limit: ${reason}`);
-      continue;
-    }
-    if (!outcome.value) {
-      // No commits: a bug diagnosed for a person / not reproducible, or a
-      // build the agent couldn't finish. The agent has commented; make sure a
-      // person sees it.
-      const labels = ghJson<string[]>("issue", "view", String(t.number), "--json", "labels", "--jq", "[.labels[].name]");
-      if (labels.includes(LABEL[t.kind])) {
-        gh("issue", "edit", String(t.number), "--remove-label", LABEL[t.kind], "--add-label", LABEL.human);
-      }
-      release(t, "no commits; handed to a person");
-      continue;
-    }
-    try {
-      land(t, epicPath);
-    } catch (error) {
-      // One ticket that can't land (a push refused, gh down) doesn't stop the
-      // others; its branch keeps the work, and the next pass lands it.
-      release(t, `landing failed: ${String(error).slice(0, 300)}`);
-      await alert(`Landing #${t.number} failed; the next pass retries it: ${String(error).slice(0, 300)}`);
-    }
-    syncTracker();
+// One ticket, from build to landed (or handed back).
+async function work(t: Ticket, epicPath?: string) {
+  let commits: number;
+  try {
+    commits = await build(t);
+  } catch (error) {
+    freeBranch(t.branch); // a sandbox that died leaves its worktree; the branch and its commits stay
+    release(t, String(error).slice(0, 300));
+    if (isLimit(String(error))) limitReason = String(error);
+    return;
   }
+  try {
+    settle(t, commits, epicPath);
+  } catch (error) {
+    release(t, `after the build: ${String(error).slice(0, 300)}`);
+    throw error;
+  }
+  syncTracker();
+}
 
-  return planned + work.length + (stopRequested() ? 0 : await verifyEpics());
+function settle(t: Ticket, commits: number, epicPath?: string) {
+  if (!commits) {
+    // No commits: a bug diagnosed for a person / not reproducible, or a
+    // build the agent couldn't finish. The agent has commented; make sure a
+    // person sees it.
+    const labels = ghJson<string[]>("issue", "view", String(t.number), "--json", "labels", "--jq", "[.labels[].name]");
+    if (labels.includes(LABEL[t.kind])) {
+      gh("issue", "edit", String(t.number), "--remove-label", LABEL[t.kind], "--add-label", LABEL.human);
+    }
+    release(t, "no commits; handed to a person");
+    return;
+  }
+  // A ticket that can't land (a push refused, gh down) is released with its
+  // work kept on its branch, and alerted; the next pass lands it.
+  land(t, epicPath);
+}
+
+async function build(t: Ticket): Promise<number> {
+  const box = await sandcastle.createSandbox({ branch: t.branch, sandbox: container(), hooks });
+  try {
+    await box.run({
+      name: `#${t.number}`,
+      maxIterations: 100,
+      agent: sandcastle.claudeCode(WORKER),
+      promptFile: t.kind === "bug" ? "./.sandcastle/bug-prompt.md" : "./.sandcastle/implement-prompt.md",
+      promptArgs: { ISSUE: String(t.number), TITLE: t.title, BRANCH: t.branch },
+    });
+    if (!unlanded(t)) return 0;
+    await box.run({
+      name: `#${t.number} review`,
+      maxIterations: 1,
+      agent: sandcastle.claudeCode(WORKER),
+      promptFile: "./.sandcastle/review-prompt.md",
+      promptArgs: { ISSUE: String(t.number), BRANCH: t.branch, BASE: t.epic ? `origin/${t.epic.branch}` : "origin/main" },
+    });
+    return unlanded(t);
+  } finally {
+    await box.close();
+  }
 }
 
 function land(t: Ticket, epicPath?: string) {
@@ -575,7 +629,7 @@ function planJobs(): PlanJob[] {
     const milestone = ghJson<{ milestone: { title: string } | null }>("issue", "view", String(e.number), "--json", "milestone").milestone?.title;
     const branch = e.body.match(/`(epic\/[^`]+)`/)?.[1];
     if (!milestone || !branch) continue;
-    if (Number(gh("api", `repos/${repo}/issues/${e.number}`, "--jq", ".issue_dependencies_summary.blocked_by // 0")) > 0) continue;
+    if (EPIC_GATE === "epic" && Number(gh("api", `repos/${repo}/issues/${e.number}`, "--jq", ".issue_dependencies_summary.blocked_by // 0")) > 0) continue;
     const epic = { number: e.number, title: e.title, branch, milestone, mode: modeOf(e.labels.map((l) => l.name)) };
     const items = ghJson<Issue[]>("issue", "list", "--state", "all", "--milestone", milestone, "--json", "number,title,state,body,labels,comments", "--limit", "300")
       .filter((i) => i.number !== e.number);
@@ -637,14 +691,14 @@ async function planEpics(): Promise<number> {
       const box = await sandcastle.createSandbox({ branch, sandbox: container(), hooks });
       let commits = 0;
       try {
-        const done = await finished(`plan #${j.epic.number}`, () => box.run({
+        const done = await box.run({
           name: `plan #${j.epic.number}`,
           maxIterations: 1,
           agent: sandcastle.claudeCode(PLANNER),
           promptFile: "./.sandcastle/autopilot-prompt.md",
           promptArgs: { INSTRUCTIONS: instructions(j), BRANCH: branch, EPIC_BRANCH: j.epic.branch },
-        }));
-        commits = done ? done.commits.length : Number(git(undefined, "rev-list", "--count", `${j.epic.branch}..${branch}`));
+        });
+        commits = done.commits.length;
       } finally {
         await box.close();
       }
@@ -685,6 +739,7 @@ async function verifyEpics(): Promise<number> {
   );
   let ran = 0;
   for (const e of epics) {
+    if (checking.has(e.number)) continue; // its check is still running
     try {
       ran += await verifyEpic(e);
     } catch (error) {
@@ -714,35 +769,53 @@ async function verifyEpic(e: { number: number; title: string; body: string; labe
     if (!pr) return 0;
   }
   git(undefined, "fetch", "--quiet", "origin", branch);
-  let verified = verifyState(pr.headRefOid);
+  const status = verifyStatus(pr.headRefOid);
+  let verified = status.state;
   if (!verified && carryVerified(pr.number, pr.headRefOid)) verified = "success";
   if (verified === "success" && unblocks(modeOf(e.labels.map((l) => l.name)))) return mergeEpic(pr.number, e.number);
   if (verified === "success" || verified === "failure") return 0; // this commit is done
+  // Pending: another loop (or this one before a restart) is checking it. A
+  // check that never finished frees the commit after CHECK_STALE_MINUTES.
+  if (verified === "pending" && Date.now() - Date.parse(status.updatedAt) < CHECK_STALE_MINUTES * 60_000) return 0;
 
   const verifyBranch = `agent/verify-${e.number}`;
   freeBranch(verifyBranch);
   git(undefined, "branch", "-f", verifyBranch, `origin/${branch}`);
+  // Claim the commit before the sandbox starts, so another loop skips it.
+  gh("api", `repos/${repo}/statuses/${pr.headRefOid}`, "-f", "state=pending", "-f", "context=verify-epic",
+    "-f", `description=Verifying (agent loop on ${hostname()})`);
   log(`verifying epic #${e.number} (PR #${pr.number} at ${pr.headRefOid.slice(0, 7)})`);
+  // The check runs beside the tickets, not before the next pass: tickets in
+  // other epics keep building while it runs.
+  checking.set(e.number, background(`Checking epic #${e.number}`, () => check(e.number, pr!, verifyBranch), () => checking.delete(e.number)));
+  return 1;
+}
+
+async function check(epic: number, pr: { number: number; headRefOid: string }, verifyBranch: string) {
   try {
-    await finished(`verify #${e.number}`, () => sandcastle.run({
+    await sandcastle.run({
       hooks,
       sandbox: container(),
-      name: `verify #${e.number}`,
+      name: `verify #${epic}`,
       maxIterations: 1,
       branchStrategy: { type: "branch", branch: verifyBranch },
       agent: sandcastle.claudeCode(WORKER),
       promptFile: "./.sandcastle/verify-prompt.md",
-      promptArgs: { PR: String(pr.number), EPIC: String(e.number), SHA: pr.headRefOid, BRANCH: verifyBranch },
-    }));
+      promptArgs: { PR: String(pr.number), EPIC: String(epic), SHA: pr.headRefOid, BRANCH: verifyBranch },
+    });
   } finally {
     freeBranch(verifyBranch); // a run that died keeps its worktree otherwise
     tryGit(undefined, "branch", "-D", verifyBranch);
   }
-  return 1;
 }
 
-const verifyState = (sha: string) =>
-  gh("api", `repos/${repo}/commits/${sha}/status`, "--jq", '[.statuses[] | select(.context=="verify-epic")][0].state // ""');
+// The commit's verify-epic status: its state ("" when none) and when it was set.
+function verifyStatus(sha: string): { state: string; updatedAt: string } {
+  const found = gh("api", `repos/${repo}/commits/${sha}/status`, "--jq", '[.statuses[] | select(.context=="verify-epic")][0] // {} | "\\(.state // "") \\(.updated_at // "")"');
+  const [state = "", updatedAt = ""] = found.split(" ");
+  return { state, updatedAt };
+}
+const verifyState = (sha: string) => verifyStatus(sha).state;
 
 // A new head commit that only changes loop or docs files (AGENTS_VERIFY_SKIP)
 // since the newest verified commit inherits its green status, without a run.
@@ -886,14 +959,14 @@ async function triage(): Promise<number> {
 
   const settled = await Promise.allSettled(jobs.map(async (j) => {
     gh("issue", "edit", String(j.n), "--add-label", LABEL.triage);
-    await finished(`triage #${j.n}`, () => sandcastle.run({
+    await sandcastle.run({
       sandbox: container(),
       name: `triage #${j.n}`,
       maxIterations: 1,
       agent: sandcastle.claudeCode(WORKER),
       promptFile: "./.sandcastle/triage-prompt.md",
       promptArgs: { ISSUE: String(j.n), TITLE: j.title, WHY: j.why },
-    }));
+    });
     const after = ghJson<{ labels: { name: string }[]; comments: { body: string }[] }>("issue", "view", String(j.n), "--json", "labels,comments");
     const labels = after.labels.map((l) => l.name);
     if (labels.includes(LABEL.triage) || !isAiComment(after.comments.at(-1)?.body ?? "")) {
@@ -1110,14 +1183,14 @@ async function resolveConflicts(issue: Issue, epic: Epic) {
     const box = await sandcastle.createSandbox({ branch, sandbox: container(), hooks });
     let commits = 0;
     try {
-      const done = await finished(`conflicts #${epic.number}`, () => box.run({
+      const done = await box.run({
         name: `conflicts #${epic.number}`,
         maxIterations: 20,
         agent: sandcastle.claudeCode(PLANNER),
         promptFile: "./.sandcastle/conflicts-prompt.md",
         promptArgs: { ISSUE: String(n), BRANCH: branch, EPIC: String(epic.number), EPIC_BRANCH: epic.branch, FILES: files },
-      }));
-      commits = done ? done.commits.length : Number(git(undefined, "rev-list", "--count", `${base}..${branch}`)) - 1; // less the WIP merge
+      });
+      commits = done.commits.length;
     } finally {
       await box.close();
     }
@@ -1201,6 +1274,31 @@ function syncTracker() {
   }
 }
 
+// One loop per checkout. Two loops in the same folder share its worktrees:
+// one freeing a branch for its run deletes the folder the other's agent works
+// in, which then sits silent until the idle timeout (EveryShelf, 2026-10-28).
+// Loops on different machines are fine: claims and check statuses keep them apart.
+const LOCK = ".sandcastle/loop.pid";
+const alive = (pid: number) => {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === "EPERM";
+  }
+};
+const holder = Number(existsSync(LOCK) ? readFileSync(LOCK, "utf8").trim() : 0);
+if (holder && holder !== process.pid && alive(holder)) {
+  console.error(`[agents] Another agent loop (pid ${holder}) is already running in this folder. Stop it first (\`npm run agents:stop\`, or \`kill -INT ${holder}\`), or run this one from another clone.`);
+  process.exit(1);
+}
+writeFileSync(LOCK, String(process.pid));
+process.on("exit", () => {
+  try {
+    if (readFileSync(LOCK, "utf8").trim() === String(process.pid)) rmSync(LOCK, { force: true });
+  } catch { /* already gone */ }
+});
+
 // Starting the loop is the clearest sign you want it running: a stop file
 // left by an earlier request (or a stop asked for while nothing ran) is cleared.
 if (existsSync(STOP_FILE)) {
@@ -1209,11 +1307,26 @@ if (existsSync(STOP_FILE)) {
 }
 
 // Sleeps in one-minute steps so a stop request ends an idle wait promptly.
-async function idle(minutes: number) {
-  for (let i = 0; i < minutes && !stopRequested(); i++) await sleep(60_000);
+// With `wakeable`, a job finishing (a free slot) ends it at once.
+async function idle(minutes: number, wakeable = false) {
+  for (let i = 0; i < minutes && !stopRequested(); i++) {
+    if (wakeable && woken) break;
+    await Promise.race([sleep(60_000), new Promise<void>((resolve) => { if (wakeable) wakeUp = resolve; })]);
+  }
+  woken = false;
+}
+
+const busy = () => running.size + checking.size;
+
+// Lets every running ticket and check finish (a stop, or the end of --once).
+async function drain() {
+  while (busy()) await Promise.allSettled([...running.values(), ...checking.values()]);
 }
 
 async function stopNicely(worked: number) {
+  worked += busy();
+  if (busy()) log(`stopping: waiting for ${busy()} running ticket(s) and check(s) to land`);
+  await drain();
   rmSync(STOP_FILE, { force: true });
   log(worked ? "stopped nicely after landing the in-flight work" : "stopped nicely; nothing was in flight");
   await alert(`Agent loop stopped nicely${worked ? " after landing its in-flight work" : ""}. Start it again with \`npm run agents:awake\`.`);
@@ -1236,7 +1349,7 @@ for (;;) {
     if (isLimit(message)) {
       if (!limitAlerted) await alert(`Usage limit reached; the agent loop sleeps ${LIMIT_SLEEP_MINUTES} min and retries.`);
       limitAlerted = true;
-      if (ONCE) break;
+      if (ONCE) { await drain(); break; }
       if (stopRequested()) await stopNicely(0);
       await idle(LIMIT_SLEEP_MINUTES);
       continue;
@@ -1245,15 +1358,25 @@ for (;;) {
     const wait = Math.min(RETRY_MINUTES * 2 ** (failures - 1), IDLE_MINUTES);
     await alert(`Agent loop pass failed; retrying in ${wait} min: ${message.slice(0, 500)}`);
     syncTracker();
-    if (ONCE) process.exit(1);
+    if (ONCE) { await drain(); process.exit(1); }
     if (stopRequested()) await stopNicely(0);
     await idle(wait);
     if (stopRequested()) await stopNicely(0);
     continue;
   }
   syncTracker();
-  if (ONCE) break;
+  if (ONCE) {
+    await drain();
+    syncTracker();
+    break;
+  }
   if (stopRequested()) await stopNicely(worked);
+  if (busy()) {
+    // Work is running: pass again when a slot frees up, or after the idle
+    // time for what arrived meanwhile; at once when the queue just changed.
+    if (!changedQueue) await idle(IDLE_MINUTES, true);
+    continue;
+  }
   if (!worked) {
     log(`nothing ready; sleeping ${IDLE_MINUTES} min`);
     await idle(IDLE_MINUTES);
