@@ -18,4 +18,8 @@ Fix what it finds on this branch, preserving behaviour: correctness bugs, missin
 
 Don't push, open PRs or touch the issue.
 
+The sandbox's dependencies are installed, and when the project has a `.sandcastle/sandbox-env`, its services (database, cache) are already running: `source .sandcastle/sandbox-env` before running tests. Don't install or start your own (no `apt-get`, `sudo`, `embedded-postgres` or the like); if a service is missing, say so in your comment.
+
+Before you signal completion, stop every process you started (dev servers, watchers, databases): one left running keeps the sandbox from closing.
+
 Once done, output <promise>COMPLETE</promise>.

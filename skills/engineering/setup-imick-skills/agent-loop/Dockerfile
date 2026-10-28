@@ -1,5 +1,5 @@
 # Agent loop image: Sandcastle's default plus a headless Chromium.
-FROM node:22-bookworm
+FROM node:24-bookworm
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
@@ -21,6 +21,18 @@ RUN npx -y playwright@latest install --with-deps chromium \
   && chmod -R a+rx /root/.cache/ms-playwright \
   && mv /root/.cache/ms-playwright /opt/ms-playwright
 ENV PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright
+
+# --- project additions ---
+# What this project's tests need in the sandbox: apt packages for its services,
+# started by .sandcastle/sandbox-setup.sh. Keep project changes inside this
+# block, so a template update can replace the rest of the file. For example:
+# RUN apt-get update && apt-get install -y postgresql redis-server \
+#   && rm -rf /var/lib/apt/lists/*
+# --- end project additions ---
+
+# pnpm and yarn at the version package.json asks for. The loop points
+# COREPACK_HOME at the shared package cache, so they're downloaded once.
+RUN corepack enable
 
 # Build-args for UID/GID alignment: sandcastle docker build-image
 # defaults these to the host user's UID/GID so image-built files
