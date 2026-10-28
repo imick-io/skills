@@ -79,7 +79,7 @@ On **yes**, ask where it runs:
 > Run triage in **GitHub Actions** or **inside the agent loop**? (recommended: **GitHub Actions** when people other than you file issues or the repo is public; **the agent loop** otherwise)
 >
 > - **GitHub Actions**: reacts within a minute, around the clock, and the triage agent can only run `gh issue` commands. Uses Actions minutes: a private repo on the free plan gets 2,000 a month, then needs billing.
-> - **The agent loop**: no Actions minutes or billing. The loop triages at the start of each pass, so only while it runs, and up to its idle wait (45 minutes) after the issue or the reply. The agent has the sandbox's full permissions, so keep this to repos where only trusted people file issues. Needs Section F.
+> - **The agent loop**: no Actions minutes or billing. The loop triages on each pass, so only while it runs, and up to its idle wait (45 minutes) after the issue or the reply. The agent has the sandbox's full permissions, so keep this to repos where only trusted people file issues. Needs Section F.
 
 **Agent loop** chosen: don't write the workflow and don't set any triage secrets. Create every role label from `triage-labels.md` (`gh label create "<label>" --force`), note `AGENTS_TRIAGE=1` for Section F's `.env` step, and make sure the `triage` skill is committed in the repo (the sandbox sees only the repo). If `.github/workflows/triage.yml` already exists, strip its `issues`, `issue_comment` and `schedule` triggers and keep `workflow_dispatch`, so both never triage the same issue but one issue can still be triaged by hand. If the user then declines Section F, come back here and ask again between GitHub Actions and no triage.
 
