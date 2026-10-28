@@ -181,7 +181,7 @@ npm run agents:awake              # the loop, keeping a laptop awake while it ru
 
 **Autopilot planning**, per epic. Every epic from `/scope-decomposer` waits for a **`/brief`**: a short, high-level session where you say what you already have in mind (must-haves, no-gos, the big product calls), saved in the epic's Brief section, the glossary and ADRs. The brief ends with **autopilot or manual?** An epic labelled `autopilot` is planned by the loop: it runs wayfinder on it by itself, takes every Brief line as decided, decides the rest (75% confidence or more directly, below that after researching it with `dig`, still unsure as **assumed**), parks tasks that need you as `ready-for-human`, and writes the spec with a **Decided on autopilot** section (least confident first). The spec waits on `ready-for-human` and Slack pings you: **approve** with the `spec-approved` label and the next pass cuts the tickets; **request changes** with a comment and the next pass revises it. Epics without the label are yours to plan with `/wayfinder <epic>`, and the loop never touches them.
 
-Tune it in `.sandcastle/.env`: `AGENTS_IDLE_MINUTES` (45), `AGENTS_MAX_PARALLEL` (3), `AGENTS_PLANNER_MODEL`, `AGENTS_WORKER_MODEL`, and `SLACK_ALERTS_WEBHOOK_URL` for usage-limit and failure alerts.
+Tune it in `.sandcastle/.env`: `AGENTS_IDLE_MINUTES` (45), `AGENTS_RETRY_MINUTES` (5, after a failed pass), `AGENTS_MAX_PARALLEL` (3), `AGENTS_VERIFY_SKIP` (the files whose changes keep an epic verified), `AGENTS_PLANNER_MODEL`, `AGENTS_WORKER_MODEL`, and `SLACK_ALERTS_WEBHOOK_URL` for usage-limit and failure alerts.
 
 **Good to know**
 
