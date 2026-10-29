@@ -44,6 +44,8 @@ Don't run `/brief`'s interview once per epic. By the time the epics pass the fou
 
 An epic the user wants to brief later, or can't yet, is published the usual way (`needs-briefing`); the others don't wait for it.
 
+An epic the user will plan **and build** by hand (with other tools or models) gets the `manual` label instead of a brief and `autopilot`: the loop never plans it, never queues or unblocks its tickets, and never opens its PR. Ask once, for the whole set, whether any epic is theirs to run that way.
+
 ## Run
 
 The input is an idea in prose, an issue (often labelled `needs-scoping` by triage), or an existing initiative. An existing initiative means a **re-run**: see below.
@@ -56,7 +58,7 @@ The input is an idea in prose, an issue (often labelled `needs-scoping` by triag
 
 4. **Publish**, in this order:
    1. The **initiative**. From an existing issue, keep its text, append the sections below, and swap any triage labels (`needs-scoping`, `ready-for-human`) for `initiative`. Label it with every area its epics use, and assign the owner the user named.
-   2. Each **epic**, in build order: its milestone (next free repo-wide number), the issue (labels `epic`, `needs-briefing` and `ready-for-human` + its area, in its milestone, assigned to the area's default person, linked under the initiative). On **supersonic**, a briefed epic carries its `## Brief` after the Destination and the labels `epic`, `autopilot` + its area (plus `supersonic` when the project isn't supersonic as a whole), without `needs-briefing` or `ready-for-human`.
+   2. Each **epic**, in build order: its milestone (next free repo-wide number), the issue (labels `epic`, `needs-briefing` and `ready-for-human` + its area, in its milestone, assigned to the area's default person, linked under the initiative). On **supersonic**, a briefed epic carries its `## Brief` after the Destination and the labels `epic`, `autopilot` + its area (plus `supersonic` when the project isn't supersonic as a whole), without `needs-briefing` or `ready-for-human`. An epic the user runs by hand carries `epic`, `manual`, `needs-briefing`, `ready-for-human` + its area, and its body says so under the Destination; its tickets, when cut, get `ready-for-human`.
    3. Blocking edges between epics, in a second pass once every epic has an id.
 
 5. **Hand off.** Report what was created, by name with links. On supersonic: "The agent loop plans the briefed epics in build order, starting with <first epic nothing blocks>; you'll hear from it only for what can't be undone, and in its daily digest." Otherwise every epic waits for its brief: "Next, run `/brief` to brief the epics, starting with <first epic nothing blocks> (<milestone title>); each brief ends by choosing manual or autopilot planning."

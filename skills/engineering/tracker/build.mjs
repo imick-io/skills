@@ -150,6 +150,14 @@ function epicPr(e) {
   return openPrs.get(branch) ?? null;
 }
 
+// A `manual` epic is a person's end to end, so its statuses name them, not the agent.
+const MANUAL_STATUS = {
+  planning: "You are planning it",
+  building: "You are building it",
+  ready: "Ready for you to plan",
+  merge: "Built; merge its PR",
+};
+
 const EPIC_STATUS = {
   done: "Done",
   brief: "Needs your brief",
@@ -208,6 +216,7 @@ const epicData = epics.map((e) => {
     status: epicStatus(e),
     area: e.labels.find((l) => l.startsWith("area:"))?.slice(5) ?? null,
     autopilot: has(e, "autopilot"),
+    manual: has(e, "manual"),
     blockedBy: e.blockedBy,
     openBlockers: openBlockers(e).map((b) => b.number),
     total: ts.length,
@@ -344,6 +353,7 @@ const data = {
   titles: Object.fromEntries(issues.map((i) => [i.number, i.title])),
   urls: Object.fromEntries(issues.map((i) => [i.number, i.url])),
   epicStatus: EPIC_STATUS,
+  manualStatus: MANUAL_STATUS,
   ticketStatus: TICKET_STATUS,
 };
 
@@ -499,6 +509,7 @@ details.spec > .spec { border: 0; padding: 0; margin: 10px 0 0; }
 .pill.backlog { color: var(--backlog); background: var(--backlog-soft); }
 .pill.brief, .pill.spec { color: var(--queued); background: var(--queued-soft); }
 .pill.merge { color: var(--you); background: var(--you-soft); }
+.pill.manual { color: var(--you); background: transparent; border: 1px solid var(--you); padding-top: 0; padding-bottom: 0; }
 label.check { display: inline-flex; gap: 6px; align-items: center; font-size: 14px; }
 </style>
 </head>
@@ -707,11 +718,16 @@ renderBacklog();
 
 // ---- Roadmap
 const EPIC_COLORS = { done: 'done', brief: 'you', spec: 'you', merge: 'you', held: 'blocked', waiting: 'blocked', planning: 'queued', building: 'working', ready: 'queued', backlog: 'backlog' };
+// A manual epic's colour and wording say it's the person's: nothing on it is the agent's turn.
+const MANUAL_COLORS = { planning: 'you', building: 'you', ready: 'you' };
+const epicColor = (e) => (e.manual && MANUAL_COLORS[e.status]) || EPIC_COLORS[e.status];
+const epicStatusText = (e) => (e.manual && DATA.manualStatus[e.status]) || DATA.epicStatus[e.status];
+const manualPill = (e) => e.manual ? ' <span class="pill manual" title="Planned and built by you; the agent loop never touches this epic or its tickets">manual</span>' : '';
 $('epic-table').innerHTML = '<tr><th>Epic</th><th>Status</th><th>Tickets</th><th>Waits on</th></tr>' + DATA.epics.map((e) => {
   const pct = e.total ? Math.round((e.done / e.total) * 100) : 0;
   const counts = e.total ? Object.entries(e.counts).filter(([s, n]) => n && s !== 'done' && s !== 'dropped').map(([s, n]) => n + ' ' + DATA.ticketStatus[s].toLowerCase()).join(' · ') : '';
-  return '<tr><td>' + ref(e.number) + ' ' + esc(e.title) + '</td>' +
-    '<td><span class="pill ' + EPIC_COLORS[e.status] + '">' + esc(DATA.epicStatus[e.status]) + '</span></td>' +
+  return '<tr><td>' + ref(e.number) + ' ' + esc(e.title) + manualPill(e) + '</td>' +
+    '<td><span class="pill ' + epicColor(e) + '">' + esc(epicStatusText(e)) + '</span></td>' +
     '<td>' + (e.total ? e.done + ' / ' + e.total + ' done<div class="bar"><i style="width:' + pct + '%"></i></div><div class="meta">' + counts + '</div>' : '<span class="meta">not planned yet</span>') + '</td>' +
     '<td>' + (e.openBlockers.map(ref).join(', ') || '<span class="meta">nothing</span>') + '</td></tr>';
 }).join('');
@@ -737,7 +753,7 @@ function renderRoadmap() {
   const cols = [];
   for (const e of DATA.epics) (cols[levelOf(e)] ??= []).push(e);
   $('rm').innerHTML = '<svg class="lines" id="rm-lines"></svg>' + cols.map((list, i) => '<div class="rm-col"><div class="rm-step">' + (i === 0 ? 'Now' : 'Step ' + (i + 1)) + '</div>' + list.map((e) => {
-    const c = EPIC_COLORS[e.status];
+    const c = epicColor(e);
     const pct = e.total ? Math.round((e.done / e.total) * 100) : 0;
     let ts = DATA.tickets.filter((t) => t.epic === e.number);
     const shownTs = ts.filter((t) => !(hideDone && (t.status === 'done' || t.status === 'dropped')))
@@ -748,8 +764,8 @@ function renderRoadmap() {
       return '<a class="chip ' + k + '" style="--k:var(--' + k + ');--ks:var(--' + k + '-soft)" href="' + t.url + '" target="_blank" title="' + esc(tip) + '"><span class="cn">#' + t.number + '</span><span class="ct">' + esc(t.title) + '</span></a>';
     }).join('') + '</div>' : '';
     return '<div class="ep" id="ep-' + e.number + '" style="--c:var(--' + c + ');--cs:var(--' + c + '-soft)">' +
-      '<div class="ep-title"><a class="n" href="' + e.url + '" target="_blank">#' + e.number + '</a><span>' + esc(e.title) + '</span></div>' +
-      '<span class="ep-status">' + esc(DATA.epicStatus[e.status]) + '</span>' +
+      '<div class="ep-title"><a class="n" href="' + e.url + '" target="_blank">#' + e.number + '</a><span>' + esc(e.title) + manualPill(e) + '</span></div>' +
+      '<span class="ep-status">' + esc(epicStatusText(e)) + '</span>' +
       (e.total ? '<div class="ep-meta">' + e.done + ' of ' + e.total + ' tickets done' + (e.counts.you + e.counts.review ? ' · ' + (e.counts.you + e.counts.review) + ' need you' : '') + '</div><div class="bar"><i style="width:' + pct + '%"></i></div>' : '') +
       (e.openBlockers.length ? '<div class="ep-meta">after ' + e.openBlockers.map(ref).join(', ') + '</div>' : '') +
       (e.total ? chips : '<div class="unplanned">Not planned yet: no tickets.</div>') + '</div>';
