@@ -806,7 +806,7 @@ function legend(id, keys) {
   $(id).innerHTML = keys.map((k) => pill(k)).join(' ') + ' <span>Arrows point from a blocker to what it blocks. Click a box to open the issue.</span>';
 }
 legend('roadmap-legend', []);
-$('roadmap-legend').innerHTML = '<span>Epic:</span> ' + Object.entries({ working: 'Building', queued: 'Planning / ready to plan', you: 'Needs your brief, approval or merge', blocked: 'Waiting on earlier epics', done: 'Done' }).map(([k, v]) => '<span class="pill ' + k + '">' + v + '</span>').join(' ') +
+$('roadmap-legend').innerHTML = '<span>Epic:</span> ' + Object.entries({ working: 'Building', queued: 'Planning / ready to plan', you: 'Needs your brief, approval or merge', blocked: 'Waiting on earlier epics', done: 'Done' }).map(([k, v]) => '<span class="pill ' + k + '">' + v + '</span>').join(' ') + ' <span class="pill manual">manual</span> <span class="meta">planned and built by you, outside the loop</span>' +
   '<br><span>Ticket:</span> ' + ['you', 'review', 'working', 'queued', 'blocked', 'done'].map((k) => pill(k)).join(' ') +
   '<br><span>Columns run left to right in build order; arrows point to the epics that wait on another. Hover a ticket for what it waits on; click to open it.</span>';
 ['rm-tickets', 'rm-hide-done'].forEach((id) => {
