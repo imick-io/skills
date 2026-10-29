@@ -79,7 +79,7 @@ Vague parts land in the initiative's **Not yet scoped** list; run `/scope-decomp
 A few rounds of high-level questions: who it's for, must-haves, no-gos, the big product calls. Reply `ok` to accept every recommendation at 90%+. It writes the epic's **Brief** section (plus `GLOSSARY.md` and ADRs) and ends with:
 
 - **Autopilot**: the epic gets the `autopilot` label and the agent loop plans it.
-- **Manual**: you plan it yourself in step 4.
+- **Manual**: you plan it yourself in step 4. With the `manual` label you also build it yourself, with whatever tools or models you like: the loop never plans it, never queues its tickets and never opens its PR. Without the label, the loop builds the tickets you cut.
 
 Brief every epic now, or just before each is planned; either works. To skip a brief, remove `needs-briefing` and `ready-for-human` from the epic yourself (and add `autopilot` if you want the agent to plan it).
 

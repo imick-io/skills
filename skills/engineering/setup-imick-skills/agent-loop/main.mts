@@ -24,6 +24,9 @@
 // Planning only touches epics labelled `autopilot` (chosen at the end of their
 // /brief): chart and resolve their wayfinder map, write the spec for your
 // review, and cut tickets once you approve it. Other epics are planned by hand.
+// An epic labelled `manual` is planned AND built by hand: the loop never
+// plans it, never queues or unblocks its tickets whatever they're labelled,
+// and never opens or verifies its PR.
 //
 // One pass:
 //   0. Triage (AGENTS_TRIAGE=1, in place of the GitHub triage workflow): new
@@ -169,6 +172,7 @@ const LABEL = {
   map: "wayfinder:map",
   planning: "agent:planning",
   autopilot: "autopilot",
+  manual: process.env.AGENTS_LABEL_MANUAL ?? "manual",
   briefing: "needs-briefing",
   backlog: process.env.AGENTS_LABEL_BACKLOG ?? "backlog",
   triage: "needs-triage",
@@ -230,7 +234,7 @@ const container = () => docker({
 // Helpers
 // ---------------------------------------------------------------------------
 
-type Epic = { number: number; title: string; branch: string; milestone: string; mode: Mode };
+type Epic = { number: number; title: string; branch: string; milestone: string; mode: Mode; manual: boolean };
 type Ticket = { number: number; title: string; kind: "build" | "bug"; epic?: Epic; branch: string };
 
 const sh = (cmd: string, args: string[], cwd?: string) =>
@@ -318,8 +322,9 @@ function epicFor(milestone?: string): Epic | undefined {
     "--json", "number,title,body,labels", "--limit", "1",
   );
   const branch = epic?.body.match(/`(epic\/[^`]+)`/)?.[1];
-  const mode = modeOf(epic?.labels.map((l) => l.name) ?? []);
-  const found = epic && branch ? { number: epic.number, title: epic.title, branch, milestone, mode } : undefined;
+  const labels = epic?.labels.map((l) => l.name) ?? [];
+  const mode = modeOf(labels);
+  const found = epic && branch ? { number: epic.number, title: epic.title, branch, milestone, mode, manual: labels.includes(LABEL.manual) } : undefined;
   epicCache.set(milestone, found);
   return found;
 }
@@ -337,6 +342,7 @@ function readyTickets(): Ticket[] {
       const blocked = Number(gh("api", `repos/${repo}/issues/${issue.number}`, "--jq", ".issue_dependencies_summary.blocked_by // 0"));
       if (blocked > 0) continue;
       const epic = epicFor(issue.milestone?.title);
+      if (epic?.manual) continue; // a hand-run epic: its tickets are never the loop's, whatever their labels
       if (epic && EPIC_GATE === "epic" && epicBlocked(epic)) continue;
       tickets.push({
         number: issue.number,
@@ -634,7 +640,7 @@ function planJobs(): PlanJob[] {
   const epics = ghJson<Issue[]>("issue", "list", "--state", "open", "--label", LABEL.epic, "--label", LABEL.autopilot, "--json", "number,title,state,body,labels", "--limit", "100");
   const jobs: PlanJob[] = [];
   for (const e of epics) {
-    if (has(e, LABEL.planning) || has(e, LABEL.briefing) || has(e, LABEL.backlog)) continue; // another loop is on it, no brief yet, or parked
+    if (has(e, LABEL.planning) || has(e, LABEL.briefing) || has(e, LABEL.backlog) || has(e, LABEL.manual)) continue; // another loop is on it, no brief yet, parked, or hand-run
     const milestone = ghJson<{ milestone: { title: string } | null }>("issue", "view", String(e.number), "--json", "milestone").milestone?.title;
     const branch = e.body.match(/`(epic\/[^`]+)`/)?.[1];
     if (!milestone || !branch) continue;
@@ -749,6 +755,7 @@ async function verifyEpics(): Promise<number> {
   let ran = 0;
   for (const e of epics) {
     if (checking.has(e.number)) continue; // its check is still running
+    if (e.labels.some((l) => l.name === LABEL.backlog || l.name === LABEL.manual)) continue; // parked or hand-run: its PR is a person's too
     try {
       ran += await verifyEpic(e);
     } catch (error) {
@@ -1014,7 +1021,7 @@ const unblockSchema = z.object({
 const followSchema = z.object({ outcome: z.enum(["kept", "updated", "followup"]), summary: z.string() });
 // Issues fast mode leaves to you: parked ones (backlog), planning artefacts
 // with their own flow, and an epic waiting for its /brief.
-const NOT_UNBLOCKED = [LABEL.backlog, LABEL.epic, LABEL.spec, LABEL.map, LABEL.briefing, LABEL.unblocking, "initiative", "needs-scoping"];
+const NOT_UNBLOCKED = [LABEL.backlog, LABEL.manual, LABEL.epic, LABEL.spec, LABEL.map, LABEL.briefing, LABEL.unblocking, "initiative", "needs-scoping"];
 const labelledEpics = () => [LABEL.fast, LABEL.supersonic].some((label) => {
   try {
     return ghJson<unknown[]>("issue", "list", "--state", "open", "--label", label, "--json", "number", "--limit", "1").length > 0;
@@ -1038,7 +1045,7 @@ async function unblock(): Promise<number> {
       const epic = epicFor(i.milestone?.title);
       return { i, epic, mode: epic ? epic.mode : modeOf(i.labels.map((l) => l.name)) };
     })
-    .filter(({ mode }) => unblocks(mode));
+    .filter(({ epic, mode }) => !epic?.manual && unblocks(mode)); // a hand-run epic's questions are the person's
   const conflicts = open.filter(({ i, epic }) => epic && i.title === conflictTitle(epic));
   for (const { i, epic } of conflicts) await resolveConflicts(i, epic!);
   const waiting = open.filter((x) => !conflicts.includes(x)).slice(0, MAX_PARALLEL);

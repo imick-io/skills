@@ -106,6 +106,8 @@ Two modes. Either way, **never resolve more than one ticket per session**, with 
 
 **Autopilot.** When the epic carries the `autopilot` label (or the map's Notes say `Mode: autopilot`), read [AUTOPILOT.md](AUTOPILOT.md): it overrides the human-in-the-loop parts of both modes. Invoking with `autopilot` adds the label to the epic.
 
+**Manual.** When the epic carries the `manual` label, a person plans and builds it: every ticket cut from its map or spec gets `ready-for-human`, never `ready-for-agent`, since the loop ignores the epic's tickets whatever they're labelled.
+
 ### Chart the map
 
 User invokes with a loose idea, or with an **epic** (an issue labelled `epic`, from `/scope-decomposer`).
