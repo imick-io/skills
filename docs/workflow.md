@@ -44,7 +44,7 @@ flowchart TD
 | Make the decisions an epic needs | You + agent, or agents alone on autopilot | `/wayfinder <epic>` (`/dig Q<n>` for hard questions), or the loop for `autopilot` epics |
 | Agree on the UI | You + agent | `/product-design <epic>` |
 | Turn decisions into tickets | Agent | `/to-spec`, then `/to-tickets` |
-| Build tickets, fix bugs | Agents | The agent loop (`npm run agents`) on your laptop or the always-on Mac |
+| Build tickets, fix bugs | Agents | The agent loop (`npm run agents`) on your laptop or the always-on Mac; or you, on one ticket: [Building a ticket yourself](build-a-ticket-yourself.md) |
 | Test the finished epic | Agent | `verify-epic`, run by the loop |
 | Approve and merge | **You** | Review the epic PR once `epic-gate` is green |
 | Close what's done | Workflow | The closing chain |
