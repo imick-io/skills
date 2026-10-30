@@ -1579,7 +1579,7 @@
     {
       "id": "by-hand",
       "title": "A ticket, by hand",
-      "description": "The agent loop's steps for one ticket, run yourself in Claude Code. The branch depends on whether the ticket sits under an epic; both paths share the build, then split again to land. Dashed arrows are the way back.",
+      "description": "The agent loop's steps for one ticket, run yourself in Claude Code. /claim does the top part: it assigns you, picks the branch by whether the ticket sits under an epic, and switches you to it. Both paths share the build, then split again to land. Dashed arrows are the way back.",
       "rows": 11,
       "columns": {
         "youL": 150,
@@ -1621,8 +1621,8 @@
           "col": "youL",
           "row": 1,
           "lane": "you",
-          "title": "Claim it",
-          "sub": "assign yourself: the loop skips it"
+          "cmd": "/claim",
+          "sub": "assigns you: the loop skips it"
         },
         "epicq": {
           "col": "youL",
@@ -1685,7 +1685,7 @@
           "row": 9,
           "lane": "you",
           "title": "Merge into the epic",
-          "sub": "pull it first, then merge + push"
+          "sub": "onto origin/epic, then push"
         },
         "openPR": {
           "col": "youR",
@@ -2415,7 +2415,7 @@
           "role": "agent"
         },
         {
-          "via": "you claim it"
+          "via": "claim"
         },
         {
           "via": "implement"
@@ -2430,7 +2430,7 @@
           "end": "closed"
         }
       ],
-      "note": "Assigning yourself keeps the loop off it. Under an epic you merge into the epic branch; otherwise you open the PR with Fixes #n. Step by step: docs/build-a-ticket-yourself.md."
+      "note": "/claim assigns you (the loop then leaves it alone) and sets up the branch. Under an epic you merge into the epic branch; otherwise you open the PR with Fixes #n. Step by step: docs/build-a-ticket-yourself.md."
     },
     {
       "title": "A big idea, on autopilot",
@@ -2861,6 +2861,23 @@
       ],
       "source": "iMick",
       "url": "https://github.com/imick-io/skills/tree/main/skills/engineering/brief"
+    },
+    {
+      "name": "claim",
+      "group": "build",
+      "summary": "Claim a ticket to build it yourself - the next available one, or a given number - and set up its branch the way the agent loop would, then say what to do next.",
+      "description": "Claim a ticket to build it yourself - the next available one, or a given number - and set up its branch the way the agent loop would, then say what to do next. Use when the user wants to work a ticket by hand, pick up the next ticket, take one from the agent queue, or says \"claim\" or \"claim #42\".",
+      "runs": [
+        "auto"
+      ],
+      "uses": [],
+      "next": [
+        "implement",
+        "debug-and-fix",
+        "code-review"
+      ],
+      "source": "iMick",
+      "url": "https://github.com/imick-io/skills/tree/main/skills/engineering/claim"
     },
     {
       "name": "code-review",
