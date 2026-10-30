@@ -34,11 +34,12 @@ Add `--dry-run` to see which ticket it would take and what it would do, changing
 The script prints a `## Not claimed` or `## Claimed #n, but its branch isn't ready` heading with the reason. Relay it in plain words with the fix it gives; don't work around it:
 
 - **Uncommitted changes**: ask whether to commit or stash them, then run it again.
-- **No ticket available**: say so, and point to `/why-sleeping` for what would free one.
+- **No ticket available**: the script says why, by reason (in development, blocked, held back by its epic, left in a loop worktree), and names the blockers that would free the most tickets, with where each stands. Relay that, lead with the blocker that frees the most, and offer `/why-sleeping` for what only the user can unblock.
 - **#n is blocked**: name the blockers. Pass `--force` only when the user says to build it anyway.
 - **#n is assigned to you and the loop looks to be on it**: the loop claims with the user's own GitHub account, so an assignee alone can't tell them apart. Suggest stopping the loop (`npm run agents:stop`) or picking another ticket. `--force` only on the user's word that the loop isn't running.
 - **`main` conflicts with the epic branch**: the ticket stays theirs. Offer to resolve the merge with them, then run `/claim <n>` again.
 - **The branch is checked out in a loop worktree**: a sandbox left it there. Removing that worktree is the user's call: check no sandbox is running first.
+- **Untracked files in the way**: an untracked file here has the same path as one on the ticket's branch. It lists them; moving or deleting them is the user's call.
 
 ## 3. Say what's next
 

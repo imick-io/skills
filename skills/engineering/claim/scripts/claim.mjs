@@ -191,14 +191,58 @@ if (wanted) {
       return !labels.includes(LABEL.epic) && !labels.includes(LABEL.backlog) && !isSpec(labels, i.body);
     })
     .sort((a, b) => order(a.milestone?.title) - order(b.milestone?.title) || a.createdAt.localeCompare(b.createdAt));
+  // Why each one was passed over, for when none is left.
+  const held = new Map(); // blocker -> tickets it holds back
+  const waitingEpics = new Map(); // epic -> { tickets, blockers }
+  const leftover = [];
+  const raced = [];
   for (const issue of queue) {
-    if (blockedCount(issue.number) > 0) continue;
+    const open = blockers(issue.number);
+    if (open.length) {
+      for (const b of open) held.set(b, [...(held.get(b) ?? []), issue.number]);
+      continue;
+    }
     const t = toTicket(issue);
-    if (t.epic && blockedCount(t.epic.number) > 0) continue;
-    if (worktreeOf(t.branch)) continue; // a sandbox left it checked out: not free in practice
+    if (t.epic && blockedCount(t.epic.number) > 0) {
+      const w = waitingEpics.get(t.epic.number) ?? { epic: t.epic, tickets: [], blockers: blockers(t.epic.number) };
+      w.tickets.push(t.number);
+      waitingEpics.set(t.epic.number, w);
+      continue;
+    }
+    const wt = worktreeOf(t.branch);
+    if (wt) { leftover.push(`#${t.number} (\`${wt}\`)`); continue; } // a sandbox left it checked out
     if (DRY || claim(t.number)) { ticket = t; break; }
+    raced.push(t.number);
   }
-  if (!ticket) stop("No ticket is available: every ready ticket is claimed, blocked, or under an epic that's waiting on another. `/why-sleeping` or `/whats-next` says what would free one.");
+  if (!ticket) {
+    const list = (ns, max = 8) => ns.slice(0, max).map((n) => `#${n}`).join(", ") + (ns.length > max ? `, … (${ns.length} in all)` : "");
+    const inDev = [LABEL.build, LABEL.bug].flatMap((label) =>
+      ghJson("issue", "list", "--state", "open", "--label", label, "--search", "assignee:*", "--json", "number", "--limit", "100").map((i) => i.number));
+    const blocked = new Set([...held.values()].flat());
+    const lines = [];
+    if (!queue.length && !inDev.length)
+      lines.push(`- **The queue is empty**: no open ticket is labelled \`${LABEL.build}\` or \`${LABEL.bug}\`. New work comes from planning an epic (\`/brief\`, \`/wayfinder\`, \`/to-tickets\`) or triage.`);
+    if (inDev.length) lines.push(`- **In development: ${inDev.length}**, claimed by you or the loop (it uses your account): ${list(inDev)}.`);
+    if (blocked.size) lines.push(`- **Blocked: ${blocked.size}**, waiting on open issues.`);
+    if (waitingEpics.size)
+      lines.push(...[...waitingEpics.values()].map((w) =>
+        `- **Under epic #${w.epic.number} ${w.epic.title}: ${w.tickets.length}**, held back until the epic(s) it waits on land: ${list(w.blockers)}.`));
+    if (leftover.length) lines.push(`- **Left checked out in a loop worktree: ${leftover.length}**: ${leftover.join(", ")}. Free once no sandbox is running on them.`);
+    if (raced.length) lines.push(`- **Claimed by someone else a moment ago: ${raced.length}**: ${list(raced)}.`);
+    // The blockers that would free the most tickets, with where each one stands.
+    const top = [...held.entries()].sort((a, b) => b[1].length - a[1].length).slice(0, 5).map(([b, ts]) => {
+      const i = ghJson("issue", "view", String(b), "--json", "title,labels,assignees");
+      const labels = i.labels.map((l) => l.name);
+      const where = i.assignees.length ? `in development (@${i.assignees[0].login})`
+        : labels.includes(LABEL.epic) ? "an epic, not landed yet"
+        : labels.find((l) => /^(ready-for-|needs-|agent:asked)/.test(l)) ?? "open";
+      const own = [...held.entries()].filter(([, held2]) => held2.includes(b)).map(([x]) => `#${x}`);
+      return `- **#${b} ${i.title}**: ${where}${own.length ? `, itself blocked by ${own.join(", ")}` : ""}. Frees ${ts.length}: ${list(ts, 6)}.`;
+    });
+    stop(`No ticket is available right now.\n\n${lines.join("\n")}` +
+      (top.length ? `\n\n**What would free the most:**\n\n${top.join("\n")}` : "") +
+      `\n\n\`/why-sleeping\` ranks what only you can unblock.`);
+  }
 }
 
 if (DRY) {
@@ -260,28 +304,40 @@ if (elsewhere)
     `Claimed #${ticket.number}, but its branch isn't ready`);
 let branchNote;
 const current = git("rev-parse", "--abbrev-ref", "HEAD");
+const startedOn = current === "HEAD" ? undefined : current; // undefined: a detached HEAD
+// \`git switch\` refuses when an untracked file here would be overwritten.
+const switchTo = (...argv) => {
+  const r = run("git", ["switch", "--quiet", ...argv]);
+  if (r.ok) return;
+  const files = r.err.match(/would be overwritten by checkout:\n([\s\S]*?)\nPlease move or remove/)?.[1]?.split("\n").map((f) => f.trim()).filter(Boolean);
+  stop(files
+    ? `Untracked files here would be overwritten by \`${ticket.branch}\`. The ticket stays assigned to you. Move or delete them, then run \`/claim ${ticket.number}\` again:\n\n${files.map((f) => `- \`${f}\``).join("\n")}`
+    : `\`git switch\` failed. The ticket stays assigned to you:\n\n\`\`\`\n${r.err}\n\`\`\``,
+    `Claimed #${ticket.number}, but its branch isn't ready`);
+};
 if (tryGit("rev-parse", "--verify", "--quiet", `refs/heads/${ticket.branch}`)) {
-  if (current !== ticket.branch) git("switch", "--quiet", ticket.branch);
+  if (current !== ticket.branch) switchTo(ticket.branch);
   const [behind, ahead] = git("rev-list", "--left-right", "--count", `${base}...${ticket.branch}`).split(/\s+/).map(Number);
   branchNote = `existing branch, ${ahead} commit(s) of earlier work` + (behind ? `; ${behind} commit(s) behind \`${base}\`: \`git merge ${base}\` to catch up` : "");
 } else if (tryGit("rev-parse", "--verify", "--quiet", `refs/remotes/origin/${ticket.branch}`)) {
-  git("switch", "--quiet", "-c", ticket.branch, "--track", `origin/${ticket.branch}`);
+  switchTo("-c", ticket.branch, "--track", `origin/${ticket.branch}`);
   branchNote = `from \`origin/${ticket.branch}\`, which already had work`;
 } else {
-  git("switch", "--quiet", "-c", ticket.branch, "--no-track", base);
+  switchTo("-c", ticket.branch, "--no-track", base);
   branchNote = `new, from \`${base}\``;
 }
 
 // ---- what to do next
 
 const n = ticket.number;
+const back = startedOn && startedOn !== ticket.branch ? startedOn : "main";
 const services = existsSync(".sandcastle/sandbox-setup.sh")
   ? "Start what `.sandcastle/sandbox-setup.sh` starts in a sandbox (database, cache, migrations, seed data), with the project's own dev commands."
   : "Install dependencies and start the project's services.";
 const land = ticket.epic
   ? "```sh\n" +
     `git fetch origin\ngit switch --detach origin/${ticket.epic.branch}\ngit merge --no-edit ${ticket.branch}\ngit push origin HEAD:${ticket.epic.branch}\n` +
-    `gh issue close ${n} --comment "Landed on ${ticket.epic.branch}."\ngit switch main\n` +
+    `gh issue close ${n} --comment "Landed on ${ticket.epic.branch}."\ngit switch ${back}\n` +
     "```\nOn a conflict: `git merge --abort`, `git switch " + ticket.branch + "`, `git merge " + base + "`, fix, re-run the checks, and land again."
   : "```sh\n" + `git push -u origin ${ticket.branch}\ngh pr create --fill --body "Fixes #${n}"\n` + "```";
 
@@ -301,4 +357,4 @@ ${notes.map((x) => `- ${x}`).join("\n")}
 5. **Land.**
 ${land}
 
-**Stopping halfway:** commit, \`git switch main\` (the loop can't use a branch checked out here), then \`gh issue edit ${n} --remove-assignee @me\`. The loop picks it up from the branch's commits.`.replace(/\n\n\n/g, "\n\n"));
+**Stopping halfway:** commit, \`git switch ${back}\` (the loop can't use a branch checked out here), then \`gh issue edit ${n} --remove-assignee @me\`. The loop picks it up from the branch's commits.`.replace(/\n\n\n/g, "\n\n"));
