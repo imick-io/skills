@@ -1994,6 +1994,31 @@
       ]
     },
     {
+      "title": "A ticket you build yourself",
+      "steps": [
+        {
+          "label": "ready-for-agent",
+          "role": "agent"
+        },
+        {
+          "via": "you claim it"
+        },
+        {
+          "via": "implement"
+        },
+        {
+          "via": "code-review"
+        },
+        {
+          "via": "you land it"
+        },
+        {
+          "end": "closed"
+        }
+      ],
+      "note": "Assigning yourself keeps the loop off it. Under an epic you merge into the epic branch; otherwise you open the PR with Fixes #n. Step by step: docs/build-a-ticket-yourself.md."
+    },
+    {
       "title": "A big idea, on autopilot",
       "steps": [
         {

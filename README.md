@@ -6,6 +6,7 @@ My agent skills, straight from my `.claude/skills` directory.
 
 - **[Running a new project](docs/new-project.md)**: the step-by-step checklist, from an empty repo to agents shipping epics, plus the daily check and troubleshooting.
 - **[How work flows](docs/workflow.md)**: the whole path from idea to merged code, who does each step, and the labels and branches involved.
+- **[Building a ticket yourself](docs/build-a-ticket-yourself.md)**: what the agent loop does with a ticket, and how to run the same steps by hand in Claude Code.
 - **[Always-on Mac](docs/mac-setup.md)**: a spare Mac that never sleeps, runs the agent loop, and lets you use Claude on it from your phone.
 - The sections below are the reference for each piece: installation, the skills, automatic triage, the agent loop, epic PRs, and releasing.
 
