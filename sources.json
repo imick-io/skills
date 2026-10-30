@@ -38,6 +38,11 @@
       "source": "own"
     },
     {
+      "local_path": "skills/engineering/claim",
+      "local_name": "claim",
+      "source": "own"
+    },
+    {
       "local_path": "skills/engineering/code-review",
       "local_name": "code-review",
       "source": "mattpocock",

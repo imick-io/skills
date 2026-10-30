@@ -17,7 +17,7 @@ For a whole epic you'd rather build by hand, put the `manual` label on it instea
 
 ```mermaid
 flowchart TD
-  R["Ticket ready<br/>ready-for-agent, unassigned, unblocked"] --> C["Claim it<br/>gh issue edit N --add-assignee @me"]
+  R["Ticket ready<br/>ready-for-agent, unassigned, unblocked"] --> C["/claim<br/>assigns you: the loop skips it"]
   C --> Q{Under an epic?}
   Q -->|yes| U["Update the epic branch<br/>merge origin/main in, push"]
   U --> BE["Branch off the epic<br/>agent/issue-N"]
@@ -27,7 +27,7 @@ flowchart TD
   S --> I["/implement #N<br/>/debug-and-fix for a bug"]
   I --> CR["/code-review<br/>since the base branch, against #N"]
   CR --> K["Checks green<br/>typecheck, tests, the prompt's extras"]
-  K -->|epic| ME["Merge into the epic branch<br/>pull first, merge, push"]
+  K -->|epic| ME["Merge into the epic branch<br/>onto origin/epic, then push"]
   K -->|no epic| PR["Open the PR<br/>Fixes #N"]
   ME --> X["Ticket closed"]
   PR -->|you merge| X
@@ -37,26 +37,32 @@ flowchart TD
 
 Replace `N` with the ticket number and `epic/NN-slug` with its epic's branch, written in the epic's body as **Branch:**. The commands use `npm`; use your project's package manager.
 
-### 1. Claim it
+### 1–2. Claim it and make the branch: `/claim`
+
+```
+/claim        # the next available ticket, in build order
+/claim 42     # ticket #42
+```
+
+[`/claim`](../skills/engineering/claim/SKILL.md) does both steps the way the loop does, and stops on anything it shouldn't decide alone (uncommitted changes, a blocked ticket, a merge conflict):
+
+1. **Claims it**: assigns you. The loop only takes unassigned tickets, so it can keep running beside you.
+2. **Makes the branch.** Under an epic: merges `origin/main` into the epic branch and pushes it, then branches `agent/issue-N` off it. With no epic: branches `feat/N` (`fix/N` for a bug) off `main`. A branch the loop already started is reused, with its commits.
+3. **Switches you to it**, and lists the next steps for that ticket.
+
+By hand, without the skill:
 
 ```sh
 gh issue edit N --add-assignee @me
-```
-
-The loop only takes unassigned tickets, so it can keep running beside you.
-
-### 2. Make the branch
-
-Under an epic, as the loop does:
-
-```sh
 git fetch origin
-git switch epic/NN-slug && git pull
-git merge origin/main && git push      # bring main into the epic first
-git switch -c agent/issue-N            # or switch to it, if the loop already started one
+# Under an epic. The loop may have the epic branch checked out in a worktree of
+# its own, so update it without checking it out here:
+git switch --detach origin/epic/NN-slug
+git merge origin/main && git push origin HEAD:epic/NN-slug
+git switch -c agent/issue-N origin/epic/NN-slug
+# With no epic:
+git switch -c feat/N origin/main      # fix/N for a bug
 ```
-
-With no epic: `git switch -c feat/N origin/main` (`fix/N` for a bug).
 
 ### 3. Start what the sandbox would have
 
@@ -86,12 +92,15 @@ The project's typecheck and tests, green, plus anything the project's `implement
 
 ### 7. Land it
 
-Under an epic:
+Under an epic, onto the latest epic branch (the loop may have landed other tickets meanwhile), without checking the epic branch out:
 
 ```sh
-git switch epic/NN-slug && git pull    # the loop may have landed other tickets meanwhile
-git merge --no-edit agent/issue-N && git push
+git fetch origin
+git switch --detach origin/epic/NN-slug
+git merge --no-edit agent/issue-N
+git push origin HEAD:epic/NN-slug
 gh issue close N --comment "Landed on epic/NN-slug."
+git switch main
 ```
 
 With no epic, open the PR the loop would have:
@@ -104,8 +113,8 @@ gh pr create --fill --body "Fixes #N"
 ## Good to know
 
 - **You're the loop here.** The "don't push, don't close the issue" rules in `.sandcastle/implement-prompt.md` are for the sandboxed agents; by hand, pushing and closing are yours.
-- **Conflicts.** If the merge in step 7 conflicts, merge the epic branch into yours (`git merge epic/NN-slug`), resolve, and run step 6 again. The loop does the same by retrying the ticket on top of the latest epic branch.
-- **Stopping halfway.** Unassign yourself (`gh issue edit N --remove-assignee @me`): the loop picks the ticket up again, from the commits already on its branch.
+- **Conflicts.** If the merge in step 7 conflicts, `git merge --abort`, switch back to your branch, merge the epic branch into it (`git merge origin/epic/NN-slug`), resolve, and run step 6 again. The loop does the same by retrying the ticket on top of the latest epic branch.
+- **Stopping halfway.** Commit, `git switch main` (the loop can't use a branch checked out in your checkout), then unassign yourself (`gh issue edit N --remove-assignee @me`): the loop picks the ticket up again, from the commits already on its branch.
 - **Watching the real loop instead.** `npm run agents -- --once` runs one full pass (plan, build what's ready, land) and exits. Stop a running loop first: two loops on one checkout fight over the same tickets.
 
 ## Steering the loop without building
