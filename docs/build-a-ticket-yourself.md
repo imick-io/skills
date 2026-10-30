@@ -4,6 +4,8 @@ The agent loop builds `ready-for-agent` tickets on its own, but every step it ta
 
 For a whole epic you'd rather build by hand, put the `manual` label on it instead: the loop then never plans it or touches its tickets (see [How work flows](workflow.md)).
 
+For a whole `manual` epic you'd rather have built *here*, in a Claude Code session you can watch, run `/run-epic <epic>`: it takes the epic's tickets through this same pipeline one at a time (the loop's prompts, the same claim, branch and landing), hands back what it can't build, and opens the epic's PR at the end.
+
 ## What the loop does with a ticket
 
 1. **Queue.** It takes open issues labelled `ready-for-agent` (or `ready-for-agent-debugging` for a bug) that have no assignee and no open blocker.

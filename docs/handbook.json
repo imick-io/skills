@@ -3134,6 +3134,26 @@
       "url": "https://github.com/imick-io/skills/tree/main/skills/engineering/review-work"
     },
     {
+      "name": "run-epic",
+      "group": "build",
+      "summary": "Build every ticket of one epic inside this Claude Code session, the way the agent loop would (claim, branch, implement, review, land, next), one ticket at a time until the epic is built and its PR is open.",
+      "description": "Build every ticket of one epic inside this Claude Code session, the way the agent loop would (claim, branch, implement, review, land, next), one ticket at a time until the epic is built and its PR is open. Use when the user wants an epic built here without the Docker loop, says \"run the epic\", \"build the epic's tickets\", or \"run-epic 42\".",
+      "runs": [
+        "you"
+      ],
+      "uses": [
+        "claim",
+        "implement",
+        "debug-and-fix",
+        "code-review"
+      ],
+      "next": [
+        "verify-epic"
+      ],
+      "source": "iMick",
+      "url": "https://github.com/imick-io/skills/tree/main/skills/engineering/run-epic"
+    },
+    {
       "name": "scope-decomposer",
       "group": "plan",
       "summary": "Breaks a big idea into an initiative of epics on the tracker, each with a milestone, a branch and its blockers. New products default to a local-first v1 with a Go-live epic last.",
