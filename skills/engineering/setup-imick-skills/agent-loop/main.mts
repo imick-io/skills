@@ -606,6 +606,10 @@ function land(t: Ticket, epicPath?: string) {
     if (!tryGit(epicPath, "merge", "--no-edit", "--quiet", t.branch)) {
       tryGit(epicPath, "merge", "--abort");
       comment(t.number, `The work on \`${t.branch}\` conflicts with \`${t.epic.branch}\`; the loop will retry it on top of the latest epic branch.`);
+      // The sandbox's worktree still holds the branch, and git won't delete a
+      // branch checked out in a worktree: free it first, or the stale branch
+      // survives and every retry rebuilds on it and conflicts again.
+      freeBranch(t.branch);
       git(undefined, "branch", "-D", t.branch);
       release(t, "merge conflict with the epic branch");
       return;
