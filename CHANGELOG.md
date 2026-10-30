@@ -1,5 +1,36 @@
 # imick-skills
 
+## 1.8.0
+
+### Minor Changes
+
+- [#49](https://github.com/imick-io/skills/pull/49) [`a1f893d`](https://github.com/imick-io/skills/commit/a1f893df62bb9dbc8655a795f61f5a5b07593a0f) Thanks [@imick-io](https://github.com/imick-io)! - A new skill, **`/claim`**: take a ticket out of the agent queue to build it yourself, with its branch set up the way the agent loop would. `/claim` takes the next available ticket (the loop's own queue, in build order, plus a `manual` epic's tickets); `/claim 42` takes [#42](https://github.com/imick-io/skills/issues/42).
+  
+  - **Claims it**: assigns you (the loop only takes unassigned tickets), re-reads, and backs off if the loop claimed it at the same moment.
+  - **Branches like the loop.** Under an epic: merges `main` into the epic branch and pushes it, in a temporary worktree, since the loop may hold the epic branch in its own; then `agent/issue-<n>` off it. Otherwise `feat/<n>` (`fix/<n>` for a bug) off `main`. A branch the loop already started is reused.
+  - **Switches you to it** and lists the next steps for that ticket: services, `/implement` or `/debug-and-fix`, `/code-review` against the right base, the checks, and the commands to land it.
+  - **Says why when nothing is free**: how many tickets are in development, blocked, held back by their epic or left in a loop worktree, and the blockers that would free the most, with where each stands.
+  - **Stops instead of guessing**: uncommitted changes, untracked files the branch would overwrite, a blocked ticket (`--force` to build it anyway), a ticket the loop looks to be building (it claims with your account), a merge conflict between `main` and the epic. `--dry-run` shows what it would do.
+  
+  **Building a ticket yourself** (`docs/build-a-ticket-yourself.md`) now starts with `/claim`, and its by-hand commands update and land on the epic branch without checking it out, which failed while the loop held that branch in a worktree. The handbook's *A ticket, by hand* flow and journey use `/claim`.
+  
+  Existing projects: `npx skills update -p -y` installs it.
+
+- [#46](https://github.com/imick-io/skills/pull/46) [`ce53bdc`](https://github.com/imick-io/skills/commit/ce53bdc4194541b13e00afe91644a278f9b2abba) Thanks [@imick-io](https://github.com/imick-io)! - A `manual` label for epics a person plans **and** builds, with other tools or models: the agent loop never plans the epic, never queues or unblocks its tickets whatever they're labelled, and never opens or verifies its PR. Until now the only way to keep the loop off an epic was `backlog`, which means "parked", so the tracker showed the epic as dormant and anyone removing the label handed it to the loop. Also closes a gap: the loop's epic-PR step ran for a `backlog` epic once its milestone emptied.
+  
+  - **Agent loop (`main.mts`).** `LABEL.manual` (`AGENTS_LABEL_MANUAL`). A `manual` epic is skipped by planning, by the epic PR and verification pass (as is a `backlog` epic now), and by fast-mode unblocking; a ticket whose milestone belongs to a `manual` epic never enters the queue, even labelled `ready-for-agent`, and its `ready-for-human` questions are never answered by the loop.
+  - **`/brief`** ends with a three-way choice: autopilot, manual (the label: you plan and build it), or neither (you plan it, the loop builds its tickets). **`/scope-decomposer`** asks once whether any epic is yours to run by hand and publishes it with `manual`. **`/wayfinder`** cuts a `manual` epic's tickets as `ready-for-human`. **`/whats-next`** names a `manual` epic's tickets as your moves.
+  - **Tracker.** A `manual` epic shows a `manual` pill on the roadmap and in the epic table, with its statuses worded for you ("You are building it") in your colour instead of the agent's.
+  - **Docs.** `triage-labels.md`, `workflow.md`, `new-project.md` and the setup skill's label list.
+  
+  Existing setups: copy the new `main.mts` into `.sandcastle/` and `tracker/build.mjs` into `tracker/`, add the `manual` row to `docs/agents/triage-labels.md`, and create the `manual` label (`gh label create manual --color 5319E7`).
+
+### Patch Changes
+
+- [#44](https://github.com/imick-io/skills/pull/44) [`4eb4c9a`](https://github.com/imick-io/skills/commit/4eb4c9af820f40f7f6c1f3b7558fff53a61cd55b) Thanks [@imick-io](https://github.com/imick-io)! - Agent loop fix, pnpm projects: `pnpm <script>` in the sandbox no longer fails after the install. Since v1.6.0 the shared package store was passed only to the install (`--store-dir`). pnpm 11 checks the dependencies before every script, saw a different store, tried to reinstall, and stopped on a confirmation the sandbox can't give (`set "confirmModulesPurge" to "false"`). So `pnpm test`, `pnpm typecheck`, and the migrations in `sandbox-setup.sh` all failed. The store is now set in the sandbox's environment (`pnpm_config_store_dir` for pnpm 11, `npm_config_store_dir` for pnpm 9 and 10), so the install and every later command use the same one.
+  
+  Existing setups: copy the new `main.mts` into `.sandcastle/`, or make the same change there: drop `--store-dir …` from the pnpm install command, and add both variables to the `env` passed to `docker()`.
+
 ## 1.7.0
 
 ### Minor Changes
