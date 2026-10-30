@@ -1574,6 +1574,420 @@
           ]
         }
       ]
+    },
+    {
+      "id": "by-hand",
+      "title": "A ticket, by hand",
+      "description": "The agent loop's steps for one ticket, run yourself in Claude Code. The branch depends on whether the ticket sits under an epic; both paths share the build, then split again to land. Dashed arrows are the way back.",
+      "rows": 11,
+      "columns": {
+        "youL": 150,
+        "mid": 310,
+        "youR": 470,
+        "gh": 810
+      },
+      "lanes": [
+        {
+          "name": "You",
+          "sub": "in Claude Code, in the repo",
+          "x": 0,
+          "width": 640,
+          "tone": "you"
+        },
+        {
+          "name": "GitHub",
+          "sub": "the issue and the repo",
+          "x": 640,
+          "width": 340,
+          "tone": "gh"
+        }
+      ],
+      "nodes": {
+        "ready": {
+          "col": "gh",
+          "row": 0,
+          "lane": "gh",
+          "title": "Ticket ready",
+          "sub": "open, unassigned, unblocked",
+          "pills": [
+            {
+              "role": "agent",
+              "label": "ready-for-agent"
+            }
+          ]
+        },
+        "claim": {
+          "col": "youL",
+          "row": 1,
+          "lane": "you",
+          "title": "Claim it",
+          "sub": "assign yourself: the loop skips it"
+        },
+        "epicq": {
+          "col": "youL",
+          "row": 2,
+          "lane": "you",
+          "title": "Under an epic?",
+          "sub": "its Branch: line names epic/NN-slug"
+        },
+        "updEpic": {
+          "col": "youL",
+          "row": 3,
+          "lane": "you",
+          "title": "Update the epic branch",
+          "sub": "merge origin/main in, push"
+        },
+        "offMain": {
+          "col": "youR",
+          "row": 3,
+          "lane": "you",
+          "title": "Branch off main",
+          "sub": "feat/N, or fix/N for a bug"
+        },
+        "offEpic": {
+          "col": "youL",
+          "row": 4,
+          "lane": "you",
+          "title": "Branch off the epic",
+          "sub": "agent/issue-N"
+        },
+        "services": {
+          "col": "mid",
+          "row": 5,
+          "lane": "you",
+          "title": "Start the services",
+          "sub": "what sandbox-setup.sh starts"
+        },
+        "implement": {
+          "col": "mid",
+          "row": 6,
+          "lane": "you",
+          "cmd": "/implement #N",
+          "sub": "/debug-and-fix for a bug"
+        },
+        "review": {
+          "col": "mid",
+          "row": 7,
+          "lane": "you",
+          "cmd": "/code-review",
+          "sub": "since the base branch, against #N"
+        },
+        "checks": {
+          "col": "mid",
+          "row": 8,
+          "lane": "you",
+          "title": "Checks green",
+          "sub": "typecheck, tests, the prompt's extras"
+        },
+        "mergeEpic": {
+          "col": "youL",
+          "row": 9,
+          "lane": "you",
+          "title": "Merge into the epic",
+          "sub": "pull it first, then merge + push"
+        },
+        "openPR": {
+          "col": "youR",
+          "row": 9,
+          "lane": "you",
+          "title": "Open the PR",
+          "sub": "body: Fixes #N",
+          "pills": [
+            {
+              "role": "human",
+              "label": "ready-for-review"
+            }
+          ]
+        },
+        "closed": {
+          "col": "gh",
+          "row": 10,
+          "lane": "gh",
+          "title": "Ticket closed",
+          "sub": "landed on the epic, or PR merged"
+        }
+      },
+      "edges": [
+        {
+          "points": [
+            [
+              "ready.L",
+              "ready.cy"
+            ],
+            [
+              "claim.cx",
+              "ready.cy"
+            ],
+            [
+              "claim.cx",
+              "claim.T"
+            ]
+          ]
+        },
+        {
+          "points": [
+            [
+              "claim.cx",
+              "claim.B"
+            ],
+            [
+              "epicq.cx",
+              "epicq.T"
+            ]
+          ]
+        },
+        {
+          "points": [
+            [
+              "epicq.cx",
+              "epicq.B"
+            ],
+            [
+              "updEpic.cx",
+              "updEpic.T"
+            ]
+          ],
+          "label": "yes",
+          "at": [
+            "epicq.cx",
+            "mid(epicq.B,updEpic.T)"
+          ]
+        },
+        {
+          "points": [
+            [
+              "epicq.R",
+              "epicq.cy"
+            ],
+            [
+              "offMain.cx",
+              "epicq.cy"
+            ],
+            [
+              "offMain.cx",
+              "offMain.T"
+            ]
+          ],
+          "label": "no",
+          "at": [
+            "mid(epicq.R,offMain.cx)",
+            "epicq.cy"
+          ]
+        },
+        {
+          "points": [
+            [
+              "updEpic.cx",
+              "updEpic.B"
+            ],
+            [
+              "offEpic.cx",
+              "offEpic.T"
+            ]
+          ]
+        },
+        {
+          "points": [
+            [
+              "offEpic.cx",
+              "offEpic.B"
+            ],
+            [
+              "offEpic.cx",
+              "services.cy"
+            ],
+            [
+              "services.L",
+              "services.cy"
+            ]
+          ]
+        },
+        {
+          "points": [
+            [
+              "offMain.cx",
+              "offMain.B"
+            ],
+            [
+              "offMain.cx",
+              "services.cy"
+            ],
+            [
+              "services.R",
+              "services.cy"
+            ]
+          ]
+        },
+        {
+          "points": [
+            [
+              "services.cx",
+              "services.B"
+            ],
+            [
+              "implement.cx",
+              "implement.T"
+            ]
+          ]
+        },
+        {
+          "points": [
+            [
+              "implement.cx",
+              "implement.B"
+            ],
+            [
+              "review.cx",
+              "review.T"
+            ]
+          ]
+        },
+        {
+          "points": [
+            [
+              "review.cx",
+              "review.B"
+            ],
+            [
+              "checks.cx",
+              "checks.T"
+            ]
+          ]
+        },
+        {
+          "points": [
+            [
+              "checks.cx-50",
+              "checks.B"
+            ],
+            [
+              "checks.cx-50",
+              "mergeEpic.T-16"
+            ],
+            [
+              "mergeEpic.cx",
+              "mergeEpic.T-16"
+            ],
+            [
+              "mergeEpic.cx",
+              "mergeEpic.T"
+            ]
+          ],
+          "label": "epic",
+          "at": [
+            "mid(mergeEpic.cx,checks.cx-50)",
+            "mergeEpic.T-16"
+          ]
+        },
+        {
+          "points": [
+            [
+              "checks.cx+50",
+              "checks.B"
+            ],
+            [
+              "checks.cx+50",
+              "openPR.T-16"
+            ],
+            [
+              "openPR.cx",
+              "openPR.T-16"
+            ],
+            [
+              "openPR.cx",
+              "openPR.T"
+            ]
+          ],
+          "label": "no epic",
+          "at": [
+            "mid(openPR.cx,checks.cx+50)",
+            "openPR.T-16"
+          ]
+        },
+        {
+          "points": [
+            [
+              "mergeEpic.cx",
+              "mergeEpic.B"
+            ],
+            [
+              "mergeEpic.cx",
+              "closed.cy"
+            ],
+            [
+              "closed.L",
+              "closed.cy"
+            ]
+          ],
+          "label": "close it",
+          "at": [
+            "mid(mergeEpic.cx,openPR.cx)",
+            "closed.cy"
+          ]
+        },
+        {
+          "points": [
+            [
+              "openPR.cx",
+              "openPR.B"
+            ],
+            [
+              "openPR.cx",
+              "closed.cy"
+            ]
+          ],
+          "join": true,
+          "label": "you merge the PR",
+          "at": [
+            "openPR.cx",
+            "mid(openPR.B,closed.cy)"
+          ]
+        },
+        {
+          "points": [
+            [
+              "mergeEpic.L+20",
+              "mergeEpic.T"
+            ],
+            [
+              "mergeEpic.L+20",
+              "checks.cy"
+            ],
+            [
+              "checks.L",
+              "checks.cy"
+            ]
+          ],
+          "dash": true,
+          "label": "conflict: merge the epic in",
+          "at": [
+            "mergeEpic.L+20",
+            "mid(checks.cy,mergeEpic.T)"
+          ]
+        },
+        {
+          "points": [
+            [
+              "implement.R",
+              "implement.cy"
+            ],
+            [
+              "ready.cx",
+              "implement.cy"
+            ],
+            [
+              "ready.cx",
+              "ready.B"
+            ]
+          ],
+          "dash": true,
+          "label": "stop halfway: unassign",
+          "at": [
+            "ready.cx",
+            "mid(ready.B,implement.cy)"
+          ]
+        }
+      ]
     }
   ],
   "flowLayout": {
