@@ -15,6 +15,26 @@ For a whole epic you'd rather build by hand, put the `manual` label on it instea
 
 ## Doing it by hand
 
+```mermaid
+flowchart TD
+  R["Ticket ready<br/>ready-for-agent, unassigned, unblocked"] --> C["Claim it<br/>gh issue edit N --add-assignee @me"]
+  C --> Q{Under an epic?}
+  Q -->|yes| U["Update the epic branch<br/>merge origin/main in, push"]
+  U --> BE["Branch off the epic<br/>agent/issue-N"]
+  Q -->|no| BM["Branch off main<br/>feat/N, or fix/N for a bug"]
+  BE --> S["Start the services<br/>what sandbox-setup.sh starts"]
+  BM --> S
+  S --> I["/implement #N<br/>/debug-and-fix for a bug"]
+  I --> CR["/code-review<br/>since the base branch, against #N"]
+  CR --> K["Checks green<br/>typecheck, tests, the prompt's extras"]
+  K -->|epic| ME["Merge into the epic branch<br/>pull first, merge, push"]
+  K -->|no epic| PR["Open the PR<br/>Fixes #N"]
+  ME --> X["Ticket closed"]
+  PR -->|you merge| X
+  ME -.->|conflict, merge the epic in| K
+  I -.->|stop halfway, unassign| R
+```
+
 Replace `N` with the ticket number and `epic/NN-slug` with its epic's branch, written in the epic's body as **Branch:**. The commands use `npm`; use your project's package manager.
 
 ### 1. Claim it
