@@ -3007,7 +3007,8 @@
         "brief",
         "wayfinder",
         "scope-decomposer",
-        "triage"
+        "triage",
+        "update-imick-skills"
       ]
     },
     "wizard": {
@@ -3082,6 +3083,16 @@
       "next": [
         "verify-epic"
       ]
+    },
+    "update-imick-skills": {
+      "group": "ops",
+      "uses": [
+        "whats-next"
+      ],
+      "next": [
+        "whats-next"
+      ],
+      "summary": "Upgrades a project to the latest imick-skills release: skills, new skills on offer, the loop's files merged with local changes, tracker, labels and the release notes' steps, as a PR."
     }
   },
   "branches": [
