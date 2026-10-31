@@ -1,5 +1,11 @@
 # imick-skills
 
+## 1.11.1
+
+### Patch Changes
+
+- [#59](https://github.com/imick-io/skills/pull/59) [`0c79c7c`](https://github.com/imick-io/skills/commit/0c79c7c961317356cf1951ecbcf67e2a6f168668) Thanks [@imick-io](https://github.com/imick-io)! - `/update-imick-skills` fix: a loop file whose template did not change between the installed version and the target is now left alone, whatever the project did to it; and the Dockerfile's block-only merge is used only when every project change sits inside the `# --- project additions ---` block. A Dockerfile customized outside the block (an extra apt package, a pinned Playwright version) is three-way merged instead, so those edits survive. Found on the first real run: the block merge had dropped two such lines. Also, an `.env.example` key brought over now comes with the comment lines that continue its note.
+
 ## 1.11.0
 
 ### Minor Changes
