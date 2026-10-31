@@ -164,6 +164,11 @@
       "source": "own"
     },
     {
+      "local_path": "skills/engineering/run-epic",
+      "local_name": "run-epic",
+      "source": "own"
+    },
+    {
       "local_path": "skills/engineering/scope-decomposer",
       "local_name": "scope-decomposer",
       "source": "own"
