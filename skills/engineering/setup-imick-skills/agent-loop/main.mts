@@ -85,6 +85,7 @@
 
 import * as sandcastle from "@ai-hero/sandcastle";
 import { docker } from "@ai-hero/sandcastle/sandboxes/docker";
+import { isolatedDocker, sweepContainers } from "./isolated-docker.mts";
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { hostname } from "node:os";
@@ -115,6 +116,11 @@ const VERIFY_SKIP = (process.env.AGENTS_VERIFY_SKIP ?? ".sandcastle/**,.claude/*
   .split(",").map((g) => g.trim()).filter(Boolean);
 const LIMIT_SLEEP_MINUTES = Number(process.env.AGENTS_LIMIT_SLEEP_MINUTES ?? 60);
 const MAX_PARALLEL = Number(process.env.AGENTS_MAX_PARALLEL ?? 3);
+// Where a sandbox on a branch runs. "bind" (the default) bind-mounts its
+// worktree; "isolated" copies the repo in and the commits out, mounting
+// nothing of the checkout (isolated-docker.mts): much faster installs on
+// Docker Desktop for Mac, and a sandbox can't touch the host checkout.
+const SANDBOX = process.env.AGENTS_SANDBOX === "isolated" ? "isolated" : "bind";
 const PLANNER = process.env.AGENTS_PLANNER_MODEL ?? "claude-opus-5-5";
 const WORKER = process.env.AGENTS_WORKER_MODEL ?? "claude-sonnet-5";
 const ALERTS = process.env.SLACK_ALERTS_WEBHOOK_URL;
@@ -200,7 +206,7 @@ const CACHE = ".sandcastle/cache";
 const SANDBOX_CACHE = "/home/agent/.pkg-cache";
 mkdirSync(CACHE, { recursive: true });
 const install =
-  existsSync("pnpm-lock.yaml") ? "CI=true pnpm install --frozen-lockfile"
+  existsSync("pnpm-lock.yaml") ? `CI=true pnpm install --frozen-lockfile --store-dir ${SANDBOX_CACHE}/pnpm-store`
   : existsSync("yarn.lock") ? `YARN_CACHE_FOLDER=${SANDBOX_CACHE}/yarn yarn install --immutable`
   : existsSync("package-lock.json") ? `npm ci --cache ${SANDBOX_CACHE}/npm`
   : `npm install --cache ${SANDBOX_CACHE}/npm`;
@@ -216,19 +222,25 @@ const hooks = {
     ],
   },
 };
-const container = () => docker({
-  mounts: [{ hostPath: CACHE, sandboxPath: SANDBOX_CACHE }],
-  // pnpm's store goes in the environment, not on the install's command line:
-  // pnpm 11 checks the dependencies before every `pnpm <script>`, and a store
-  // other than the one the install used makes it reinstall, which fails without
-  // a TTY. pnpm 11 reads only pnpm_config_*, pnpm 9 and 10 only npm_config_*.
-  env: {
-    COREPACK_HOME: `${SANDBOX_CACHE}/corepack`,
-    COREPACK_ENABLE_DOWNLOAD_PROMPT: "0",
-    pnpm_config_store_dir: `${SANDBOX_CACHE}/pnpm-store`,
-    npm_config_store_dir: `${SANDBOX_CACHE}/pnpm-store`,
-  },
-});
+// pnpm's store goes in the environment, not on the install's command line:
+// pnpm 11 checks the dependencies before every `pnpm <script>`, and a store
+// other than the one the install used makes it reinstall, which fails without
+// a TTY. pnpm 11 reads only pnpm_config_*, pnpm 9 and 10 only npm_config_*.
+const sandboxEnv = {
+  COREPACK_HOME: `${SANDBOX_CACHE}/corepack`,
+  COREPACK_ENABLE_DOWNLOAD_PROMPT: "0",
+  pnpm_config_store_dir: `${SANDBOX_CACHE}/pnpm-store`,
+  npm_config_store_dir: `${SANDBOX_CACHE}/pnpm-store`,
+};
+// A sandbox on a branch (a worktree of its own) runs isolated when
+// AGENTS_SANDBOX=isolated, with the caches in a shared Docker volume. A run on
+// the host's own checkout (no branch) and a job that merges branches keep the
+// bind mount: isolated sandboxes need a branch, and their patches can't carry
+// a merge commit.
+const container = (branch?: string, opts: { merges?: boolean } = {}) =>
+  branch && SANDBOX === "isolated" && !opts.merges
+    ? isolatedDocker({ cachePath: SANDBOX_CACHE, env: sandboxEnv })
+    : docker({ mounts: [{ hostPath: CACHE, sandboxPath: SANDBOX_CACHE }], env: sandboxEnv });
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -578,7 +590,7 @@ function settle(t: Ticket, commits: number, epicPath?: string) {
 }
 
 async function build(t: Ticket): Promise<number> {
-  const box = await sandcastle.createSandbox({ branch: t.branch, sandbox: container(), hooks });
+  const box = await sandcastle.createSandbox({ branch: t.branch, sandbox: container(t.branch), hooks });
   try {
     await box.run({
       name: `#${t.number}`,
@@ -649,7 +661,7 @@ function planJobs(): PlanJob[] {
     const branch = e.body.match(/`(epic\/[^`]+)`/)?.[1];
     if (!milestone || !branch) continue;
     if (EPIC_GATE === "epic" && Number(gh("api", `repos/${repo}/issues/${e.number}`, "--jq", ".issue_dependencies_summary.blocked_by // 0")) > 0) continue;
-    const epic = { number: e.number, title: e.title, branch, milestone, mode: modeOf(e.labels.map((l) => l.name)) };
+    const epic = { number: e.number, title: e.title, branch, milestone, mode: modeOf(e.labels.map((l) => l.name)), manual: false }; // manual epics were skipped above
     const items = ghJson<Issue[]>("issue", "list", "--state", "all", "--milestone", milestone, "--json", "number,title,state,body,labels,comments", "--limit", "300")
       .filter((i) => i.number !== e.number);
     const specs = items.filter((i) => i.state === "OPEN" && isSpec(i.labels.map((l) => l.name), i.body));
@@ -707,7 +719,7 @@ async function planEpics(): Promise<number> {
       const branch = `agent/plan-${j.epic.number}`;
       freeBranch(branch);
       git(undefined, "branch", "-f", branch, j.epic.branch);
-      const box = await sandcastle.createSandbox({ branch, sandbox: container(), hooks });
+      const box = await sandcastle.createSandbox({ branch, sandbox: container(branch), hooks });
       let commits = 0;
       try {
         const done = await box.run({
@@ -815,7 +827,7 @@ async function check(epic: number, pr: { number: number; headRefOid: string }, v
   try {
     await sandcastle.run({
       hooks,
-      sandbox: container(),
+      sandbox: container(verifyBranch),
       name: `verify #${epic}`,
       maxIterations: 1,
       branchStrategy: { type: "branch", branch: verifyBranch },
@@ -1060,8 +1072,9 @@ async function unblock(): Promise<number> {
     gh("issue", "edit", String(i.number), "--add-label", LABEL.unblocking);
     unblockingIssues.add(i.number);
     try {
+      // Runs on the host's checkout (no branchStrategy) and only reads: no
+      // install hook, or it would install into the host's node_modules.
       const run = await sandcastle.run({
-        hooks,
         sandbox: container(),
         name: `unblock #${i.number}`,
         maxIterations: 1,
@@ -1116,8 +1129,9 @@ async function followUps(): Promise<number> {
     gh("issue", "edit", String(i.number), "--add-label", LABEL.unblocking);
     unblockingIssues.add(i.number);
     try {
+      // Runs on the host's checkout (no branchStrategy) and only reads: no
+      // install hook, or it would install into the host's node_modules.
       const run = await sandcastle.run({
-        hooks,
         sandbox: container(),
         name: `follow up #${i.number}`,
         maxIterations: 1,
@@ -1200,7 +1214,7 @@ async function resolveConflicts(issue: Issue, epic: Epic) {
     }
 
     log(`resolving conflicts of ${epic.branch} with main (#${n})`);
-    const box = await sandcastle.createSandbox({ branch, sandbox: container(), hooks });
+    const box = await sandcastle.createSandbox({ branch, sandbox: container(branch, { merges: true }), hooks });
     let commits = 0;
     try {
       const done = await box.run({
@@ -1359,6 +1373,12 @@ let failures = 0; // failed passes in a row
 for (;;) {
   let worked = 0;
   syncTracker();
+  try {
+    const strays = sweepContainers();
+    if (strays) log(`removed ${strays} isolated sandbox container(s) left by failed or interrupted runs`);
+  } catch (error) {
+    log(`sandbox sweep skipped: ${String(error).slice(0, 200)}`);
+  }
   try {
     worked = await pass();
     await sendDigest();

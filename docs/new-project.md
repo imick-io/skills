@@ -114,6 +114,14 @@ On your laptop while you work, and on the [always-on Mac](mac-setup.md) the rest
 - lands epic work on the epic branch; other work arrives as PRs,
 - opens an epic's PR to `main` once its milestone is empty, and verifies it in the running app.
 
+### Sandbox speed on a Mac
+
+Each ticket's sandbox installs the project's dependencies first. By default the sandbox bind-mounts the ticket's worktree, and on Docker Desktop for Mac writing a `node_modules` folder across that bind mount is slow: a large pnpm install measured **10½ minutes**, against 12 s natively, enough to hit the loop's 10-minute install limit.
+
+Set `AGENTS_SANDBOX=isolated` in `.sandcastle/.env` to avoid it. Sandboxes on a branch then get the repo copied in (a git bundle) and send their commits back as patches, with nothing of the checkout mounted. The same install takes **about 15–25 s** on a quiet machine (longer the very first time, while the shared cache volume fills), and a sandbox can't touch your own checkout. With many sandboxes running test suites at once, every sandbox start slows to minutes, whichever provider: Docker's VM is the bottleneck then, and `AGENTS_MAX_PARALLEL` is the lever. The job that resolves `main` into an epic branch keeps the bind mount, because patches can't carry a merge commit. Agents are told not to merge other branches.
+
+It works with any Docker-compatible runtime. [OrbStack](https://orbstack.dev) also speeds up plain bind mounts, if you'd rather keep the default (free for personal use, paid for commercial). The measurements and the alternatives considered are in [research/mac-container-runtimes-file-io.md](research/mac-container-runtimes-file-io.md) and [research/cloud-sandboxes-for-agent-loop.md](research/cloud-sandboxes-for-agent-loop.md).
+
 ## 7. Review and merge
 
 An epic's PR is ready when **`epic-gate`** is green: no open tickets, no `mocks/` left, `verify-epic` passed. Failures `verify-epic` found are already tickets the loop is fixing. Review the PR and merge it: the epic closes, then its milestone, then the initiative when it was the last epic (or it comments, if parked areas remain).
@@ -137,6 +145,7 @@ An epic's PR is ready when **`epic-gate`** is green: no open tickets, no `mocks/
 | --- | --- | --- |
 | A new issue isn't labelled | Triage token missing or expired | Check `#triage-alerts` or the Actions tab; renew with `claude setup-token` |
 | `npm run agents` fails at once | Docker isn't running, or `.sandcastle/.env` incomplete | Start Docker Desktop; fill the `.env` |
+| Tickets time out installing dependencies, or take minutes to start | Docker Desktop's bind mounts are slow to write `node_modules` on a Mac | `AGENTS_SANDBOX=isolated` in `.sandcastle/.env`, then restart the loop ([Sandbox speed on a Mac](#sandbox-speed-on-a-mac)) |
 | The loop says "nothing ready" but tickets exist | They're assigned, blocked, or lack `ready-for-agent` | Unassign, close the blocker, or add the label |
 | An autopilot epic never gets planned | It still has `needs-briefing`, lacks `autopilot`, or is blocked by another epic | Brief it, add the label, or finish the blocker |
 | An epic is paused | Merging `main` into its branch conflicts | Resolve the "Resolve conflicts" ticket on the epic branch |
