@@ -1575,6 +1575,420 @@
           ]
         }
       ]
+    },
+    {
+      "id": "by-hand",
+      "title": "A ticket, by hand",
+      "description": "The agent loop's steps for one ticket, run yourself in Claude Code. /claim does the top part: it assigns you, picks the branch by whether the ticket sits under an epic, and switches you to it. Both paths share the build, then split again to land. Dashed arrows are the way back.",
+      "rows": 11,
+      "columns": {
+        "youL": 150,
+        "mid": 310,
+        "youR": 470,
+        "gh": 810
+      },
+      "lanes": [
+        {
+          "name": "You",
+          "sub": "in Claude Code, in the repo",
+          "x": 0,
+          "width": 640,
+          "tone": "you"
+        },
+        {
+          "name": "GitHub",
+          "sub": "the issue and the repo",
+          "x": 640,
+          "width": 340,
+          "tone": "gh"
+        }
+      ],
+      "nodes": {
+        "ready": {
+          "col": "gh",
+          "row": 0,
+          "lane": "gh",
+          "title": "Ticket ready",
+          "sub": "open, unassigned, unblocked",
+          "pills": [
+            {
+              "role": "agent",
+              "label": "ready-for-agent"
+            }
+          ]
+        },
+        "claim": {
+          "col": "youL",
+          "row": 1,
+          "lane": "you",
+          "cmd": "/claim",
+          "sub": "assigns you: the loop skips it"
+        },
+        "epicq": {
+          "col": "youL",
+          "row": 2,
+          "lane": "you",
+          "title": "Under an epic?",
+          "sub": "its Branch: line names epic/NN-slug"
+        },
+        "updEpic": {
+          "col": "youL",
+          "row": 3,
+          "lane": "you",
+          "title": "Update the epic branch",
+          "sub": "merge origin/main in, push"
+        },
+        "offMain": {
+          "col": "youR",
+          "row": 3,
+          "lane": "you",
+          "title": "Branch off main",
+          "sub": "feat/N, or fix/N for a bug"
+        },
+        "offEpic": {
+          "col": "youL",
+          "row": 4,
+          "lane": "you",
+          "title": "Branch off the epic",
+          "sub": "agent/issue-N"
+        },
+        "services": {
+          "col": "mid",
+          "row": 5,
+          "lane": "you",
+          "title": "Start the services",
+          "sub": "what sandbox-setup.sh starts"
+        },
+        "implement": {
+          "col": "mid",
+          "row": 6,
+          "lane": "you",
+          "cmd": "/implement #N",
+          "sub": "/debug-and-fix for a bug"
+        },
+        "review": {
+          "col": "mid",
+          "row": 7,
+          "lane": "you",
+          "cmd": "/code-review",
+          "sub": "since the base branch, against #N"
+        },
+        "checks": {
+          "col": "mid",
+          "row": 8,
+          "lane": "you",
+          "title": "Checks green",
+          "sub": "typecheck, tests, the prompt's extras"
+        },
+        "mergeEpic": {
+          "col": "youL",
+          "row": 9,
+          "lane": "you",
+          "title": "Merge into the epic",
+          "sub": "onto origin/epic, then push"
+        },
+        "openPR": {
+          "col": "youR",
+          "row": 9,
+          "lane": "you",
+          "title": "Open the PR",
+          "sub": "body: Fixes #N",
+          "pills": [
+            {
+              "role": "human",
+              "label": "ready-for-review"
+            }
+          ]
+        },
+        "closed": {
+          "col": "gh",
+          "row": 10,
+          "lane": "gh",
+          "title": "Ticket closed",
+          "sub": "landed on the epic, or PR merged"
+        }
+      },
+      "edges": [
+        {
+          "points": [
+            [
+              "ready.L",
+              "ready.cy"
+            ],
+            [
+              "claim.cx",
+              "ready.cy"
+            ],
+            [
+              "claim.cx",
+              "claim.T"
+            ]
+          ]
+        },
+        {
+          "points": [
+            [
+              "claim.cx",
+              "claim.B"
+            ],
+            [
+              "epicq.cx",
+              "epicq.T"
+            ]
+          ]
+        },
+        {
+          "points": [
+            [
+              "epicq.cx",
+              "epicq.B"
+            ],
+            [
+              "updEpic.cx",
+              "updEpic.T"
+            ]
+          ],
+          "label": "yes",
+          "at": [
+            "epicq.cx",
+            "mid(epicq.B,updEpic.T)"
+          ]
+        },
+        {
+          "points": [
+            [
+              "epicq.R",
+              "epicq.cy"
+            ],
+            [
+              "offMain.cx",
+              "epicq.cy"
+            ],
+            [
+              "offMain.cx",
+              "offMain.T"
+            ]
+          ],
+          "label": "no",
+          "at": [
+            "mid(epicq.R,offMain.cx)",
+            "epicq.cy"
+          ]
+        },
+        {
+          "points": [
+            [
+              "updEpic.cx",
+              "updEpic.B"
+            ],
+            [
+              "offEpic.cx",
+              "offEpic.T"
+            ]
+          ]
+        },
+        {
+          "points": [
+            [
+              "offEpic.cx",
+              "offEpic.B"
+            ],
+            [
+              "offEpic.cx",
+              "services.cy"
+            ],
+            [
+              "services.L",
+              "services.cy"
+            ]
+          ]
+        },
+        {
+          "points": [
+            [
+              "offMain.cx",
+              "offMain.B"
+            ],
+            [
+              "offMain.cx",
+              "services.cy"
+            ],
+            [
+              "services.R",
+              "services.cy"
+            ]
+          ]
+        },
+        {
+          "points": [
+            [
+              "services.cx",
+              "services.B"
+            ],
+            [
+              "implement.cx",
+              "implement.T"
+            ]
+          ]
+        },
+        {
+          "points": [
+            [
+              "implement.cx",
+              "implement.B"
+            ],
+            [
+              "review.cx",
+              "review.T"
+            ]
+          ]
+        },
+        {
+          "points": [
+            [
+              "review.cx",
+              "review.B"
+            ],
+            [
+              "checks.cx",
+              "checks.T"
+            ]
+          ]
+        },
+        {
+          "points": [
+            [
+              "checks.cx-50",
+              "checks.B"
+            ],
+            [
+              "checks.cx-50",
+              "mergeEpic.T-16"
+            ],
+            [
+              "mergeEpic.cx",
+              "mergeEpic.T-16"
+            ],
+            [
+              "mergeEpic.cx",
+              "mergeEpic.T"
+            ]
+          ],
+          "label": "epic",
+          "at": [
+            "mid(mergeEpic.cx,checks.cx-50)",
+            "mergeEpic.T-16"
+          ]
+        },
+        {
+          "points": [
+            [
+              "checks.cx+50",
+              "checks.B"
+            ],
+            [
+              "checks.cx+50",
+              "openPR.T-16"
+            ],
+            [
+              "openPR.cx",
+              "openPR.T-16"
+            ],
+            [
+              "openPR.cx",
+              "openPR.T"
+            ]
+          ],
+          "label": "no epic",
+          "at": [
+            "mid(openPR.cx,checks.cx+50)",
+            "openPR.T-16"
+          ]
+        },
+        {
+          "points": [
+            [
+              "mergeEpic.cx",
+              "mergeEpic.B"
+            ],
+            [
+              "mergeEpic.cx",
+              "closed.cy"
+            ],
+            [
+              "closed.L",
+              "closed.cy"
+            ]
+          ],
+          "label": "close it",
+          "at": [
+            "mid(mergeEpic.cx,openPR.cx)",
+            "closed.cy"
+          ]
+        },
+        {
+          "points": [
+            [
+              "openPR.cx",
+              "openPR.B"
+            ],
+            [
+              "openPR.cx",
+              "closed.cy"
+            ]
+          ],
+          "join": true,
+          "label": "you merge the PR",
+          "at": [
+            "openPR.cx",
+            "mid(openPR.B,closed.cy)"
+          ]
+        },
+        {
+          "points": [
+            [
+              "mergeEpic.L+20",
+              "mergeEpic.T"
+            ],
+            [
+              "mergeEpic.L+20",
+              "checks.cy"
+            ],
+            [
+              "checks.L",
+              "checks.cy"
+            ]
+          ],
+          "dash": true,
+          "label": "conflict: merge the epic in",
+          "at": [
+            "mergeEpic.L+20",
+            "mid(checks.cy,mergeEpic.T)"
+          ]
+        },
+        {
+          "points": [
+            [
+              "implement.R",
+              "implement.cy"
+            ],
+            [
+              "ready.cx",
+              "implement.cy"
+            ],
+            [
+              "ready.cx",
+              "ready.B"
+            ]
+          ],
+          "dash": true,
+          "label": "stop halfway: unassign",
+          "at": [
+            "ready.cx",
+            "mid(ready.B,implement.cy)"
+          ]
+        }
+      ]
     }
   ],
   "flowLayout": {
@@ -1992,6 +2406,31 @@
           "end": "closed"
         }
       ]
+    },
+    {
+      "title": "A ticket you build yourself",
+      "steps": [
+        {
+          "label": "ready-for-agent",
+          "role": "agent"
+        },
+        {
+          "via": "claim"
+        },
+        {
+          "via": "implement"
+        },
+        {
+          "via": "code-review"
+        },
+        {
+          "via": "you land it"
+        },
+        {
+          "end": "closed"
+        }
+      ],
+      "note": "/claim assigns you (the loop then leaves it alone) and sets up the branch. Under an epic you merge into the epic branch; otherwise you open the PR with Fixes #n. Step by step: docs/build-a-ticket-yourself.md."
     },
     {
       "title": "A big idea, on autopilot",
@@ -2424,6 +2863,23 @@
       "url": "https://github.com/imick-io/skills/tree/main/skills/engineering/brief"
     },
     {
+      "name": "claim",
+      "group": "build",
+      "summary": "Claim a ticket to build it yourself - the next available one, or a given number - and set up its branch the way the agent loop would, then say what to do next.",
+      "description": "Claim a ticket to build it yourself - the next available one, or a given number - and set up its branch the way the agent loop would, then say what to do next. Use when the user wants to work a ticket by hand, pick up the next ticket, take one from the agent queue, or says \"claim\" or \"claim #42\".",
+      "runs": [
+        "auto"
+      ],
+      "uses": [],
+      "next": [
+        "implement",
+        "debug-and-fix",
+        "code-review"
+      ],
+      "source": "iMick",
+      "url": "https://github.com/imick-io/skills/tree/main/skills/engineering/claim"
+    },
+    {
       "name": "code-review",
       "group": "build",
       "summary": "Reviews changes against the repo's coding standards and against the originating issue or spec, in parallel.",
@@ -2678,6 +3134,26 @@
       "url": "https://github.com/imick-io/skills/tree/main/skills/engineering/review-work"
     },
     {
+      "name": "run-epic",
+      "group": "build",
+      "summary": "Build every ticket of one epic inside this Claude Code session, the way the agent loop would (claim, branch, implement, review, land, next), one ticket at a time until the epic is built and its PR is open.",
+      "description": "Build every ticket of one epic inside this Claude Code session, the way the agent loop would (claim, branch, implement, review, land, next), one ticket at a time until the epic is built and its PR is open. Use when the user wants an epic built here without the Docker loop, says \"run the epic\", \"build the epic's tickets\", or \"run-epic 42\".",
+      "runs": [
+        "you"
+      ],
+      "uses": [
+        "claim",
+        "implement",
+        "debug-and-fix",
+        "code-review"
+      ],
+      "next": [
+        "verify-epic"
+      ],
+      "source": "iMick",
+      "url": "https://github.com/imick-io/skills/tree/main/skills/engineering/run-epic"
+    },
+    {
       "name": "scope-decomposer",
       "group": "plan",
       "summary": "Breaks a big idea into an initiative of epics on the tracker, each with a milestone, a branch and its blockers. New products default to a local-first v1 with a Go-live epic last.",
@@ -2806,6 +3282,23 @@
       "url": "https://github.com/imick-io/skills/tree/main/skills/engineering/triage"
     },
     {
+      "name": "update-imick-skills",
+      "group": "ops",
+      "summary": "Upgrades a project to the latest imick-skills release: skills, new skills on offer, the loop's files merged with local changes, tracker, labels and the release notes' steps, as a PR.",
+      "description": "Upgrade a project to the latest release of imick-io/skills in one pass - the installed skills, new skills on offer, the agent loop's files in .sandcastle/ (merged with the project's own changes), the tracker, new triage labels, and every \"Existing setups\" step the release notes ask for - then a branch and a PR. Use when the user wants to update, upgrade or sync the imick skills, or /whats-next reports skills or loop files behind upstream.",
+      "runs": [
+        "you"
+      ],
+      "uses": [
+        "whats-next"
+      ],
+      "next": [
+        "whats-next"
+      ],
+      "source": "iMick",
+      "url": "https://github.com/imick-io/skills/tree/main/skills/engineering/update-imick-skills"
+    },
+    {
       "name": "verify-epic",
       "group": "build",
       "summary": "Tests an epic's PR in the running app against its tickets, spec and agreed screens; files failures as bugs and sets the merge-gate status.",
@@ -2859,7 +3352,8 @@
         "brief",
         "wayfinder",
         "scope-decomposer",
-        "triage"
+        "triage",
+        "update-imick-skills"
       ],
       "source": "iMick",
       "url": "https://github.com/imick-io/skills/tree/main/skills/engineering/whats-next"

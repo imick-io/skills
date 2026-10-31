@@ -96,7 +96,7 @@
           "pills": [
             {
               "role": "what",
-              "label": "bug · enhancement"
+              "label": "bug \u00b7 enhancement"
             }
           ]
         },
@@ -138,7 +138,7 @@
           "row": 4,
           "lane": "loop",
           "title": "Plans the epic",
-          "sub": "wayfinder + research → a spec",
+          "sub": "wayfinder + research \u2192 a spec",
           "pills": [
             {
               "role": "plan",
@@ -150,7 +150,7 @@
           "col": "youL",
           "row": 5,
           "lane": "you",
-          "cmd": "/to-spec → /to-tickets",
+          "cmd": "/to-spec \u2192 /to-tickets",
           "sub": "tickets with their blockers"
         },
         "approve": {
@@ -171,7 +171,7 @@
           "row": 6,
           "lane": "loop",
           "title": "Builds ready tickets",
-          "sub": "implement · debug · review",
+          "sub": "implement \u00b7 debug \u00b7 review",
           "pills": [
             {
               "role": "agent",
@@ -204,7 +204,7 @@
           "row": 9,
           "lane": "gh",
           "title": "epic-gate turns green",
-          "sub": "closed · no mocks · verified"
+          "sub": "closed \u00b7 no mocks \u00b7 verified"
         },
         "merge": {
           "col": "youL",
@@ -218,7 +218,7 @@
           "row": 11,
           "lane": "gh",
           "title": "Closing chain",
-          "sub": "epic → milestone → initiative"
+          "sub": "epic \u2192 milestone \u2192 initiative"
         }
       },
       "edges": [
@@ -490,7 +490,7 @@
             ]
           ],
           "dash": true,
-          "label": "failures → bugs",
+          "label": "failures \u2192 bugs",
           "at": [
             "verify.R+34",
             "mid(verify.cy,build.cy)"
@@ -634,14 +634,14 @@
           "row": 4,
           "lane": "loop",
           "title": "Resolves conflicts",
-          "sub": "main ↔ epic branch, any time"
+          "sub": "main \u2194 epic branch, any time"
         },
         "auto": {
           "col": "loopR",
           "row": 4,
           "lane": "loop",
           "title": "Plans the epic",
-          "sub": "wayfinder + research → a spec",
+          "sub": "wayfinder + research \u2192 a spec",
           "pills": [
             {
               "role": "plan",
@@ -667,7 +667,7 @@
           "row": 5,
           "lane": "loop",
           "title": "Approves its spec",
-          "sub": "every decision ≥ 70%",
+          "sub": "every decision \u2265 70%",
           "pills": [
             {
               "role": "plan",
@@ -680,7 +680,7 @@
           "row": 7,
           "lane": "loop",
           "title": "Builds ready tickets",
-          "sub": "implement · debug · review",
+          "sub": "implement \u00b7 debug \u00b7 review",
           "pills": [
             {
               "role": "agent",
@@ -693,7 +693,7 @@
           "row": 8,
           "lane": "you",
           "title": "Answer one question",
-          "sub": "Slack ping → comment",
+          "sub": "Slack ping \u2192 comment",
           "pills": [
             {
               "role": "loop",
@@ -706,7 +706,7 @@
           "row": 8,
           "lane": "loop",
           "title": "Answers what's stuck",
-          "sub": "≥ 70%, or a local stand-in",
+          "sub": "\u2265 70%, or a local stand-in",
           "pills": [
             {
               "role": "human",
@@ -726,7 +726,7 @@
           "row": 10,
           "lane": "gh",
           "title": "epic-gate green",
-          "sub": "closed · verified"
+          "sub": "closed \u00b7 verified"
         },
         "merge": {
           "col": "loopR",
@@ -740,7 +740,7 @@
           "row": 12,
           "lane": "gh",
           "title": "Closing chain",
-          "sub": "epic → milestone → initiative"
+          "sub": "epic \u2192 milestone \u2192 initiative"
         }
       },
       "edges": [
@@ -1146,14 +1146,14 @@
           "row": 3,
           "lane": "loop",
           "title": "Plans the epic",
-          "sub": "wayfinder + research → a spec"
+          "sub": "wayfinder + research \u2192 a spec"
         },
         "conflict": {
           "col": "loopL",
           "row": 4,
           "lane": "loop",
           "title": "Resolves conflicts",
-          "sub": "main ↔ epic branch, any time"
+          "sub": "main \u2194 epic branch, any time"
         },
         "approve": {
           "col": "loopR",
@@ -1173,7 +1173,7 @@
           "row": 6,
           "lane": "loop",
           "title": "Builds ready tickets",
-          "sub": "implement · debug · review",
+          "sub": "implement \u00b7 debug \u00b7 review",
           "pills": [
             {
               "role": "agent",
@@ -1186,7 +1186,7 @@
           "row": 7,
           "lane": "you",
           "title": "Blocking question",
-          "sub": "money · secrets · data · deletes",
+          "sub": "money \u00b7 secrets \u00b7 data \u00b7 deletes",
           "pills": [
             {
               "role": "loop",
@@ -1219,7 +1219,7 @@
           "row": 9,
           "lane": "gh",
           "title": "epic-gate green",
-          "sub": "closed · verified"
+          "sub": "closed \u00b7 verified"
         },
         "digest": {
           "col": "you",
@@ -1253,7 +1253,7 @@
           "row": 11,
           "lane": "gh",
           "title": "Closing chain",
-          "sub": "epic → milestone → initiative"
+          "sub": "epic \u2192 milestone \u2192 initiative"
         }
       },
       "edges": [
@@ -1571,6 +1571,420 @@
               "close.L",
               "close.cy"
             ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "by-hand",
+      "title": "A ticket, by hand",
+      "description": "The agent loop's steps for one ticket, run yourself in Claude Code. /claim does the top part: it assigns you, picks the branch by whether the ticket sits under an epic, and switches you to it. Both paths share the build, then split again to land. Dashed arrows are the way back.",
+      "rows": 11,
+      "columns": {
+        "youL": 150,
+        "mid": 310,
+        "youR": 470,
+        "gh": 810
+      },
+      "lanes": [
+        {
+          "name": "You",
+          "sub": "in Claude Code, in the repo",
+          "x": 0,
+          "width": 640,
+          "tone": "you"
+        },
+        {
+          "name": "GitHub",
+          "sub": "the issue and the repo",
+          "x": 640,
+          "width": 340,
+          "tone": "gh"
+        }
+      ],
+      "nodes": {
+        "ready": {
+          "col": "gh",
+          "row": 0,
+          "lane": "gh",
+          "title": "Ticket ready",
+          "sub": "open, unassigned, unblocked",
+          "pills": [
+            {
+              "role": "agent",
+              "label": "ready-for-agent"
+            }
+          ]
+        },
+        "claim": {
+          "col": "youL",
+          "row": 1,
+          "lane": "you",
+          "cmd": "/claim",
+          "sub": "assigns you: the loop skips it"
+        },
+        "epicq": {
+          "col": "youL",
+          "row": 2,
+          "lane": "you",
+          "title": "Under an epic?",
+          "sub": "its Branch: line names epic/NN-slug"
+        },
+        "updEpic": {
+          "col": "youL",
+          "row": 3,
+          "lane": "you",
+          "title": "Update the epic branch",
+          "sub": "merge origin/main in, push"
+        },
+        "offMain": {
+          "col": "youR",
+          "row": 3,
+          "lane": "you",
+          "title": "Branch off main",
+          "sub": "feat/N, or fix/N for a bug"
+        },
+        "offEpic": {
+          "col": "youL",
+          "row": 4,
+          "lane": "you",
+          "title": "Branch off the epic",
+          "sub": "agent/issue-N"
+        },
+        "services": {
+          "col": "mid",
+          "row": 5,
+          "lane": "you",
+          "title": "Start the services",
+          "sub": "what sandbox-setup.sh starts"
+        },
+        "implement": {
+          "col": "mid",
+          "row": 6,
+          "lane": "you",
+          "cmd": "/implement #N",
+          "sub": "/debug-and-fix for a bug"
+        },
+        "review": {
+          "col": "mid",
+          "row": 7,
+          "lane": "you",
+          "cmd": "/code-review",
+          "sub": "since the base branch, against #N"
+        },
+        "checks": {
+          "col": "mid",
+          "row": 8,
+          "lane": "you",
+          "title": "Checks green",
+          "sub": "typecheck, tests, the prompt's extras"
+        },
+        "mergeEpic": {
+          "col": "youL",
+          "row": 9,
+          "lane": "you",
+          "title": "Merge into the epic",
+          "sub": "onto origin/epic, then push"
+        },
+        "openPR": {
+          "col": "youR",
+          "row": 9,
+          "lane": "you",
+          "title": "Open the PR",
+          "sub": "body: Fixes #N",
+          "pills": [
+            {
+              "role": "human",
+              "label": "ready-for-review"
+            }
+          ]
+        },
+        "closed": {
+          "col": "gh",
+          "row": 10,
+          "lane": "gh",
+          "title": "Ticket closed",
+          "sub": "landed on the epic, or PR merged"
+        }
+      },
+      "edges": [
+        {
+          "points": [
+            [
+              "ready.L",
+              "ready.cy"
+            ],
+            [
+              "claim.cx",
+              "ready.cy"
+            ],
+            [
+              "claim.cx",
+              "claim.T"
+            ]
+          ]
+        },
+        {
+          "points": [
+            [
+              "claim.cx",
+              "claim.B"
+            ],
+            [
+              "epicq.cx",
+              "epicq.T"
+            ]
+          ]
+        },
+        {
+          "points": [
+            [
+              "epicq.cx",
+              "epicq.B"
+            ],
+            [
+              "updEpic.cx",
+              "updEpic.T"
+            ]
+          ],
+          "label": "yes",
+          "at": [
+            "epicq.cx",
+            "mid(epicq.B,updEpic.T)"
+          ]
+        },
+        {
+          "points": [
+            [
+              "epicq.R",
+              "epicq.cy"
+            ],
+            [
+              "offMain.cx",
+              "epicq.cy"
+            ],
+            [
+              "offMain.cx",
+              "offMain.T"
+            ]
+          ],
+          "label": "no",
+          "at": [
+            "mid(epicq.R,offMain.cx)",
+            "epicq.cy"
+          ]
+        },
+        {
+          "points": [
+            [
+              "updEpic.cx",
+              "updEpic.B"
+            ],
+            [
+              "offEpic.cx",
+              "offEpic.T"
+            ]
+          ]
+        },
+        {
+          "points": [
+            [
+              "offEpic.cx",
+              "offEpic.B"
+            ],
+            [
+              "offEpic.cx",
+              "services.cy"
+            ],
+            [
+              "services.L",
+              "services.cy"
+            ]
+          ]
+        },
+        {
+          "points": [
+            [
+              "offMain.cx",
+              "offMain.B"
+            ],
+            [
+              "offMain.cx",
+              "services.cy"
+            ],
+            [
+              "services.R",
+              "services.cy"
+            ]
+          ]
+        },
+        {
+          "points": [
+            [
+              "services.cx",
+              "services.B"
+            ],
+            [
+              "implement.cx",
+              "implement.T"
+            ]
+          ]
+        },
+        {
+          "points": [
+            [
+              "implement.cx",
+              "implement.B"
+            ],
+            [
+              "review.cx",
+              "review.T"
+            ]
+          ]
+        },
+        {
+          "points": [
+            [
+              "review.cx",
+              "review.B"
+            ],
+            [
+              "checks.cx",
+              "checks.T"
+            ]
+          ]
+        },
+        {
+          "points": [
+            [
+              "checks.cx-50",
+              "checks.B"
+            ],
+            [
+              "checks.cx-50",
+              "mergeEpic.T-16"
+            ],
+            [
+              "mergeEpic.cx",
+              "mergeEpic.T-16"
+            ],
+            [
+              "mergeEpic.cx",
+              "mergeEpic.T"
+            ]
+          ],
+          "label": "epic",
+          "at": [
+            "mid(mergeEpic.cx,checks.cx-50)",
+            "mergeEpic.T-16"
+          ]
+        },
+        {
+          "points": [
+            [
+              "checks.cx+50",
+              "checks.B"
+            ],
+            [
+              "checks.cx+50",
+              "openPR.T-16"
+            ],
+            [
+              "openPR.cx",
+              "openPR.T-16"
+            ],
+            [
+              "openPR.cx",
+              "openPR.T"
+            ]
+          ],
+          "label": "no epic",
+          "at": [
+            "mid(openPR.cx,checks.cx+50)",
+            "openPR.T-16"
+          ]
+        },
+        {
+          "points": [
+            [
+              "mergeEpic.cx",
+              "mergeEpic.B"
+            ],
+            [
+              "mergeEpic.cx",
+              "closed.cy"
+            ],
+            [
+              "closed.L",
+              "closed.cy"
+            ]
+          ],
+          "label": "close it",
+          "at": [
+            "mid(mergeEpic.cx,openPR.cx)",
+            "closed.cy"
+          ]
+        },
+        {
+          "points": [
+            [
+              "openPR.cx",
+              "openPR.B"
+            ],
+            [
+              "openPR.cx",
+              "closed.cy"
+            ]
+          ],
+          "join": true,
+          "label": "you merge the PR",
+          "at": [
+            "openPR.cx",
+            "mid(openPR.B,closed.cy)"
+          ]
+        },
+        {
+          "points": [
+            [
+              "mergeEpic.L+20",
+              "mergeEpic.T"
+            ],
+            [
+              "mergeEpic.L+20",
+              "checks.cy"
+            ],
+            [
+              "checks.L",
+              "checks.cy"
+            ]
+          ],
+          "dash": true,
+          "label": "conflict: merge the epic in",
+          "at": [
+            "mergeEpic.L+20",
+            "mid(checks.cy,mergeEpic.T)"
+          ]
+        },
+        {
+          "points": [
+            [
+              "implement.R",
+              "implement.cy"
+            ],
+            [
+              "ready.cx",
+              "implement.cy"
+            ],
+            [
+              "ready.cx",
+              "ready.B"
+            ]
+          ],
+          "dash": true,
+          "label": "stop halfway: unassign",
+          "at": [
+            "ready.cx",
+            "mid(ready.B,implement.cy)"
           ]
         }
       ]
@@ -1991,6 +2405,31 @@
           "end": "closed"
         }
       ]
+    },
+    {
+      "title": "A ticket you build yourself",
+      "steps": [
+        {
+          "label": "ready-for-agent",
+          "role": "agent"
+        },
+        {
+          "via": "claim"
+        },
+        {
+          "via": "implement"
+        },
+        {
+          "via": "code-review"
+        },
+        {
+          "via": "you land it"
+        },
+        {
+          "end": "closed"
+        }
+      ],
+      "note": "/claim assigns you (the loop then leaves it alone) and sets up the branch. Under an epic you merge into the epic branch; otherwise you open the PR with Fixes #n. Step by step: docs/build-a-ticket-yourself.md."
     },
     {
       "title": "A big idea, on autopilot",
@@ -2568,7 +3007,8 @@
         "brief",
         "wayfinder",
         "scope-decomposer",
-        "triage"
+        "triage",
+        "update-imick-skills"
       ]
     },
     "why-sleeping": {
@@ -2630,6 +3070,36 @@
     },
     "writing-shape": {
       "group": "wip"
+    },
+    "claim": {
+      "group": "build",
+      "next": [
+        "implement",
+        "debug-and-fix",
+        "code-review"
+      ]
+    },
+    "run-epic": {
+      "group": "build",
+      "uses": [
+        "claim",
+        "implement",
+        "debug-and-fix",
+        "code-review"
+      ],
+      "next": [
+        "verify-epic"
+      ]
+    },
+    "update-imick-skills": {
+      "group": "ops",
+      "uses": [
+        "whats-next"
+      ],
+      "next": [
+        "whats-next"
+      ],
+      "summary": "Upgrades a project to the latest imick-skills release: skills, new skills on offer, the loop's files merged with local changes, tracker, labels and the release notes' steps, as a PR."
     }
   },
   "branches": [

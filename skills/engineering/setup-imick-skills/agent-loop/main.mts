@@ -24,28 +24,36 @@
 // Planning only touches epics labelled `autopilot` (chosen at the end of their
 // /brief): chart and resolve their wayfinder map, write the spec for your
 // review, and cut tickets once you approve it. Other epics are planned by hand.
+// An epic labelled `manual` is planned AND built by hand: the loop never
+// plans it, never queues or unblocks its tickets whatever they're labelled,
+// and never opens or verifies its PR.
 //
 // One pass:
 //   0. Triage (AGENTS_TRIAGE=1, in place of the GitHub triage workflow): new
 //      issues with no triage label, `needs-info` issues the reporter answered
 //      since the last triage note, and anything left on `needs-triage` get an
-//      unattended /triage run each, so what comes out ready-for-agent is
-//      built in the same pass.
+//      unattended /triage run each, after the tickets have started; what
+//      comes out ready-for-agent is picked up by the next pass, at once.
 //   1. Queue: open, unassigned, unblocked issues labelled ready-for-agent or
 //      ready-for-agent-debugging. Specs are skipped (they're read by
 //      /to-tickets, never built directly).
-//   2. Plan: an agent picks the tickets that can safely run in parallel.
+//   2. Plan: an agent picks the tickets that can safely run in parallel,
+//      beside the ones already building, to fill the free slots.
 //   3. Claim each one (assignee = claimed), prepare its branch: tickets under
 //      an epic branch off the epic branch, after `main` is merged into it;
 //      the others branch off `main`.
 //   4. Execute + review: one Docker sandbox per ticket, running /implement or
-//      /debug-and-fix, then a review pass.
+//      /debug-and-fix, then a review pass. Each ticket is its own job: the
+//      pass doesn't wait for it, and the loop passes again as soon as one
+//      lands, so a free slot is refilled without waiting for a whole batch.
 //   5. Land: epic tickets merge into the epic branch and close; the others
 //      get a PR with "Fixes #n". An epic with no open tickets left gets its
 //      PR to main ("Closes #epic").
 //   6. Verify: an epic PR whose milestone is empty is checked with
-//      /verify-epic, once per commit; its failures become tickets that the
-//      next pass picks up, and its status feeds the epic-gate merge check.
+//      /verify-epic, once per commit, beside the tickets; its failures become tickets that the
+//      next pass picks up, and its status feeds the epic-gate merge check. A
+//      commit that only changes loop or docs files (AGENTS_VERIFY_SKIP) keeps
+//      the last green status instead of running the check again.
 //
 // Fast mode (AGENTS_MODE=fast for the whole project, or the `fast` label on
 // one epic) is for projects that value speed over review: personal projects,
@@ -77,8 +85,10 @@
 
 import * as sandcastle from "@ai-hero/sandcastle";
 import { docker } from "@ai-hero/sandcastle/sandboxes/docker";
+import { isolatedDocker, sweepContainers } from "./isolated-docker.mts";
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { hostname } from "node:os";
 import { setTimeout as sleep } from "node:timers/promises";
 import { z } from "zod";
 
@@ -89,8 +99,28 @@ import { z } from "zod";
 const ONCE = process.argv.includes("--once");
 const PLANNING = !process.argv.includes("--no-planning");
 const IDLE_MINUTES = Number(process.env.AGENTS_IDLE_MINUTES ?? 45);
+// After a failed pass (not a usage limit) the loop retries soon, doubling the
+// wait for each failure in a row, up to AGENTS_IDLE_MINUTES.
+const RETRY_MINUTES = Number(process.env.AGENTS_RETRY_MINUTES ?? 5);
+// A verified epic stays verified when every file changed since then matches
+// one of these globs: a merge of loop or docs changes doesn't need a new check.
+// What an epic blocked by other epics holds back. `epic` (default): all its
+// tickets wait. `ticket`: only tickets with blockers of their own wait, so the
+// rest start early; for tickets cut with a `blocked by` link to the other
+// epic wherever they need its work (/to-tickets does). Autopilot planning of
+// a blocked epic then goes ahead too, so it has tickets to start.
+const EPIC_GATE = process.env.AGENTS_EPIC_GATE === "ticket" ? "ticket" : "epic";
+// A pending epic check older than this is taken to have died, and run again.
+const CHECK_STALE_MINUTES = 60;
+const VERIFY_SKIP = (process.env.AGENTS_VERIFY_SKIP ?? ".sandcastle/**,.claude/**,docs/**,*.md,tracker/**")
+  .split(",").map((g) => g.trim()).filter(Boolean);
 const LIMIT_SLEEP_MINUTES = Number(process.env.AGENTS_LIMIT_SLEEP_MINUTES ?? 60);
 const MAX_PARALLEL = Number(process.env.AGENTS_MAX_PARALLEL ?? 3);
+// Where a sandbox on a branch runs. "bind" (the default) bind-mounts its
+// worktree; "isolated" copies the repo in and the commits out, mounting
+// nothing of the checkout (isolated-docker.mts): much faster installs on
+// Docker Desktop for Mac, and a sandbox can't touch the host checkout.
+const SANDBOX = process.env.AGENTS_SANDBOX === "isolated" ? "isolated" : "bind";
 const PLANNER = process.env.AGENTS_PLANNER_MODEL ?? "claude-opus-5-5";
 const WORKER = process.env.AGENTS_WORKER_MODEL ?? "claude-sonnet-5";
 const ALERTS = process.env.SLACK_ALERTS_WEBHOOK_URL;
@@ -148,6 +178,7 @@ const LABEL = {
   map: "wayfinder:map",
   planning: "agent:planning",
   autopilot: "autopilot",
+  manual: process.env.AGENTS_LABEL_MANUAL ?? "manual",
   briefing: "needs-briefing",
   backlog: process.env.AGENTS_LABEL_BACKLOG ?? "backlog",
   triage: "needs-triage",
@@ -166,14 +197,62 @@ const isAiComment = (body: string) =>
   body.startsWith(AI_NOTE) || /^>\s*(\S+\s+)?\*[^\n]*\b(generated|written)\b[^\n]*\b(AI|Claude)\b/i.test(body.trimStart());
 const WORKTREES = ".sandcastle/worktrees";
 
-const hooks = { sandbox: { onSandboxReady: [{ command: "npm install" }] } };
-const copyToWorktree = ["node_modules"];
+// Dependencies are installed inside the sandbox, for Linux, from one package
+// store shared by every sandbox: a warm install only links packages. The
+// host's node_modules is never copied in (it's built for the host's platform).
+// The install command follows the lockfile; corepack (enabled in the image)
+// provides pnpm and yarn at the version package.json asks for.
+const CACHE = ".sandcastle/cache";
+const SANDBOX_CACHE = "/home/agent/.pkg-cache";
+mkdirSync(CACHE, { recursive: true });
+const install =
+  existsSync("pnpm-lock.yaml") ? `CI=true pnpm install --frozen-lockfile --store-dir ${SANDBOX_CACHE}/pnpm-store`
+  : existsSync("yarn.lock") ? `YARN_CACHE_FOLDER=${SANDBOX_CACHE}/yarn yarn install --immutable`
+  : existsSync("package-lock.json") ? `npm ci --cache ${SANDBOX_CACHE}/npm`
+  : `npm install --cache ${SANDBOX_CACHE}/npm`;
+// A project whose tests need services (a database, a cache) starts them in
+// .sandcastle/sandbox-setup.sh, after the install. It writes their exports to
+// .sandcastle/sandbox-env, which the agents source instead of setting up their own.
+const SETUP = ".sandcastle/sandbox-setup.sh";
+const hooks = {
+  sandbox: {
+    onSandboxReady: [
+      { command: install, timeoutMs: 600_000 },
+      { command: `if [ -f ${SETUP} ]; then bash ${SETUP}; fi`, timeoutMs: 600_000 },
+    ],
+  },
+};
+// The job that merges main into an epic branch keeps the bind mount (see
+// container()), where an install on Docker Desktop for Mac can take over 10
+// minutes: give its install 30.
+const mergeHooks = {
+  sandbox: { onSandboxReady: [{ command: install, timeoutMs: 1_800_000 }, hooks.sandbox.onSandboxReady[1]] },
+};
+// pnpm's store goes in the environment, not on the install's command line:
+// pnpm 11 checks the dependencies before every `pnpm <script>`, and a store
+// other than the one the install used makes it reinstall, which fails without
+// a TTY. pnpm 11 reads only pnpm_config_*, pnpm 9 and 10 only npm_config_*.
+const sandboxEnv = {
+  COREPACK_HOME: `${SANDBOX_CACHE}/corepack`,
+  COREPACK_ENABLE_DOWNLOAD_PROMPT: "0",
+  pnpm_config_store_dir: `${SANDBOX_CACHE}/pnpm-store`,
+  npm_config_store_dir: `${SANDBOX_CACHE}/pnpm-store`,
+};
+// A sandbox on a branch (a worktree of its own) runs isolated when
+// AGENTS_SANDBOX=isolated, with the caches in a shared Docker volume. A run on
+// the host's own checkout (no branch) and a job that merges branches keep the
+// bind mount: isolated sandboxes need a branch, and their patches can't carry
+// a merge commit.
+const container = (branch?: string, opts: { merges?: boolean } = {}) =>
+  branch && SANDBOX === "isolated" && !opts.merges
+    ? isolatedDocker({ cachePath: SANDBOX_CACHE, env: sandboxEnv })
+    : docker({ mounts: [{ hostPath: CACHE, sandboxPath: SANDBOX_CACHE }], env: sandboxEnv });
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-type Epic = { number: number; title: string; branch: string; milestone: string; mode: Mode };
+type Epic = { number: number; title: string; branch: string; milestone: string; mode: Mode; manual: boolean };
 type Ticket = { number: number; title: string; kind: "build" | "bug"; epic?: Epic; branch: string };
 
 const sh = (cmd: string, args: string[], cwd?: string) =>
@@ -200,6 +279,7 @@ const freeBranch = (branch: string) => {
   tryGit(undefined, "worktree", "prune");
 };
 const log = (msg: string) => console.log(`[agents ${new Date().toISOString()}] ${msg}`);
+const isLimit = (reason: string) => /usage limit|rate limit|429/i.test(reason);
 const repo = gh("repo", "view", "--json", "nameWithOwner", "--jq", ".nameWithOwner");
 const me = gh("api", "user", "--jq", ".login");
 
@@ -240,7 +320,8 @@ const epicCache = new Map<string, Epic | undefined>();
 const epicBlockedCache = new Map<number, boolean>();
 
 // An epic waiting on other epics holds back its tickets too, even those with
-// no blockers inside its milestone: they'd be built on missing foundations.
+// no blockers inside its milestone: they'd be built on missing foundations
+// (unless AGENTS_EPIC_GATE=ticket).
 function epicBlocked(epic: Epic): boolean {
   if (!epicBlockedCache.has(epic.number)) {
     const n = Number(gh("api", `repos/${repo}/issues/${epic.number}`, "--jq", ".issue_dependencies_summary.blocked_by // 0"));
@@ -259,8 +340,9 @@ function epicFor(milestone?: string): Epic | undefined {
     "--json", "number,title,body,labels", "--limit", "1",
   );
   const branch = epic?.body.match(/`(epic\/[^`]+)`/)?.[1];
-  const mode = modeOf(epic?.labels.map((l) => l.name) ?? []);
-  const found = epic && branch ? { number: epic.number, title: epic.title, branch, milestone, mode } : undefined;
+  const labels = epic?.labels.map((l) => l.name) ?? [];
+  const mode = modeOf(labels);
+  const found = epic && branch ? { number: epic.number, title: epic.title, branch, milestone, mode, manual: labels.includes(LABEL.manual) } : undefined;
   epicCache.set(milestone, found);
   return found;
 }
@@ -278,7 +360,8 @@ function readyTickets(): Ticket[] {
       const blocked = Number(gh("api", `repos/${repo}/issues/${issue.number}`, "--jq", ".issue_dependencies_summary.blocked_by // 0"));
       if (blocked > 0) continue;
       const epic = epicFor(issue.milestone?.title);
-      if (epic && epicBlocked(epic)) continue;
+      if (epic?.manual) continue; // a hand-run epic: its tickets are never the loop's, whatever their labels
+      if (epic && EPIC_GATE === "epic" && epicBlocked(epic)) continue;
       tickets.push({
         number: issue.number,
         title: issue.title,
@@ -365,99 +448,175 @@ function unlanded(t: Ticket): number {
 
 const planSchema = z.object({ issues: z.array(z.object({ number: z.number() })) });
 
+// The loop keeps up to AGENTS_MAX_PARALLEL tickets building at once, as a
+// pool: each ticket is a job of its own, and when one lands its slot is
+// refilled at once, instead of waiting for the slowest ticket of a batch.
+// Epic checks run beside them, one per epic. A job never throws: it releases
+// its ticket and notes a usage limit for the next pass to act on.
+const running = new Map<number, Promise<void>>(); // ticket number → its job
+const checking = new Map<number, Promise<void>>(); // epic number → its check
+let limitReason: string | undefined;
+
+// A finished job wakes the loop's wait, so a free slot is refilled at once.
+let woken = false;
+let wakeUp = () => {};
+function wake() {
+  woken = true;
+  wakeUp();
+}
+
+function background(what: string, job: () => Promise<void>, done: () => void): Promise<void> {
+  return job()
+    .catch(async (error) => {
+      const reason = String(error);
+      if (isLimit(reason)) limitReason = reason;
+      else await alert(`${what} failed: ${reason.slice(0, 300)}`);
+    })
+    .catch(() => {}) // even the alert failing must not reject
+    .finally(() => {
+      done();
+      wake();
+    });
+}
+
 async function pass(): Promise<number> {
+  if (limitReason) {
+    const reason = limitReason;
+    limitReason = undefined;
+    throw new Error(`usage limit: ${reason}`);
+  }
   epicCache.clear();
   epicBlockedCache.clear();
-  const triaged = stopRequested() ? 0 : await triage();
-  const unblocked = triaged + (stopRequested() ? 0 : await unblock());
-  const planned = unblocked + (PLANNING && !stopRequested() ? await planEpics() : 0);
-  if (stopRequested()) return planned;
-  const ready = readyTickets();
-  if (!ready.length) return planned + (await verifyEpics());
+  // Tickets first: their slots are the loop's throughput. What triage,
+  // unblocking and planning make ready is picked up by the next pass, which
+  // starts at once because they count as work.
+  const started = stopRequested() ? 0 : await fill();
+  let other = stopRequested() ? 0 : await verifyEpics();
+  if (!stopRequested()) other += await triage();
+  if (!stopRequested()) other += await unblock();
+  if (PLANNING && !stopRequested()) other += await planEpics();
+  changedQueue = other > 0;
+  return started + other;
+}
+// Whether the last pass may have made new tickets ready (triage, unblocking,
+// planning, a check's gaps): then the next pass runs at once, even with
+// every slot busy, instead of waiting for a ticket to land.
+let changedQueue = false;
 
-  const plan = await sandcastle.run({
-    hooks,
-    sandbox: docker(),
-    name: "planner",
-    maxIterations: 1,
-    agent: sandcastle.claudeCode(PLANNER),
-    promptFile: "./.sandcastle/plan-prompt.md",
-    promptArgs: {
-      MAX_PARALLEL: String(MAX_PARALLEL),
-      TICKETS: ready.map((t) => `- #${t.number} (${t.kind}${t.epic ? `, epic #${t.epic.number}` : ""}): ${t.title}`).join("\n"),
-    },
-    output: sandcastle.Output.object({ tag: "plan", schema: planSchema }),
-  });
-  const picked = planSchema.parse(plan.output).issues
-    .map((p) => ready.find((t) => t.number === p.number))
-    .filter((t): t is Ticket => !!t)
-    .slice(0, MAX_PARALLEL);
+// Start ready tickets in the free slots. Returns how many started.
+async function fill(): Promise<number> {
+  const free = MAX_PARALLEL - running.size;
+  if (free <= 0) return 0;
+  const ready = readyTickets(); // unassigned only: running tickets are claimed
+  if (!ready.length) return 0;
+
+  const busy = [...inFlight];
+  // One ready ticket and nothing building: nothing to choose between.
+  const picked = ready.length === 1 && !busy.length ? ready : await plan(ready, busy, free);
 
   const epicPaths = new Map<number, string | undefined>();
-  const work: { t: Ticket; epicPath?: string }[] = [];
-  for (const t of picked) {
+  let started = 0;
+  for (const t of picked.slice(0, free)) {
     if (t.epic && !epicPaths.has(t.epic.number)) epicPaths.set(t.epic.number, prepareEpic(t.epic));
     const epicPath = t.epic ? epicPaths.get(t.epic.number) : undefined;
     if (t.epic && !epicPath) continue; // epic paused on a conflict with main
     if (stopRequested()) break; // claim nothing more once a stop is asked for
     if (!claim(t)) continue;
     prepareBranch(t, epicPath);
-    work.push({ t, epicPath });
     inFlight.add(t);
+    running.set(t.number, background(`#${t.number}`, () => work(t, epicPath), () => {
+      inFlight.delete(t);
+      running.delete(t.number);
+    }));
+    started++;
   }
-  log(`working ${work.map(({ t }) => `#${t.number}`).join(", ") || "nothing"}`);
+  const others = busy.length ? ` (already building ${busy.map((t) => `#${t.number}`).join(", ")})` : "";
+  log(`started ${started ? picked.slice(0, started).map((t) => `#${t.number}`).join(", ") : "nothing"}${others}`);
+  return started;
+}
 
-  const settled = await Promise.allSettled(
-    work.map(async ({ t }) => {
-      const box = await sandcastle.createSandbox({ branch: t.branch, sandbox: docker(), hooks, copyToWorktree });
-      try {
-        await box.run({
-          name: `#${t.number}`,
-          maxIterations: 100,
-          agent: sandcastle.claudeCode(WORKER),
-          promptFile: t.kind === "bug" ? "./.sandcastle/bug-prompt.md" : "./.sandcastle/implement-prompt.md",
-          promptArgs: { ISSUE: String(t.number), TITLE: t.title, BRANCH: t.branch },
-        });
-        if (!unlanded(t)) return 0;
-        await box.run({
-          name: `#${t.number} review`,
-          maxIterations: 1,
-          agent: sandcastle.claudeCode(WORKER),
-          promptFile: "./.sandcastle/review-prompt.md",
-          promptArgs: { ISSUE: String(t.number), BRANCH: t.branch, BASE: t.epic ? `origin/${t.epic.branch}` : "origin/main" },
-        });
-        return unlanded(t);
-      } finally {
-        await box.close();
-      }
-    }),
-  );
+// The planner picks, among the ready tickets, the ones that can be built
+// beside each other and beside the tickets already building. It only reads
+// tickets and code, so its sandbox skips the install and the services.
+async function plan(ready: Ticket[], busy: Ticket[], free: number): Promise<Ticket[]> {
+  const line = (t: Ticket) => `- #${t.number} (${t.kind}${t.epic ? `, epic #${t.epic.number}` : ""}): ${t.title}`;
+  const run = await sandcastle.run({
+    sandbox: container(),
+    name: "planner",
+    maxIterations: 1,
+    agent: sandcastle.claudeCode(PLANNER),
+    promptFile: "./.sandcastle/plan-prompt.md",
+    promptArgs: {
+      MAX_PARALLEL: String(free),
+      TICKETS: ready.map(line).join("\n"),
+      RUNNING: busy.length ? busy.map(line).join("\n") : "- none",
+    },
+    output: sandcastle.Output.object({ tag: "plan", schema: planSchema }),
+  });
+  return planSchema.parse(run.output).issues
+    .map((p) => ready.find((t) => t.number === p.number))
+    .filter((t): t is Ticket => !!t);
+}
 
-  for (const [i, outcome] of settled.entries()) {
-    const { t, epicPath } = work[i]!;
-    inFlight.delete(t);
-    if (outcome.status === "rejected") {
-      const reason = String(outcome.reason);
-      release(t, reason);
-      if (/usage limit|rate limit|429/i.test(reason)) throw new Error(`usage limit: ${reason}`);
-      continue;
-    }
-    if (!outcome.value) {
-      // No commits: a bug diagnosed for a person / not reproducible, or a
-      // build the agent couldn't finish. The agent has commented; make sure a
-      // person sees it.
-      const labels = ghJson<string[]>("issue", "view", String(t.number), "--json", "labels", "--jq", "[.labels[].name]");
-      if (labels.includes(LABEL[t.kind])) {
-        gh("issue", "edit", String(t.number), "--remove-label", LABEL[t.kind], "--add-label", LABEL.human);
-      }
-      release(t, "no commits; handed to a person");
-      continue;
-    }
-    land(t, epicPath);
-    syncTracker();
+// One ticket, from build to landed (or handed back).
+async function work(t: Ticket, epicPath?: string) {
+  let commits: number;
+  try {
+    commits = await build(t);
+  } catch (error) {
+    freeBranch(t.branch); // a sandbox that died leaves its worktree; the branch and its commits stay
+    release(t, String(error).slice(0, 300));
+    if (isLimit(String(error))) limitReason = String(error);
+    return;
   }
+  try {
+    settle(t, commits, epicPath);
+  } catch (error) {
+    release(t, `after the build: ${String(error).slice(0, 300)}`);
+    throw error;
+  }
+  syncTracker();
+}
 
-  return planned + work.length + (stopRequested() ? 0 : await verifyEpics());
+function settle(t: Ticket, commits: number, epicPath?: string) {
+  if (!commits) {
+    // No commits: a bug diagnosed for a person / not reproducible, or a
+    // build the agent couldn't finish. The agent has commented; make sure a
+    // person sees it.
+    const labels = ghJson<string[]>("issue", "view", String(t.number), "--json", "labels", "--jq", "[.labels[].name]");
+    if (labels.includes(LABEL[t.kind])) {
+      gh("issue", "edit", String(t.number), "--remove-label", LABEL[t.kind], "--add-label", LABEL.human);
+    }
+    release(t, "no commits; handed to a person");
+    return;
+  }
+  // A ticket that can't land (a push refused, gh down) is released with its
+  // work kept on its branch, and alerted; the next pass lands it.
+  land(t, epicPath);
+}
+
+async function build(t: Ticket): Promise<number> {
+  const box = await sandcastle.createSandbox({ branch: t.branch, sandbox: container(t.branch), hooks });
+  try {
+    await box.run({
+      name: `#${t.number}`,
+      maxIterations: 100,
+      agent: sandcastle.claudeCode(WORKER),
+      promptFile: t.kind === "bug" ? "./.sandcastle/bug-prompt.md" : "./.sandcastle/implement-prompt.md",
+      promptArgs: { ISSUE: String(t.number), TITLE: t.title, BRANCH: t.branch },
+    });
+    if (!unlanded(t)) return 0;
+    await box.run({
+      name: `#${t.number} review`,
+      maxIterations: 1,
+      agent: sandcastle.claudeCode(WORKER),
+      promptFile: "./.sandcastle/review-prompt.md",
+      promptArgs: { ISSUE: String(t.number), BRANCH: t.branch, BASE: t.epic ? `origin/${t.epic.branch}` : "origin/main" },
+    });
+    return unlanded(t);
+  } finally {
+    await box.close();
+  }
 }
 
 function land(t: Ticket, epicPath?: string) {
@@ -465,6 +624,10 @@ function land(t: Ticket, epicPath?: string) {
     if (!tryGit(epicPath, "merge", "--no-edit", "--quiet", t.branch)) {
       tryGit(epicPath, "merge", "--abort");
       comment(t.number, `The work on \`${t.branch}\` conflicts with \`${t.epic.branch}\`; the loop will retry it on top of the latest epic branch.`);
+      // The sandbox's worktree still holds the branch, and git won't delete a
+      // branch checked out in a worktree: free it first, or the stale branch
+      // survives and every retry rebuilds on it and conflicts again.
+      freeBranch(t.branch);
       git(undefined, "branch", "-D", t.branch);
       release(t, "merge conflict with the epic branch");
       return;
@@ -473,6 +636,7 @@ function land(t: Ticket, epicPath?: string) {
     const sha = git(epicPath, "rev-parse", "--short", "HEAD");
     gh("issue", "close", String(t.number), "--comment",
       `> *This was generated by AI in the agent loop.*\n\nLanded on \`${t.epic.branch}\` in ${sha}. It ships with the epic's PR (#${t.epic.number}).`);
+    freeBranch(t.branch); // the sandbox's worktree still holds the branch, and git won't delete it
     git(undefined, "branch", "-D", t.branch);
     log(`#${t.number} landed on ${t.epic.branch}`);
     return;
@@ -499,12 +663,12 @@ function planJobs(): PlanJob[] {
   const epics = ghJson<Issue[]>("issue", "list", "--state", "open", "--label", LABEL.epic, "--label", LABEL.autopilot, "--json", "number,title,state,body,labels", "--limit", "100");
   const jobs: PlanJob[] = [];
   for (const e of epics) {
-    if (has(e, LABEL.planning) || has(e, LABEL.briefing) || has(e, LABEL.backlog)) continue; // another loop is on it, no brief yet, or parked
+    if (has(e, LABEL.planning) || has(e, LABEL.briefing) || has(e, LABEL.backlog) || has(e, LABEL.manual)) continue; // another loop is on it, no brief yet, parked, or hand-run
     const milestone = ghJson<{ milestone: { title: string } | null }>("issue", "view", String(e.number), "--json", "milestone").milestone?.title;
     const branch = e.body.match(/`(epic\/[^`]+)`/)?.[1];
     if (!milestone || !branch) continue;
-    if (Number(gh("api", `repos/${repo}/issues/${e.number}`, "--jq", ".issue_dependencies_summary.blocked_by // 0")) > 0) continue;
-    const epic = { number: e.number, title: e.title, branch, milestone, mode: modeOf(e.labels.map((l) => l.name)) };
+    if (EPIC_GATE === "epic" && Number(gh("api", `repos/${repo}/issues/${e.number}`, "--jq", ".issue_dependencies_summary.blocked_by // 0")) > 0) continue;
+    const epic = { number: e.number, title: e.title, branch, milestone, mode: modeOf(e.labels.map((l) => l.name)), manual: false }; // manual epics were skipped above
     const items = ghJson<Issue[]>("issue", "list", "--state", "all", "--milestone", milestone, "--json", "number,title,state,body,labels,comments", "--limit", "300")
       .filter((i) => i.number !== e.number);
     const specs = items.filter((i) => i.state === "OPEN" && isSpec(i.labels.map((l) => l.name), i.body));
@@ -562,7 +726,7 @@ async function planEpics(): Promise<number> {
       const branch = `agent/plan-${j.epic.number}`;
       freeBranch(branch);
       git(undefined, "branch", "-f", branch, j.epic.branch);
-      const box = await sandcastle.createSandbox({ branch, sandbox: docker(), hooks, copyToWorktree });
+      const box = await sandcastle.createSandbox({ branch, sandbox: container(branch), hooks });
       let commits = 0;
       try {
         const done = await box.run({
@@ -597,7 +761,7 @@ async function planEpics(): Promise<number> {
   for (const [i, outcome] of settled.entries()) {
     if (outcome.status === "rejected") {
       const reason = String(outcome.reason);
-      if (/usage limit|rate limit|429/i.test(reason)) throw new Error(`usage limit: ${reason}`);
+      if (isLimit(reason)) throw new Error(`usage limit: ${reason}`);
       await alert(`Planning epic #${jobs[i]!.epic.number} failed: ${reason.slice(0, 300)}`);
     }
   }
@@ -613,46 +777,109 @@ async function verifyEpics(): Promise<number> {
   );
   let ran = 0;
   for (const e of epics) {
-    const branch = e.body.match(/`(epic\/[^`]+)`/)?.[1];
-    const milestone = e.milestone?.title;
-    if (!branch || !milestone || !tryGit(undefined, "ls-remote", "--exit-code", "--heads", "origin", branch)) continue;
-    const items = ghJson<{ number: number; state: string; labels: { name: string }[] }[]>("issue", "list", "--state", "all", "--milestone", milestone, "--json", "number,state,labels", "--limit", "300")
-      .filter((i) => i.number !== e.number && !i.labels.some((l) => l.name === LABEL.backlog));
-    if (!items.length || items.some((i) => i.state === "OPEN")) continue; // not planned yet, or still building (backlog items don't count)
-
-    let [pr] = ghJson<{ number: number; headRefOid: string }[]>("pr", "list", "--state", "open", "--head", branch, "--json", "number,headRefOid");
-    if (!pr) {
-      const url = gh("pr", "create", "--base", "main", "--head", branch, "--title", e.title, "--body",
-        `Closes #${e.number}\n\nEvery ticket in milestone **${milestone}** is done. Verification runs next.`);
-      log(`epic #${e.number} complete → ${url}`);
-      [pr] = ghJson<{ number: number; headRefOid: string }[]>("pr", "list", "--state", "open", "--head", branch, "--json", "number,headRefOid");
-      if (!pr) continue;
+    if (checking.has(e.number)) continue; // its check is still running
+    if (e.labels.some((l) => l.name === LABEL.backlog || l.name === LABEL.manual)) continue; // parked or hand-run: its PR is a person's too
+    try {
+      ran += await verifyEpic(e);
+    } catch (error) {
+      // One epic's check failing (a hung run, gh down) doesn't hold up the others.
+      const reason = String(error);
+      if (isLimit(reason)) throw error;
+      await alert(`Checking epic #${e.number} failed: ${reason.slice(0, 300)}`);
     }
-    const verified = gh("api", `repos/${repo}/commits/${pr.headRefOid}/status`, "--jq", '[.statuses[] | select(.context=="verify-epic")][0].state // ""');
-    if (verified === "success" && unblocks(modeOf(e.labels.map((l) => l.name)))) {
-      ran += await mergeEpic(pr.number, e.number);
-      continue;
-    }
-    if (verified === "success" || verified === "failure") continue; // this commit is done
+  }
+  return ran;
+}
 
-    const verifyBranch = `agent/verify-${e.number}`;
-    git(undefined, "fetch", "--quiet", "origin", branch);
-    freeBranch(verifyBranch);
-    git(undefined, "branch", "-f", verifyBranch, `origin/${branch}`);
-    log(`verifying epic #${e.number} (PR #${pr.number} at ${pr.headRefOid.slice(0, 7)})`);
+async function verifyEpic(e: { number: number; title: string; body: string; labels: { name: string }[]; milestone: { title: string } | null }): Promise<number> {
+  const branch = e.body.match(/`(epic\/[^`]+)`/)?.[1];
+  const milestone = e.milestone?.title;
+  if (!branch || !milestone || !tryGit(undefined, "ls-remote", "--exit-code", "--heads", "origin", branch)) return 0;
+  const items = ghJson<{ number: number; state: string; labels: { name: string }[] }[]>("issue", "list", "--state", "all", "--milestone", milestone, "--json", "number,state,labels", "--limit", "300")
+    .filter((i) => i.number !== e.number && !i.labels.some((l) => l.name === LABEL.backlog));
+  if (!items.length || items.some((i) => i.state === "OPEN")) return 0; // not planned yet, or still building (backlog items don't count)
+
+  let [pr] = ghJson<{ number: number; headRefOid: string }[]>("pr", "list", "--state", "open", "--head", branch, "--json", "number,headRefOid");
+  if (!pr) {
+    const url = gh("pr", "create", "--base", "main", "--head", branch, "--title", e.title, "--body",
+      `Closes #${e.number}\n\nEvery ticket in milestone **${milestone}** is done. Verification runs next.`);
+    log(`epic #${e.number} complete → ${url}`);
+    [pr] = ghJson<{ number: number; headRefOid: string }[]>("pr", "list", "--state", "open", "--head", branch, "--json", "number,headRefOid");
+    if (!pr) return 0;
+  }
+  git(undefined, "fetch", "--quiet", "origin", branch);
+  const status = verifyStatus(pr.headRefOid);
+  let verified = status.state;
+  if (!verified && carryVerified(pr.number, pr.headRefOid)) verified = "success";
+  if (verified === "success" && unblocks(modeOf(e.labels.map((l) => l.name)))) return mergeEpic(pr.number, e.number);
+  if (verified === "success" || verified === "failure") return 0; // this commit is done
+  // Pending: another loop (or this one before a restart) is checking it. A
+  // check that never finished frees the commit after CHECK_STALE_MINUTES.
+  if (verified === "pending" && Date.now() - Date.parse(status.updatedAt) < CHECK_STALE_MINUTES * 60_000) return 0;
+
+  const verifyBranch = `agent/verify-${e.number}`;
+  freeBranch(verifyBranch);
+  git(undefined, "branch", "-f", verifyBranch, `origin/${branch}`);
+  // Claim the commit before the sandbox starts, so another loop skips it.
+  gh("api", `repos/${repo}/statuses/${pr.headRefOid}`, "-f", "state=pending", "-f", "context=verify-epic",
+    "-f", `description=Verifying (agent loop on ${hostname()})`);
+  log(`verifying epic #${e.number} (PR #${pr.number} at ${pr.headRefOid.slice(0, 7)})`);
+  // The check runs beside the tickets, not before the next pass: tickets in
+  // other epics keep building while it runs.
+  checking.set(e.number, background(`Checking epic #${e.number}`, () => check(e.number, pr!, verifyBranch), () => checking.delete(e.number)));
+  return 1;
+}
+
+async function check(epic: number, pr: { number: number; headRefOid: string }, verifyBranch: string) {
+  try {
     await sandcastle.run({
       hooks,
-      sandbox: docker(),
-      name: `verify #${e.number}`,
+      sandbox: container(verifyBranch),
+      name: `verify #${epic}`,
       maxIterations: 1,
       branchStrategy: { type: "branch", branch: verifyBranch },
       agent: sandcastle.claudeCode(WORKER),
       promptFile: "./.sandcastle/verify-prompt.md",
-      promptArgs: { PR: String(pr.number), EPIC: String(e.number), SHA: pr.headRefOid, BRANCH: verifyBranch },
+      promptArgs: { PR: String(pr.number), EPIC: String(epic), SHA: pr.headRefOid, BRANCH: verifyBranch },
     });
-    ran++;
+  } finally {
+    freeBranch(verifyBranch); // a run that died keeps its worktree otherwise
+    tryGit(undefined, "branch", "-D", verifyBranch);
   }
-  return ran;
+}
+
+// The commit's verify-epic status: its state ("" when none) and when it was set.
+function verifyStatus(sha: string): { state: string; updatedAt: string } {
+  const found = gh("api", `repos/${repo}/commits/${sha}/status`, "--jq", '[.statuses[] | select(.context=="verify-epic")][0] // {} | "\\(.state // "") \\(.updated_at // "")"');
+  const [state = "", updatedAt = ""] = found.split(" ");
+  return { state, updatedAt };
+}
+const verifyState = (sha: string) => verifyStatus(sha).state;
+
+// A new head commit that only changes loop or docs files (AGENTS_VERIFY_SKIP)
+// since the newest verified commit inherits its green status, without a run.
+function carryVerified(pr: number, head: string): boolean {
+  if (!VERIFY_SKIP.length) return false;
+  const shas = gh("api", "--paginate", `repos/${repo}/pulls/${pr}/commits`, "--jq", ".[].sha").split("\n").filter(Boolean);
+  for (const sha of shas.reverse().slice(1, 30)) { // newest first, head excluded
+    const state = verifyState(sha);
+    if (!state) continue;
+    if (state !== "success") return false; // the newest check didn't pass: check again
+    const changed = git(undefined, "diff", "--name-only", sha, head).split("\n").filter(Boolean);
+    if (!changed.every((f) => VERIFY_SKIP.some((g) => matchesGlob(f, g)))) return false;
+    gh("api", `repos/${repo}/statuses/${head}`, "-f", "state=success", "-f", "context=verify-epic",
+      "-f", `description=carried from ${sha.slice(0, 7)}: only loop/docs files changed`);
+    log(`epic PR #${pr}: verify-epic carried from ${sha.slice(0, 7)} to ${head.slice(0, 7)} (only loop/docs files changed)`);
+    return true;
+  }
+  return false;
+}
+
+// `**` crosses folders, `*` doesn't; a glob with no `/` matches the file name
+// in any folder (`*.md`), like .gitignore.
+function matchesGlob(file: string, glob: string): boolean {
+  const re = glob.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*\*/g, "\0").replace(/\*/g, "[^/]*").replace(/\?/g, "[^/]").replace(/\0/g, ".*");
+  return new RegExp(`^${glob.includes("/") ? "" : "(.*/)?"}${re}$`).test(file);
 }
 
 // Fast mode: a verified epic PR is merged, which closes the epic and frees the
@@ -772,7 +999,7 @@ async function triage(): Promise<number> {
   const settled = await Promise.allSettled(jobs.map(async (j) => {
     gh("issue", "edit", String(j.n), "--add-label", LABEL.triage);
     await sandcastle.run({
-      sandbox: docker(),
+      sandbox: container(),
       name: `triage #${j.n}`,
       maxIterations: 1,
       agent: sandcastle.claudeCode(WORKER),
@@ -797,7 +1024,7 @@ async function triage(): Promise<number> {
   for (const [n, outcome] of settled.entries()) {
     if (outcome.status === "fulfilled") { done++; continue; }
     const reason = String(outcome.reason);
-    if (/usage limit|rate limit|429/i.test(reason)) throw new Error(`usage limit: ${reason}`);
+    if (isLimit(reason)) throw new Error(`usage limit: ${reason}`);
     triageFailed.add(jobs[n]!.n);
     await alert(`Triage failed on #${jobs[n]!.n}: ${reason.slice(0, 300)}. The loop leaves it until it restarts. ${issueUrl(jobs[n]!.n)}`);
   }
@@ -817,7 +1044,7 @@ const unblockSchema = z.object({
 const followSchema = z.object({ outcome: z.enum(["kept", "updated", "followup"]), summary: z.string() });
 // Issues fast mode leaves to you: parked ones (backlog), planning artefacts
 // with their own flow, and an epic waiting for its /brief.
-const NOT_UNBLOCKED = [LABEL.backlog, LABEL.epic, LABEL.spec, LABEL.map, LABEL.briefing, LABEL.unblocking, "initiative", "needs-scoping"];
+const NOT_UNBLOCKED = [LABEL.backlog, LABEL.manual, LABEL.epic, LABEL.spec, LABEL.map, LABEL.briefing, LABEL.unblocking, "initiative", "needs-scoping"];
 const labelledEpics = () => [LABEL.fast, LABEL.supersonic].some((label) => {
   try {
     return ghJson<unknown[]>("issue", "list", "--state", "open", "--label", label, "--json", "number", "--limit", "1").length > 0;
@@ -841,7 +1068,7 @@ async function unblock(): Promise<number> {
       const epic = epicFor(i.milestone?.title);
       return { i, epic, mode: epic ? epic.mode : modeOf(i.labels.map((l) => l.name)) };
     })
-    .filter(({ mode }) => unblocks(mode));
+    .filter(({ epic, mode }) => !epic?.manual && unblocks(mode)); // a hand-run epic's questions are the person's
   const conflicts = open.filter(({ i, epic }) => epic && i.title === conflictTitle(epic));
   for (const { i, epic } of conflicts) await resolveConflicts(i, epic!);
   const waiting = open.filter((x) => !conflicts.includes(x)).slice(0, MAX_PARALLEL);
@@ -852,9 +1079,10 @@ async function unblock(): Promise<number> {
     gh("issue", "edit", String(i.number), "--add-label", LABEL.unblocking);
     unblockingIssues.add(i.number);
     try {
+      // Runs on the host's checkout (no branchStrategy) and only reads: no
+      // install hook, or it would install into the host's node_modules.
       const run = await sandcastle.run({
-        hooks,
-        sandbox: docker(),
+        sandbox: container(),
         name: `unblock #${i.number}`,
         maxIterations: 1,
         agent: sandcastle.claudeCode(PLANNER),
@@ -890,7 +1118,7 @@ async function unblock(): Promise<number> {
   for (const [n, outcome] of settled.entries()) {
     if (outcome.status === "fulfilled") continue;
     const reason = String(outcome.reason);
-    if (/usage limit|rate limit|429/i.test(reason)) throw new Error(`usage limit: ${reason}`);
+    if (isLimit(reason)) throw new Error(`usage limit: ${reason}`);
     await alert(`Unblocking #${waiting[n]!.i.number} failed: ${reason.slice(0, 300)}`);
   }
   return approved + followed + conflicts.length + waiting.length;
@@ -908,9 +1136,10 @@ async function followUps(): Promise<number> {
     gh("issue", "edit", String(i.number), "--add-label", LABEL.unblocking);
     unblockingIssues.add(i.number);
     try {
+      // Runs on the host's checkout (no branchStrategy) and only reads: no
+      // install hook, or it would install into the host's node_modules.
       const run = await sandcastle.run({
-        hooks,
-        sandbox: docker(),
+        sandbox: container(),
         name: `follow up #${i.number}`,
         maxIterations: 1,
         agent: sandcastle.claudeCode(PLANNER),
@@ -923,7 +1152,7 @@ async function followUps(): Promise<number> {
       log(`#${i.number} followed up (${result.outcome}): ${result.summary}`);
     } catch (error) {
       const reason = String(error);
-      if (/usage limit|rate limit|429/i.test(reason)) throw error;
+      if (isLimit(reason)) throw error;
       await alert(`Following up #${i.number} failed: ${reason.slice(0, 300)}`);
     } finally {
       gh("issue", "edit", String(i.number), "--remove-label", LABEL.unblocking);
@@ -992,7 +1221,7 @@ async function resolveConflicts(issue: Issue, epic: Epic) {
     }
 
     log(`resolving conflicts of ${epic.branch} with main (#${n})`);
-    const box = await sandcastle.createSandbox({ branch, sandbox: docker(), hooks, copyToWorktree });
+    const box = await sandcastle.createSandbox({ branch, sandbox: container(branch, { merges: true }), hooks: mergeHooks });
     let commits = 0;
     try {
       const done = await box.run({
@@ -1024,7 +1253,7 @@ async function resolveConflicts(issue: Issue, epic: Epic) {
     log(`${epic.branch}: conflicts with main resolved`);
   } catch (error) {
     const reason = String(error);
-    if (/usage limit|rate limit|429/i.test(reason)) throw error;
+    if (isLimit(reason)) throw error;
     await alert(`Resolving conflicts of ${epic.branch} failed: ${reason.slice(0, 300)}`);
   } finally {
     tryGit(undefined, "branch", "-D", branch);
@@ -1086,6 +1315,31 @@ function syncTracker() {
   }
 }
 
+// One loop per checkout. Two loops in the same folder share its worktrees:
+// one freeing a branch for its run deletes the folder the other's agent works
+// in, which then sits silent until the idle timeout (EveryShelf, 2026-10-28).
+// Loops on different machines are fine: claims and check statuses keep them apart.
+const LOCK = ".sandcastle/loop.pid";
+const alive = (pid: number) => {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === "EPERM";
+  }
+};
+const holder = Number(existsSync(LOCK) ? readFileSync(LOCK, "utf8").trim() : 0);
+if (holder && holder !== process.pid && alive(holder)) {
+  console.error(`[agents] Another agent loop (pid ${holder}) is already running in this folder. Stop it first (\`npm run agents:stop\`, or \`kill -INT ${holder}\`), or run this one from another clone.`);
+  process.exit(1);
+}
+writeFileSync(LOCK, String(process.pid));
+process.on("exit", () => {
+  try {
+    if (readFileSync(LOCK, "utf8").trim() === String(process.pid)) rmSync(LOCK, { force: true });
+  } catch { /* already gone */ }
+});
+
 // Starting the loop is the clearest sign you want it running: a stop file
 // left by an earlier request (or a stop asked for while nothing ran) is cleared.
 if (existsSync(STOP_FILE)) {
@@ -1094,11 +1348,26 @@ if (existsSync(STOP_FILE)) {
 }
 
 // Sleeps in one-minute steps so a stop request ends an idle wait promptly.
-async function idle(minutes: number) {
-  for (let i = 0; i < minutes && !stopRequested(); i++) await sleep(60_000);
+// With `wakeable`, a job finishing (a free slot) ends it at once.
+async function idle(minutes: number, wakeable = false) {
+  for (let i = 0; i < minutes && !stopRequested(); i++) {
+    if (wakeable && woken) break;
+    await Promise.race([sleep(60_000), new Promise<void>((resolve) => { if (wakeable) wakeUp = resolve; })]);
+  }
+  woken = false;
+}
+
+const busy = () => running.size + checking.size;
+
+// Lets every running ticket and check finish (a stop, or the end of --once).
+async function drain() {
+  while (busy()) await Promise.allSettled([...running.values(), ...checking.values()]);
 }
 
 async function stopNicely(worked: number) {
+  worked += busy();
+  if (busy()) log(`stopping: waiting for ${busy()} running ticket(s) and check(s) to land`);
+  await drain();
   rmSync(STOP_FILE, { force: true });
   log(worked ? "stopped nicely after landing the in-flight work" : "stopped nicely; nothing was in flight");
   await alert(`Agent loop stopped nicely${worked ? " after landing its in-flight work" : ""}. Start it again with \`npm run agents:awake\`.`);
@@ -1107,30 +1376,54 @@ async function stopNicely(worked: number) {
 
 log(`started (pid ${process.pid}); \`npm run agents:stop\` stops it nicely`);
 let limitAlerted = false;
+let failures = 0; // failed passes in a row
 for (;;) {
   let worked = 0;
   syncTracker();
   try {
+    const strays = sweepContainers();
+    if (strays) log(`removed ${strays} isolated sandbox container(s) left by failed or interrupted runs`);
+  } catch (error) {
+    log(`sandbox sweep skipped: ${String(error).slice(0, 200)}`);
+  }
+  try {
     worked = await pass();
     await sendDigest();
     limitAlerted = false;
+    failures = 0;
   } catch (error) {
     const message = String(error);
-    if (/usage limit|rate limit|429/i.test(message)) {
+    if (isLimit(message)) {
       if (!limitAlerted) await alert(`Usage limit reached; the agent loop sleeps ${LIMIT_SLEEP_MINUTES} min and retries.`);
       limitAlerted = true;
-      if (ONCE) break;
+      if (ONCE) { await drain(); break; }
       if (stopRequested()) await stopNicely(0);
       await idle(LIMIT_SLEEP_MINUTES);
       continue;
     }
-    await alert(`Agent loop pass failed: ${message.slice(0, 500)}`);
+    failures++;
+    const wait = Math.min(RETRY_MINUTES * 2 ** (failures - 1), IDLE_MINUTES);
+    await alert(`Agent loop pass failed; retrying in ${wait} min: ${message.slice(0, 500)}`);
     syncTracker();
-    if (ONCE) process.exit(1);
+    if (ONCE) { await drain(); process.exit(1); }
+    if (stopRequested()) await stopNicely(0);
+    await idle(wait);
+    if (stopRequested()) await stopNicely(0);
+    continue;
   }
   syncTracker();
-  if (ONCE) break;
+  if (ONCE) {
+    await drain();
+    syncTracker();
+    break;
+  }
   if (stopRequested()) await stopNicely(worked);
+  if (busy()) {
+    // Work is running: pass again when a slot frees up, or after the idle
+    // time for what arrived meanwhile; at once when the queue just changed.
+    if (!changedQueue) await idle(IDLE_MINUTES, true);
+    continue;
+  }
   if (!worked) {
     log(`nothing ready; sleeping ${IDLE_MINUTES} min`);
     await idle(IDLE_MINUTES);

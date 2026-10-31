@@ -44,7 +44,7 @@ flowchart TD
 | Make the decisions an epic needs | You + agent, or agents alone on autopilot | `/wayfinder <epic>` (`/dig Q<n>` for hard questions), or the loop for `autopilot` epics |
 | Agree on the UI | You + agent | `/product-design <epic>` |
 | Turn decisions into tickets | Agent | `/to-spec`, then `/to-tickets` |
-| Build tickets, fix bugs | Agents | The agent loop (`npm run agents`) on your laptop or the always-on Mac |
+| Build tickets, fix bugs | Agents | The agent loop (`npm run agents`) on your laptop or the always-on Mac; or you, on one ticket: [Building a ticket yourself](build-a-ticket-yourself.md) |
 | Test the finished epic | Agent | `verify-epic`, run by the loop |
 | Approve and merge | **You** | Review the epic PR once `epic-gate` is green |
 | Close what's done | Workflow | The closing chain |
@@ -57,7 +57,7 @@ You decide; agents do the legwork; workflows keep the tracker tidy. Nothing reac
 
 **2. Scope.** A big idea, yours or a `needs-scoping` issue, goes through `/scope-decomposer`: a high-level interview, then an **initiative** issue with **epics** under it. Each epic has one destination, one area (and so one owner), its own milestone (`NN: Initiative / Epic`) and branch (`epic/NN-slug`), and blocking links to the epics it waits on. Parts too vague to bound stay in the initiative's "Not yet scoped" list until a later run.
 
-**3. Brief.** Every new epic waits for a `/brief` (`needs-briefing` + `ready-for-human`): a short, high-level grilling session where you say what you already have in mind, saved in the epic's Brief section, the glossary and ADRs. A must-have that's really its own epic becomes one through `/scope-decomposer`. The brief ends with your choice: **manual** (you plan it with `/wayfinder`) or **autopilot** (the `autopilot` label: the agent loop plans it).
+**3. Brief.** Every new epic waits for a `/brief` (`needs-briefing` + `ready-for-human`): a short, high-level grilling session where you say what you already have in mind, saved in the epic's Brief section, the glossary and ADRs. A must-have that's really its own epic becomes one through `/scope-decomposer`. The brief ends with your choice: **autopilot** (the `autopilot` label: the agent loop plans it), **manual** (the `manual` label: you plan and build it, with whatever tools you like; the loop never touches it or its tickets), or neither (you plan it with `/wayfinder`, the loop builds its tickets).
 
 **4. Plan.** For each epic, in build order: `/wayfinder <epic>` charts the decisions it needs and works through them with you, one at a time (`/dig` researches a question you can't settle on instinct). `/product-design <epic>` can run at any point to build the real UI on mock data until you say "we agree". Both leave their decisions on the tracker. On an `autopilot` epic the agent loop runs wayfinder alone: the Brief's lines are your decisions, confident answers are taken directly, uncertain ones after `dig`, the rest marked *assumed*. You then review just the spec, which lists every decision the agent took, least confident first, and approve it with the `spec-approved` label.
 
@@ -88,6 +88,7 @@ You decide; agents do the legwork; workflows keep the tracker tidy. Nothing reac
 | `initiative` / `epic` | Planning issues from `/scope-decomposer` | |
 | `needs-briefing` | An epic waiting for its brief | `/brief` |
 | `autopilot` | An epic the agent loop plans by itself | The agent loop |
+| `manual` | An epic you plan and build yourself; the loop never plans it, queues its tickets or opens its PR | You |
 | `fast` | An epic the loop unblocks by itself (fast mode for one epic) | The agent loop |
 | `supersonic` | An epic in supersonic mode | The agent loop |
 | `agent:asked` | Fast mode asked you on this issue | Comment your answer |

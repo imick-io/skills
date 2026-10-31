@@ -38,6 +38,11 @@
       "source": "own"
     },
     {
+      "local_path": "skills/engineering/claim",
+      "local_name": "claim",
+      "source": "own"
+    },
+    {
       "local_path": "skills/engineering/code-review",
       "local_name": "code-review",
       "source": "mattpocock",
@@ -159,6 +164,11 @@
       "source": "own"
     },
     {
+      "local_path": "skills/engineering/run-epic",
+      "local_name": "run-epic",
+      "source": "own"
+    },
+    {
       "local_path": "skills/engineering/scope-decomposer",
       "local_name": "scope-decomposer",
       "source": "own"
@@ -211,6 +221,11 @@
     {
       "local_path": "skills/engineering/triage",
       "local_name": "triage",
+      "source": "own"
+    },
+    {
+      "local_path": "skills/engineering/update-imick-skills",
+      "local_name": "update-imick-skills",
       "source": "own"
     },
     {

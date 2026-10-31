@@ -46,6 +46,8 @@ Read the tracker doc, `docs/agents/triage-labels.md`, `docs/agents/preview.md` a
    - each **fail** becomes its own ticket: title the broken behaviour, labels `bug` + `ready-for-agent-debugging`, the epic's milestone and area, the evidence (steps, starting URL, what happened vs what the criterion says), and "Found by verify-epic on #<pr>". Unassigned, so the loop claims it.
    - all **unsure** verdicts go into one ticket, "Verify-epic: needs a person's call", labels `ready-for-human`, assigned to the area's default person, one checklist line per item.
 
+   File every gap from this run at once, and leave them independent: link one as **blocked by** another only when it really can't be fixed first. The loop works independent tickets side by side; a chain is fixed one at a time, with a check between each.
+
 5. **Report and set the status.** Post or update the PR's verification comment (edit the earlier one with `gh api` when it exists, so the PR keeps a single report):
 
    ```markdown

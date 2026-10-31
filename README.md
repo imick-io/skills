@@ -6,6 +6,7 @@ My agent skills, straight from my `.claude/skills` directory.
 
 - **[Running a new project](docs/new-project.md)**: the step-by-step checklist, from an empty repo to agents shipping epics, plus the daily check and troubleshooting.
 - **[How work flows](docs/workflow.md)**: the whole path from idea to merged code, who does each step, and the labels and branches involved.
+- **[Building a ticket yourself](docs/build-a-ticket-yourself.md)**: what the agent loop does with a ticket, and how to run the same steps by hand in Claude Code.
 - **[Always-on Mac](docs/mac-setup.md)**: a spare Mac that never sleeps, runs the agent loop, and lets you use Claude on it from your phone.
 - The sections below are the reference for each piece: installation, the skills, automatic triage, the agent loop, epic PRs, and releasing.
 
@@ -36,6 +37,7 @@ My own skills plus the ones I use from other authors, such as [Matt Pocock](http
 | --- | --- | --- |
 | [`ask-imick`](skills/engineering/ask-imick/SKILL.md) | Matt Pocock | Ask which skill or flow fits your situation. |
 | [`brief`](skills/engineering/brief/SKILL.md) | iMick | Brief an epic before it's planned - a short, high-level grill-with-docs session that captures what you already have in mind, then choose whether wayfinder runs on it manually or on autopilot. |
+| [`claim`](skills/engineering/claim/SKILL.md) | iMick | Claim a ticket to build it yourself - the next available one, or a given number - and set up its branch the way the agent loop would, then say what to do next. |
 | [`code-review`](skills/engineering/code-review/SKILL.md) | Matt Pocock | Review the changes since a fixed point (commit, branch, tag, or merge-base) along two axes: Standards (does the code follow this repo's documented coding standards?) and Spec (does the code match what the originating issue/spec asked for?). |
 | [`codebase-design`](skills/engineering/codebase-design/SKILL.md) | Matt Pocock | Shared vocabulary for designing deep modules. |
 | [`debug-and-fix`](skills/engineering/debug-and-fix/SKILL.md) | iMick | Take a bug from the ready-for-agent-debugging queue, diagnose it with diagnosing-bugs (reproducing UI bugs in the browser), fix it with a regression test when the diagnosis is clean, and report the outcome on the issue with the right labels. |
@@ -53,6 +55,7 @@ My own skills plus the ones I use from other authors, such as [Matt Pocock](http
 | [`research`](skills/engineering/research/SKILL.md) | Matt Pocock | Investigate a question against high-trust primary sources and capture the findings as a Markdown file in the repo. |
 | [`retro`](skills/engineering/retro/SKILL.md) | Matt Pocock | Conduct a retrospective on a coding session. |
 | [`review-work`](skills/engineering/review-work/SKILL.md) | iMick | Refactor-only review pass over a recent commit. |
+| [`run-epic`](skills/engineering/run-epic/SKILL.md) | iMick | Build every ticket of one epic inside this Claude Code session, the way the agent loop would (claim, branch, implement, review, land, next), one ticket at a time until the epic is built and its PR is open. |
 | [`scope-decomposer`](skills/engineering/scope-decomposer/SKILL.md) | iMick | Break a big idea, product, feature, existing project or broad issue into an initiative of epics on the issue tracker, each one ready for /brief and then /wayfinder. |
 | [`setup-imick-skills`](skills/engineering/setup-imick-skills/SKILL.md) | Matt Pocock | Configure this repo for the engineering skills: set up its issue tracker, triage label vocabulary, and domain doc layout. |
 | [`tdd`](skills/engineering/tdd/SKILL.md) | Matt Pocock | Test-driven development. |
@@ -61,6 +64,7 @@ My own skills plus the ones I use from other authors, such as [Matt Pocock](http
 | [`to-tickets`](skills/engineering/to-tickets/SKILL.md) | Matt Pocock | Break a plan, spec, or the current conversation into a set of tracer-bullet tickets, each declaring its blocking edges, published to the configured tracker (edges as text in one file per ticket locally, or native blocking links on a real tracker). |
 | [`tracker`](skills/engineering/tracker/SKILL.md) | iMick | Build and open the issue tracker page, a snapshot of the repo's GitHub issues showing what you act on next, the epics' roadmap and each epic's board and blocking graph. |
 | [`triage`](skills/engineering/triage/SKILL.md) | iMick | Classify incoming issues (and optionally external PRs) by what they are and who acts next, write agent-ready briefs, and route big asks to scoping. |
+| [`update-imick-skills`](skills/engineering/update-imick-skills/SKILL.md) | iMick | Upgrade a project to the latest release of imick-io/skills in one pass - the installed skills, new skills on offer, the agent loop's files in .sandcastle/ (merged with the project's own changes), the tracker, new triage labels, and every "Existing setups" step the release notes ask for - then a branch and a PR. |
 | [`verify-epic`](skills/engineering/verify-epic/SKILL.md) | iMick | Test an epic's PR against its tickets, spec and agreed screens in the running app, file each failure as a bug ticket under the epic, and set the verify-epic status the merge gate requires. |
 | [`wayfinder`](skills/engineering/wayfinder/SKILL.md) | Matt Pocock | Plan a huge chunk of work (more than one agent session can hold) as a shared map of decision tickets on your issue tracker, and resolve them one at a time until the way to the destination is clear. |
 | [`whats-next`](skills/engineering/whats-next/SKILL.md) | iMick | What's next in a project using these skills - reads where it stands (setup, the agent loop, what waits on you on GitHub, local changes) and names the next one to three moves, each with its command. |
@@ -182,7 +186,7 @@ npm run agents:awake              # the loop, keeping a laptop awake while it ru
 
 **Autopilot planning**, per epic. Every epic from `/scope-decomposer` waits for a **`/brief`**: a short, high-level session where you say what you already have in mind (must-haves, no-gos, the big product calls), saved in the epic's Brief section, the glossary and ADRs. The brief ends with **autopilot or manual?** An epic labelled `autopilot` is planned by the loop: it runs wayfinder on it by itself, takes every Brief line as decided, decides the rest (75% confidence or more directly, below that after researching it with `dig`, still unsure as **assumed**), parks tasks that need you as `ready-for-human`, and writes the spec with a **Decided on autopilot** section (least confident first). The spec waits on `ready-for-human` and Slack pings you: **approve** with the `spec-approved` label and the next pass cuts the tickets; **request changes** with a comment and the next pass revises it. Epics without the label are yours to plan with `/wayfinder <epic>`, and the loop never touches them.
 
-Tune it in `.sandcastle/.env`: `AGENTS_IDLE_MINUTES` (45), `AGENTS_MAX_PARALLEL` (3), `AGENTS_PLANNER_MODEL`, `AGENTS_WORKER_MODEL`, and `SLACK_ALERTS_WEBHOOK_URL` for usage-limit and failure alerts.
+Tune it in `.sandcastle/.env`: `AGENTS_IDLE_MINUTES` (45), `AGENTS_RETRY_MINUTES` (5, after a failed pass), `AGENTS_MAX_PARALLEL` (3, tickets building at once), `AGENTS_EPIC_GATE` (`epic`, or `ticket` to let a blocked epic's free tickets start), `AGENTS_VERIFY_SKIP` (the files whose changes keep an epic verified), `AGENTS_PLANNER_MODEL`, `AGENTS_WORKER_MODEL`, and `SLACK_ALERTS_WEBHOOK_URL` for usage-limit and failure alerts.
 
 **Good to know**
 

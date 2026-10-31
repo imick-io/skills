@@ -37,11 +37,17 @@ Break the work into **tracer bullet** tickets.
 
 Give each ticket its **blocking edges**: the other tickets that must complete before it can start. A ticket with no blockers can start immediately.
 
+**Prefer wide over deep.** Agents build tickets with no open blockers side by side, so a batch's speed is set by its longest chain, not its size. Give each ticket as few blocking edges as it truly needs. Measure the batch's **shape**: how many tickets, how many can run at once (the widest frontier), and the longest chain of blocking edges.
+
+**Contract first** is the usual way to turn a chain into a fan. When several tickets need a shape another one introduces (a schema, an API's types and routes, a component's props), cut a small first ticket that lands only that shape: the types, the migration, stubbed routes or components that return placeholder data. Every other ticket is blocked by that one alone and fills in its own part, so `A → B → C → D` becomes `A → {B, C, D}`. Keep the contract ticket thin; it is the one everything waits on.
+
+**Blocked by another epic.** When the parent epic is blocked by other epics, give each ticket that needs one of them a blocking edge to that epic's issue (or to the specific ticket it needs), and none to the tickets that don't. A loop running with `AGENTS_EPIC_GATE=ticket` then starts the free ones early instead of holding the whole epic back.
+
 **Wide refactors are the exception to vertical slicing.** A **wide refactor** is one mechanical change (rename a column, retype a shared symbol) whose **blast radius** fans across the whole codebase, so a single edit breaks thousands of call sites at once and no vertical slice can land green. Don't force it into a tracer bullet; sequence it as **expand–contract**. First expand: add the new form beside the old so nothing breaks. Then migrate the call sites over in batches sized by blast radius (per package, per directory), each batch its own ticket blocked by the expand, keeping CI green batch to batch because the old form still exists. Finally contract: delete the old form once no caller remains, in a ticket blocked by every migrate batch. When even the batches can't stay green alone, keep the sequence but let them share an integration branch that all block a final integrate-and-verify ticket; green is promised only there.
 
 ### 4. Quiz the user
 
-Present the proposed breakdown as a numbered list. For each ticket, show:
+Present the proposed breakdown as a numbered list, headed by its shape ("7 tickets, at most 4 at once, longest chain 3"). When the longest chain covers more than half the tickets, propose a wider split alongside it before asking. For each ticket, show:
 
 - **Title**: short descriptive name
 - **Blocked by**: which other tickets (if any) must complete first
@@ -63,6 +69,8 @@ Publish the approved tickets. **How** depends on the tracker `/setup-imick-skill
 - **A real issue tracker (GitHub, Linear, …)** → publish one issue per ticket in dependency order (blockers first) so each ticket's blocking edges can reference real identifiers. Use the platform's native blocking / sub-issue relationship where it has one; otherwise set each ticket's "Blocked by" to the blocking issues. Apply the `ready-for-agent` triage label unless instructed otherwise; the tickets are agent-grabbable by construction.
 
 Work the **frontier**: any ticket whose blockers are all done. For a purely linear chain that means top to bottom.
+
+When they're published, report the batch's shape with the links ("7 tickets, at most 4 at once, longest chain 3").
 
 Do NOT close or modify any parent issue.
 
