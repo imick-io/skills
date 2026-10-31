@@ -7,6 +7,7 @@ You run inside the agent loop, on branch `{{BRANCH}}`, which the loop created fo
 Read `.claude/skills/implement/SKILL.md` and follow it for issue #{{ISSUE}} (tests first, then the code-review close-out), with these loop rules on top:
 
 - **Commit** your work to `{{BRANCH}}`. Don't create branches, push, open PRs, close the issue or change its labels: the loop lands the work.
+- **Don't merge other branches** into yours (`git merge`, `git pull` from another branch): in an isolated sandbox your commits come back to the host as patches, which can't carry a merge. If the ticket needs work that isn't on your branch, make no commits and say so on the issue.
 - If the ticket can't be built as written (missing decision, blocked by something not on the tracker, needs access you don't have), make no commits and comment on the issue saying exactly what's missing. The loop hands it to a person.
 - Before finishing, run the project's typecheck and test commands and leave them green.
 
