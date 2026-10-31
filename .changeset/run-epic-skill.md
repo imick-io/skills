@@ -1,5 +1,5 @@
 ---
-"imick-skills": minor
+"imick-skills": patch
 ---
 
 A new skill, **`/run-epic <epic>`**: build every ticket of one epic inside a Claude Code session, the way the agent loop would, without Docker. For an epic labelled `manual` (the loop never touches it) when you would rather watch it being built in a session than build each ticket by hand with `/claim`.
