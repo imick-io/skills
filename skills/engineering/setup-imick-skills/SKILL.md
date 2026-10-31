@@ -156,6 +156,18 @@ Let them edit before writing.
 
 ### 4. Write
 
+Also write `docs/agents/imick-skills.md`, the record `/update-imick-skills` reads to upgrade the project later: the release these skills were installed from (`gh api repos/imick-io/skills/releases/latest --jq .tag_name`, without the `v`), the layout (`copies` when `.claude/skills/` holds real folders, `symlinks` when they point into `.agents/skills/`), and the source:
+
+```markdown
+# imick-skills
+
+The release of [imick-io/skills](https://github.com/imick-io/skills) this project is on, kept by `/update-imick-skills` (and written by `/setup-imick-skills` on install).
+
+Version: X.Y.Z
+Layout: copies
+Source: imick-io/skills
+```
+
 **Pick the file to edit:**
 
 - If `CLAUDE.md` exists, edit it.

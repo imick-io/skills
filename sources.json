@@ -224,6 +224,11 @@
       "source": "own"
     },
     {
+      "local_path": "skills/engineering/update-imick-skills",
+      "local_name": "update-imick-skills",
+      "source": "own"
+    },
+    {
       "local_path": "skills/engineering/verify-epic",
       "local_name": "verify-epic",
       "source": "own"

@@ -3282,6 +3282,23 @@
       "url": "https://github.com/imick-io/skills/tree/main/skills/engineering/triage"
     },
     {
+      "name": "update-imick-skills",
+      "group": "ops",
+      "summary": "Upgrades a project to the latest imick-skills release: skills, new skills on offer, the loop's files merged with local changes, tracker, labels and the release notes' steps, as a PR.",
+      "description": "Upgrade a project to the latest release of imick-io/skills in one pass - the installed skills, new skills on offer, the agent loop's files in .sandcastle/ (merged with the project's own changes), the tracker, new triage labels, and every \"Existing setups\" step the release notes ask for - then a branch and a PR. Use when the user wants to update, upgrade or sync the imick skills, or /whats-next reports skills or loop files behind upstream.",
+      "runs": [
+        "you"
+      ],
+      "uses": [
+        "whats-next"
+      ],
+      "next": [
+        "whats-next"
+      ],
+      "source": "iMick",
+      "url": "https://github.com/imick-io/skills/tree/main/skills/engineering/update-imick-skills"
+    },
+    {
       "name": "verify-epic",
       "group": "build",
       "summary": "Tests an epic's PR in the running app against its tickets, spec and agreed screens; files failures as bugs and sets the merge-gate status.",
@@ -3335,7 +3352,8 @@
         "brief",
         "wayfinder",
         "scope-decomposer",
-        "triage"
+        "triage",
+        "update-imick-skills"
       ],
       "source": "iMick",
       "url": "https://github.com/imick-io/skills/tree/main/skills/engineering/whats-next"
