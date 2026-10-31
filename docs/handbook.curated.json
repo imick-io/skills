@@ -3011,6 +3011,13 @@
         "update-imick-skills"
       ]
     },
+    "why-sleeping": {
+      "group": "ops",
+      "next": [
+        "brief",
+        "triage"
+      ]
+    },
     "wizard": {
       "group": "ops"
     },

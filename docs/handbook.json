@@ -3359,6 +3359,22 @@
       "url": "https://github.com/imick-io/skills/tree/main/skills/engineering/whats-next"
     },
     {
+      "name": "why-sleeping",
+      "group": "ops",
+      "summary": "Why is the agent loop sleeping? Names what you must do so the agents have work again - the merge, approval, answer or brief that each piece of held work waits on, ranked by how much it frees.",
+      "description": "Why is the agent loop sleeping? Names what you must do so the agents have work again - the merge, approval, answer or brief that each piece of held work waits on, ranked by how much it frees. Use when the user asks why the agents or the loop are sleeping, idle or stuck, or what unblocks them.",
+      "runs": [
+        "auto"
+      ],
+      "uses": [],
+      "next": [
+        "brief",
+        "triage"
+      ],
+      "source": "iMick",
+      "url": "https://github.com/imick-io/skills/tree/main/skills/engineering/why-sleeping"
+    },
+    {
       "name": "wizard",
       "group": "ops",
       "summary": "Generate an interactive bash wizard that walks a human through steps only they can perform.",
