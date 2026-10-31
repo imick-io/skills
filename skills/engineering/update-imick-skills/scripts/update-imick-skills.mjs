@@ -245,7 +245,15 @@ const apply = (file) => {
     if (l.action === "ask") {
       const keys = (flag("--env-keys") ?? "").split(",").filter(Boolean);
       if (!keys.length) continue;
-      const lines = read(newT).split("\n").filter((line) => keys.some((k) => line.replace(/^#\s*/, "").startsWith(k + "=")));
+      // A key's line plus the comment lines that continue it (indented `#` lines
+      // that introduce no other key), so a two-line note arrives whole.
+      const all = read(newT).split("\n");
+      const lines = [];
+      all.forEach((line, i) => {
+        if (!keys.some((k) => line.replace(/^#\s*/, "").startsWith(k + "="))) return;
+        lines.push(line);
+        for (let j = i + 1; j < all.length && /^#\s{2,}/.test(all[j]) && !/^#\s*[A-Z_][A-Z0-9_]*=/.test(all[j]); j++) lines.push(all[j]);
+      });
       writeFileSync(mineF, read(mineF).replace(/\n*$/, "\n") + lines.join("\n") + "\n");
       done.push(`.sandcastle/${l.file}: added ${keys.join(", ")}`);
       continue;
