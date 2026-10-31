@@ -139,9 +139,17 @@ const plan = () => {
       const mineF = join(".sandcastle", f), newT = join(tmplDir, f), oldT = base && join(base, LOOP_TEMPLATES, f);
       if (!existsSync(mineF)) { loop.push({ file: f, state: "missing", action: "copy" }); continue; }
       if (same(mineF, newT)) { loop.push({ file: f, state: "same", action: "none" }); continue; }
+      // The template didn't change between the installed version and the target:
+      // whatever differs is the project's own, and there is nothing to bring over.
+      if (oldT && existsSync(oldT) && same(oldT, newT) && f !== ".env.example") { loop.push({ file: f, state: "customized, template unchanged", action: "none" }); continue; }
       if (f === "Dockerfile") {
-        const hasBlock = ADDITIONS.test(read(mineF)) && ADDITIONS_END.test(read(mineF)) && ADDITIONS.test(read(newT)) && ADDITIONS_END.test(read(newT));
-        loop.push({ file: f, state: hasBlock ? "customized (project-additions block)" : "customized (no block markers)", action: hasBlock ? "merge-outside-block" : (oldT && existsSync(oldT) ? "merge3" : "by-hand") });
+        const ours = read(mineF), theirs = read(newT);
+        const blocked = (x) => ADDITIONS.test(x) && ADDITIONS_END.test(x);
+        const outside = (x) => x.replace(/# --- project additions ---[\s\S]*?# --- end project additions ---/, "");
+        // The block-only merge is safe only when every project change sits inside
+        // the block, i.e. the rest of the file still equals the installed template.
+        const onlyBlock = blocked(ours) && blocked(theirs) && oldT && existsSync(oldT) && outside(ours) === outside(read(oldT));
+        loop.push({ file: f, state: onlyBlock ? "customized inside the project-additions block only" : "customized outside the project-additions block", action: onlyBlock ? "merge-outside-block" : (oldT && existsSync(oldT) ? "merge3" : "by-hand") });
         continue;
       }
       if (f === ".env.example") {
