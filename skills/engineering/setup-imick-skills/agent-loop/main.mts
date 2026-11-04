@@ -94,6 +94,10 @@
 // overruled: the oldest starts. Each pass logs why ready tickets didn't start,
 // and a claim lost to someone else is looked at again after AGENTS_RETRY_MINUTES.
 //
+// Once an epic's PR is open, pushes to its branch are batched for CI: a push
+// with more of the epic's tickets still building says [skip ci], and the
+// batch's last push (or an empty commit after it) runs CI once.
+//
 // The loop's state (passing, building, asleep until when, the jobs in
 // backoff, what the last pass couldn't start) is kept in
 // .git/agent-loop-status.json, for /why-sleeping and --dry-run.
@@ -449,9 +453,21 @@ function release(t: Ticket, why: string) {
 // The epic branch lives in its own worktree, so the main checkout is never
 // switched underneath you. Returns the worktree path, or undefined when the
 // epic can't be worked this pass.
-function prepareEpic(epic: Epic): string | undefined {
+// Once an epic's PR is open, every push to its branch runs the project's CI
+// again, so the loop batches them. A push made while more of the epic's work
+// is on its way (main merged in for a ticket about to start, a ticket landing
+// beside others still building) carries [skip ci]. The batch's last landing
+// pushes without it, and runCiOnBatches() pushes an empty commit when the
+// batch ended on a skipped push (its last ticket failed, or had no commits),
+// so CI still runs once on the batch.
+const SKIP_CI = "[skip ci]";
+const epicPrOpen = (epic: Epic) =>
+  ghJson<unknown[]>("pr", "list", "--state", "open", "--head", epic.branch, "--base", "main", "--json", "number", "--limit", "1").length > 0;
+
+function prepareEpic(epic: Epic, { ticketNext = false } = {}): string | undefined {
   const path = epicWorktree(epic);
-  if (!tryGit(path, "merge", "--no-edit", "--quiet", "origin/main")) {
+  const message = ticketNext && epicPrOpen(epic) ? ["-m", `Merge main into ${epic.branch} ${SKIP_CI}`] : ["--no-edit"];
+  if (!tryGit(path, "merge", ...message, "--quiet", "origin/main")) {
     tryGit(path, "merge", "--abort");
     conflictTicket(epic);
     return undefined;
@@ -595,9 +611,33 @@ async function pass(): Promise<number> {
   if (!stopRequested()) other += await triage();
   if (!stopRequested()) other += await unblock();
   if (PLANNING && !stopRequested()) other += await planEpics();
+  runCiOnBatches();
   changedQueue = other > 0;
   return started + other;
 }
+// An epic branch whose last push carried [skip ci], with none of its tickets
+// building any more: nothing else will push, so an empty commit runs CI once
+// on the whole batch.
+function runCiOnBatches() {
+  if (!existsSync(WORKTREES)) return;
+  for (const block of git(undefined, "worktree", "list", "--porcelain").split("\n\n")) {
+    const path = block.match(/^worktree (.+)$/m)?.[1];
+    const branch = block.match(/^branch refs\/heads\/(epic\/.+)$/m)?.[1];
+    if (!path || !branch || !path.includes(`/${WORKTREES}/`)) continue;
+    if ([...inFlight].some((t) => t.epic?.branch === branch)) continue; // the batch is still landing
+    try {
+      git(undefined, "fetch", "--quiet", "origin", branch);
+      if (git(path, "rev-parse", "HEAD") !== git(undefined, "rev-parse", `origin/${branch}`)) continue; // not this loop's last push
+      if (!git(path, "log", "-1", "--format=%B").includes(SKIP_CI)) continue;
+      git(path, "commit", "--quiet", "--allow-empty", "--no-verify", "-m", `Run CI on the batch landed on ${branch}`);
+      git(path, "push", "--quiet", "origin", branch);
+      log(`${branch}: the batch ended on a skipped push; pushed an empty commit so CI runs on it once`);
+    } catch (error) {
+      log(`couldn't run CI on ${branch}'s batch: ${String(error).slice(0, 200)}`);
+    }
+  }
+}
+
 // Whether the last pass may have made new tickets ready (triage, unblocking,
 // planning, a check's gaps): then the next pass runs at once, even with
 // every slot busy, instead of waiting for a ticket to land.
@@ -631,7 +671,7 @@ async function fill(): Promise<number> {
   const epicPaths = new Map<number, string | undefined>();
   let started = 0;
   for (const t of picked.slice(0, free)) {
-    if (t.epic && !epicPaths.has(t.epic.number)) epicPaths.set(t.epic.number, prepareEpic(t.epic));
+    if (t.epic && !epicPaths.has(t.epic.number)) epicPaths.set(t.epic.number, prepareEpic(t.epic, { ticketNext: true }));
     const epicPath = t.epic ? epicPaths.get(t.epic.number) : undefined;
     if (t.epic && !epicPath) { why.add(`epic #${t.epic.number} is paused on a conflict with main`); continue; }
     if (stopRequested()) { why.add("a stop was asked for"); break; }
@@ -750,7 +790,9 @@ async function build(t: Ticket): Promise<number> {
 
 function land(t: Ticket, epicPath?: string): boolean {
   if (t.epic && epicPath) {
-    if (!tryGit(epicPath, "merge", "--no-edit", "--quiet", t.branch)) {
+    const more = [...inFlight].some((o) => o !== t && o.epic?.number === t.epic!.number);
+    const message = more && epicPrOpen(t.epic) ? ["--no-ff", "-m", `Merge ${t.branch} into ${t.epic.branch} ${SKIP_CI}`] : ["--no-edit"];
+    if (!tryGit(epicPath, "merge", ...message, "--quiet", t.branch)) {
       tryGit(epicPath, "merge", "--abort");
       comment(t.number, `The work on \`${t.branch}\` conflicts with \`${t.epic.branch}\`; the loop will retry it on top of the latest epic branch.`);
       // The sandbox's worktree still holds the branch, and git won't delete a
@@ -1722,6 +1764,7 @@ const busy = () => running.size + checking.size;
 // Lets every running ticket and check finish (a stop, or the end of --once).
 async function drain() {
   while (busy()) await Promise.allSettled([...running.values(), ...checking.values()]);
+  runCiOnBatches(); // no pass follows to do it
 }
 
 async function stopNicely(worked: number) {

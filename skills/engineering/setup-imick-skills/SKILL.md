@@ -131,6 +131,12 @@ On **yes**:
 1. Write `.github/workflows/epics.yml` from [epics-caller.yml](./epics-caller.yml), with the same `<REF>` choice as Section E.
 2. Write `docs/agents/preview.md` from [preview.md](./preview.md). Ask which **Source** applies: previews reported to GitHub (`github-deployments`, e.g. Vercel), a predictable URL (`url-pattern`, e.g. Coolify: ask for the pattern with `{number}`), or none (`local`). Ask whether previews are protected, and if so which environment variable names hold the credentials; the user puts the values in `.sandcastle/.env` themselves.
 3. **Make `epic-gate` a required check** on the default branch. This changes a repo setting: confirm first, then use the repo's existing branch protection (add `epic-gate` to its required status checks) or, if there is none, tell the user to add it under **Settings → Branches**. Every non-epic PR passes it automatically.
+4. **CI that matches the flow.** Ticket branches merge into the epic branch without a PR, and only the epic's PR (or a lone ticket's PR) goes to `main`. CI written for one-PR-per-change runs much more often than this flow needs. Read the project's own workflows in `.github/workflows/` that run its checks (not `epics.yml`, `triage.yml` or `token-checks.yml`), and offer these changes, as a diff per file, applying only on a yes:
+   - **`pull_request: branches: [main]`**: only PRs into `main` run the checks. Every PR in this flow targets `main`.
+   - **`concurrency: { group: <workflow>-${{ github.ref }}, cancel-in-progress: true }`**: a new push to a PR cancels the run it replaces, instead of both running to the end.
+   - **No full suite on `push: main`**: the merge would re-run what its PR just passed. Don't remove `push: main` outright when the workflow saves caches (dependencies, builds, emulator images): a PR can read caches only from its own ref or `main`'s, so every new PR would start cold. Keep the trigger and gate the expensive jobs to PRs (`if: github.event_name == 'pull_request'`), so a push to `main` runs only the cheap jobs that save the caches.
+
+   Say what changes for them: a PR into a branch other than `main` gets no checks, and a run cancelled by a newer push shows as cancelled, not failed. Leave a workflow alone when it's already like this, or deploys on `push: main`. The agent loop batches its own pushes to an open epic PR (`[skip ci]` until the batch's last push), so CI runs once per batch of fixes, not once per fix.
 
 **Section H: Tracker page.** GitHub only; skip otherwise, and when `tracker/build.mjs` already exists. Ask:
 

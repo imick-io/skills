@@ -9,7 +9,7 @@
 //   node <skill>/scripts/run-epic.mjs commits <ticket>        commits on the ticket branch not yet on its base
 //   node <skill>/scripts/run-epic.mjs land <ticket>           merge onto the epic branch, push, close (exit 3 on conflict)
 //   node <skill>/scripts/run-epic.mjs handback <ticket> <reason>   to a person: label, comment, unassign
-//   node <skill>/scripts/run-epic.mjs finish <epic>           open the epic's PR when its milestone is built (JSON)
+//   node <skill>/scripts/run-epic.mjs finish <epic>           open the epic's PR when its milestone is built, or run CI on a batch that ended skipped (JSON)
 //   node <skill>/scripts/run-epic.mjs notify <feed|alert> <text>   Slack, when the loop's webhooks are configured
 //
 // Every step mirrors .sandcastle/main.mts (claim, prepareEpic, prepareBranch,
@@ -175,14 +175,40 @@ const syncTracker = () => {
   return true;
 };
 
+// Once an epic's PR is open, every push to its branch runs the project's CI
+// again, so pushes are batched as the loop batches them: one made while more
+// of the epic's work is coming (main merged in for a ticket about to start, a
+// ticket landing with others ready after it) carries [skip ci]. The batch's
+// last landing pushes without it, and `finish` pushes an empty commit when the
+// batch ended on a skipped push, so CI runs once on the batch.
+const SKIP_CI = "[skip ci]";
+const prOpen = (epic) =>
+  ghJson("pr", "list", "--head", epic.branch, "--base", "main", "--state", "open", "--json", "number", "--limit", "1").length > 0;
+const runCiIfSkipped = (epic) => {
+  git("fetch", "--quiet", "origin", epic.branch);
+  if (!git("log", "-1", "--format=%B", `origin/${epic.branch}`).includes(SKIP_CI)) return false;
+  const tmp = mkdtempSync(join(tmpdir(), "run-epic-ci-"));
+  try {
+    git("worktree", "add", "--quiet", "--detach", tmp, `origin/${epic.branch}`);
+    git("-C", tmp, "commit", "--quiet", "--allow-empty", "--no-verify", "-m", `Run CI on the batch landed on ${epic.branch}`);
+    git("-C", tmp, "push", "--quiet", "origin", `HEAD:${epic.branch}`);
+    git("fetch", "--quiet", "origin", epic.branch);
+    return true;
+  } finally {
+    run("git", ["worktree", "remove", "--force", tmp]);
+    rmSync(tmp, { recursive: true, force: true });
+  }
+};
+
 // The epic branch with main merged in, pushed, in a temporary worktree (the
 // loop or the user may hold the branch elsewhere). Returns a note.
-const updateEpicBranch = (epic) => {
+// `skipCi`: a ticket lands next, and its push runs CI.
+const updateEpicBranch = (epic, { skipCi = false } = {}) => {
   const exists = tryGit("rev-parse", "--verify", "--quiet", `origin/${epic.branch}`);
   const tmp = mkdtempSync(join(tmpdir(), "run-epic-"));
   try {
     git("worktree", "add", "--quiet", "--detach", tmp, exists ? `origin/${epic.branch}` : "origin/main");
-    if (exists && !run("git", ["-C", tmp, "merge", "--quiet", "-m", `Merge main into ${epic.branch}`, "origin/main"]).ok) {
+    if (exists && !run("git", ["-C", tmp, "merge", "--quiet", "-m", `Merge main into ${epic.branch}${skipCi ? ` ${SKIP_CI}` : ""}`, "origin/main"]).ok) {
       run("git", ["-C", tmp, "merge", "--abort"]);
       stop(`\`main\` conflicts with \`${epic.branch}\`. Resolve it first:\n\n\`\`\`sh\ngit switch --detach origin/${epic.branch}\ngit merge origin/main   # fix, commit\ngit push origin HEAD:${epic.branch}\ngit switch -\n\`\`\``, "Epic branch not ready");
     }
@@ -255,7 +281,7 @@ const commands = {
     const open = blockers(n);
     if (open.length && !flags.has("--force")) stop(`#${n} is blocked by ${open.map((b) => `#${b}`).join(", ")}.`);
     git("fetch", "--quiet", "origin");
-    const epicNote = updateEpicBranch(t.epic);
+    const epicNote = updateEpicBranch(t.epic, { skipCi: prOpen(t.epic) });
     const base = `origin/${t.epic.branch}`;
     const path = wtPath(n);
     // --retry: the branch conflicted with the epic branch at landing; as the
@@ -324,7 +350,11 @@ You are run by \`/run-epic\`: the agent loop's pipeline, inside a Claude Code se
     let sha;
     try {
       git("worktree", "add", "--quiet", "--detach", tmp, `origin/${t.epic.branch}`);
-      if (!run("git", ["-C", tmp, "merge", "--no-edit", "--quiet", t.branch]).ok) {
+      // More of the epic coming after this one: another ready ticket, or one this landing unblocks.
+      const f = frontier(t.epic);
+      const more = f.ready.some((r) => r.number !== t.number) || f.blocked.some((b) => b.by.every((x) => x === t.number));
+      const message = more && prOpen(t.epic) ? ["--no-ff", "-m", `Merge ${t.branch} into ${t.epic.branch} ${SKIP_CI}`] : ["--no-edit"];
+      if (!run("git", ["-C", tmp, "merge", ...message, "--quiet", t.branch]).ok) {
         run("git", ["-C", tmp, "merge", "--abort"]);
         stop(`\`${t.branch}\` conflicts with \`${t.epic.branch}\`. As the loop would, rebuild it on top of the latest epic branch: \`prepare ${n} --retry\`, then build again.`, "Merge conflict", 3);
       }
@@ -365,11 +395,11 @@ You are run by \`/run-epic\`: the agent loop's pipeline, inside a Claude Code se
     const epic = readEpic(n);
     const f = frontier(epic);
     const openTickets = [...f.ready, ...f.blocked, ...f.claimed].map((t) => t.number).concat(f.other);
-    if (openTickets.length) { json({ done: false, open: openTickets, frontier: f }); return; }
+    if (openTickets.length) { json({ done: false, open: openTickets, frontier: f, ciRun: runCiIfSkipped(epic) }); return; }
     git("fetch", "--quiet", "origin");
     const note = updateEpicBranch(epic);
     const existing = ghJson("pr", "list", "--head", epic.branch, "--base", "main", "--state", "open", "--json", "number,url", "--limit", "1")[0];
-    if (existing) { json({ done: true, pr: existing.url, note: "PR already open" }); return; }
+    if (existing) { json({ done: true, pr: existing.url, note: "PR already open", ciRun: runCiIfSkipped(epic) }); return; }
     const closed = ghJson("issue", "list", "--state", "closed", "--milestone", epic.milestone, "--json", "number,title,labels,body", "--limit", "200")
       .filter((i) => i.number !== epic.number && !isSpec(i.labels.map((l) => l.name), i.body) && !i.labels.some((l) => l.name.startsWith("wayfinder:")))
       .sort((a, b) => a.number - b.number);
