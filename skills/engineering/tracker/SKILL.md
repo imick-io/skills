@@ -9,7 +9,9 @@ description: Build and open the issue tracker page, a snapshot of the repo's Git
 
 - **Action items**: everything waiting on a person (`ready-for-human`, `ready-for-review`, epics to brief, specs to approve, finished epics whose PR waits for a merge), with each issue's acceptance-criteria checklist and how many open issues it holds up, directly or down the chain.
 - **Specs**: each spec, whether it's approved, and the decisions it lists.
-- **Roadmap**: the epics in dependency order with their status and progress, and a progress table per ticket status.
+- **Roadmap**: the epics in dependency order with their status and progress, and a progress table per ticket status. Done epics fold to one line.
+
+One colour key runs through the page, and red always means you. A ticket on your turn or for your review is solid red with a "You" tag. An epic is outlined in red when anything in it waits on you, and its status is red when the epic itself does (a brief, a spec to approve, a PR to merge). Green is an agent on it, blue the agents' queue, amber not triaged yet, grey waiting on something else, and faded done.
 - **Epic board**: one epic's tickets by status, and a diagram of what blocks what.
 
 It reads the conventions set up by `/setup-imick-skills` and used by `/scope-decomposer`, `/wayfinder` and `/triage`: the triage labels, `epic` and `spec` labels, one milestone per epic, and GitHub's native issue dependencies for blocking. GitHub only.
