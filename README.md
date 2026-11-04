@@ -146,7 +146,7 @@ Agents that work your tickets while you do something else. A [Sandcastle](https:
 1. **Finds the queue**: open, unassigned, unblocked `ready-for-agent` and `ready-for-agent-debugging` issues. Specs (from `to-spec`) are skipped: `to-tickets` turns them into tickets.
 2. **Plans**: an agent picks the tickets that can run in parallel without touching the same code (3 at most by default).
 3. **Claims** each ticket by assigning it. Two loops (an always-on machine and your laptop) never take the same ticket, and the assignee shows who's on what.
-4. **Prepares branches**: a ticket under an epic branches off the epic's branch (`epic/NN-slug`, created from `main` if needed) after `main` is merged into it. If that merge conflicts, the loop opens a `ready-for-human` "Resolve conflicts" ticket and skips the epic. Other tickets branch off `main`.
+4. **Prepares branches**: a ticket under an epic branches off the epic's branch (`epic/NN-slug`, created from `main` if needed) after `main` is merged into it. If that merge conflicts, the loop opens a "Resolve conflicts" ticket and skips the epic until an agent resolves the merge on the epic branch, in every mode; only if it can't is the ticket asked of you (`agent:asked`). A `manual` epic's conflicts are yours. Other tickets branch off `main`.
 5. **Builds and reviews**: one sandbox per ticket runs `implement` (or `debug-and-fix` for bugs), then a `code-review` pass.
 6. **Lands the work**:
    - an **epic ticket** merges into the epic branch, which is pushed, and the ticket closes;

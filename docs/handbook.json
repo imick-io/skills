@@ -2668,19 +2668,19 @@
         "cells": [
           [
             "you",
-            "You"
-          ],
-          [
-            "you",
-            "You"
+            "You (a manual epic is yours)"
           ],
           [
             "auto",
-            "An agent resolves the merge; asks you if it needs a product call"
+            "An agent resolves the merge on the epic branch; asks you if it can't"
           ],
           [
             "auto",
-            "Same as fast"
+            "Same as autopilot"
+          ],
+          [
+            "auto",
+            "Same as autopilot"
           ]
         ]
       },
