@@ -136,7 +136,7 @@ On **yes**:
    - **`concurrency: { group: <workflow>-${{ github.ref }}, cancel-in-progress: true }`**: a new push to a PR cancels the run it replaces, instead of both running to the end.
    - **No full suite on `push: main`**: the merge would re-run what its PR just passed. Don't remove `push: main` outright when the workflow saves caches (dependencies, builds, emulator images): a PR can read caches only from its own ref or `main`'s, so every new PR would start cold. Keep the trigger and gate the expensive jobs to PRs (`if: github.event_name == 'pull_request'`), so a push to `main` runs only the cheap jobs that save the caches.
 
-   Say what changes for them: a PR into a branch other than `main` gets no checks, and a run cancelled by a newer push shows as cancelled, not failed. Leave a workflow alone when it's already like this, or deploys on `push: main`. The agent loop batches its own pushes to an open epic PR (`[skip ci]` until the batch's last push), so CI runs once per batch of fixes, not once per fix.
+   Say what changes for them: a PR into a branch other than `main` gets no checks, and a run cancelled by a newer push shows as cancelled, not failed. Leave a workflow alone when it's already like this, or deploys on `push: main`. `/update-imick-skills` runs the same check on every update, so a project set up before this step gets it too. The agent loop batches its own pushes to an open epic PR (`[skip ci]` until the batch's last push), so CI runs once per batch of fixes, not once per fix.
 
 **Section H: Tracker page.** GitHub only; skip otherwise, and when `tracker/build.mjs` already exists. Ask:
 
