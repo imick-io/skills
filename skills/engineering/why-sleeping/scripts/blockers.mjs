@@ -6,8 +6,11 @@
 // move it is: the agents' (the loop's next pass, or any agent session told to
 // do it) or only the person's. Each move is ranked by how much held work it
 // frees. Never writes, never prints a secret.
+// When the project's loop is new enough, it also asks the loop: its status
+// file (what it's doing, what's backed off) and its dry run (what its next
+// pass would do), so a [loop] move is one the loop itself would make.
 
-import { execFileSync } from "node:child_process";
+import { execFile, execFileSync } from "node:child_process";
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, join, resolve as resolvePath } from "node:path";
@@ -36,7 +39,8 @@ if (!existsSync(".sandcastle/main.mts")) health.push("agent loop not installed (
 if (!run("docker", ["info", "--format", "{{.ServerVersion}}"])) health.push("Docker is not running: start Docker Desktop");
 const here = process.cwd();
 const loopPids = (run("ps", ["-Ao", "pid=,command="]) ?? "").split("\n")
-  .filter((l) => /\.sandcastle\/main\.mts/.test(l)).map((l) => l.trim().split(/\s+/)[0])
+  // node running the loop itself: not an editor or a shell naming the file, nor a dry run
+  .filter((l) => /^\s*\d+\s+\S*node\s.*\.sandcastle\/main\.mts/.test(l) && !/--dry-run/.test(l)).map((l) => l.trim().split(/\s+/)[0])
   .filter((pid) => (run("lsof", ["-a", "-d", "cwd", "-p", pid, "-Fn"]) ?? "").split("\n").find((l) => l.startsWith("n"))?.slice(1) === here);
 const running = loopPids.length > 0;
 if (existsSync(".sandcastle/STOP")) health.push("a stop was requested (.sandcastle/STOP): the loop exits after its in-flight work");
@@ -47,11 +51,31 @@ if (existsSync(".sandcastle/logs")) {
   const tail = logs[0] ? readFileSync(logs[0][0], "utf8").split("\n").slice(-15).join("\n") : "";
   if (/usage limit|rate limit|429/i.test(tail)) health.push(`usage limit hit (${logs[0][0]}): the loop retries on its own; nothing to do but wait or raise the limit`);
 }
-// The launch agent's log (docs/mac-setup.md) says whether the loop is in its
-// idle sleep, and until when. A loop started by hand logs to its terminal only.
-let asleep; // { since, until }
+// The loop's dry run takes a while (it reads the whole queue): start it now,
+// read it at the end. Only a loop that knows the flag gets it: an older one
+// would start a real loop instead.
+const loopFile = existsSync(".sandcastle/main.mts") ? readFileSync(".sandcastle/main.mts", "utf8") : "";
+const dryRun = loopFile.includes("--dry-run") && loopFile.includes("function dryRun")
+  ? new Promise((done) => execFile("node", ["--env-file-if-exists=.sandcastle/.env", ".sandcastle/main.mts", "--dry-run", "--json"],
+      { encoding: "utf8", maxBuffer: 16 * 1024 * 1024, timeout: 240_000 }, (error, stdout) => {
+        try { done(error ? null : JSON.parse(stdout)); } catch { done(null); }
+      }))
+  : Promise.resolve(null);
+
+// The loop's status file: what it's doing, and until when.
+let status = null;
+const gitDir = run("git", ["rev-parse", "--absolute-git-dir"]);
+if (running && gitDir && existsSync(join(gitDir, "agent-loop-status.json"))) {
+  try {
+    const read = JSON.parse(readFileSync(join(gitDir, "agent-loop-status.json"), "utf8"));
+    if (loopPids.includes(String(read.pid))) status = read;
+  } catch { /* being rewritten: do without */ }
+}
+// Without one, the launch agent's log (docs/mac-setup.md) says whether the
+// loop is in its idle sleep, and until when. A loop started by hand logs to its terminal only.
+let asleep = status?.state === "asleep" && status.until ? { since: new Date(status.at), until: new Date(status.until) } : undefined;
 const loopLog = join(homedir(), "Library/Logs", `agents-${basename(here)}.log`);
-if (running && existsSync(loopLog)) {
+if (running && !status && existsSync(loopLog)) {
   const last = readFileSync(loopLog, "utf8").trimEnd().split("\n").filter((l) => l.startsWith("[agents ")).at(-1);
   const m = last?.match(/^\[agents (\S+)\] nothing ready; sleeping (\d+) min/);
   if (m) { const since = new Date(m[1]); asleep = { since, until: new Date(since.getTime() + Number(m[2]) * 60_000) }; }
@@ -202,7 +226,7 @@ function resolve(n, root, seen = new Set()) {
   const s = step(n);
   if (s.owner) {
     const key = `${s.owner}|${s.what}`;
-    if (!moves.has(key)) moves.set(key, { ...s, frees: new Set() });
+    if (!moves.has(key)) moves.set(key, { ...s, n, frees: new Set() });
     moves.get(key).frees.add(root);
   }
   if (s.progress) {
@@ -225,6 +249,41 @@ for (const p of prs) {
   if (e) resolve(e.number, e.number);
 }
 
+// ---- What the loop itself says
+const dry = await dryRun;
+const backoff = (dry?.backoff ?? status?.backoff ?? []).filter((b) => Date.parse(b.until) > Date.now());
+const keyNum = (key) => Number(key.split("#")[1]);
+// A job the loop has backed off is one an agent here should look into: the
+// loop retries it less and less often. It replaces the plain move on that issue.
+for (const [key, m] of moves) if (m.loop && backoff.some((b) => keyNum(b.key) === m.n)) moves.delete(key);
+for (const b of backoff) {
+  const n = keyNum(b.key);
+  moves.set(`agent|backoff ${b.key}`, {
+    owner: "agent", n, frees: new Set([n]),
+    what: `find out why "${b.what}" keeps failing (${b.count} strike(s); the loop tries again ~${clock(new Date(b.until))}), and fix it`,
+    to: b.key.startsWith("build#") ? `/claim ${n}\`, then \`/implement #${n}` : link(n),
+    note: b.why ? `last failure: ${b.why.split("\n")[0].slice(0, 200)}` : undefined,
+  });
+}
+if (dry) {
+  const lists = ["build", "plan", "verify", "triage", "unblock", "followUp", "specs"];
+  const planned = new Set(lists.flatMap((l) => dry[l] ?? []).flatMap((i) => [i.number, ...[...i.what.matchAll(/#(\d+)/g)].map((m) => Number(m[1]))]));
+  for (const m of moves.values()) {
+    if (!m.loop || planned.has(m.n)) continue;
+    m.loop = false; // the loop's own reading of the queue disagrees: an agent here has to do it
+    m.note = [m.note, "the loop's dry run doesn't list it: it won't do this on its own"].filter(Boolean).join("; ");
+  }
+  // What the loop would do that no held item led to.
+  const covered = new Set([...moves.values()].map((m) => m.n));
+  for (const l of lists) for (const i of dry[l] ?? []) {
+    if (covered.has(i.number)) continue;
+    covered.add(i.number);
+    moves.set(`agent|dry ${l}#${i.number}`, { owner: "agent", n: i.number, frees: new Set([i.number]), loop: true, what: `${i.what}: #${i.number} ${i.title}`, to: link(i.number) });
+  }
+}
+if (status?.unstarted?.tickets?.length && status.unstarted.why?.length)
+  health.push(`the last pass (${clock(new Date(status.lastPassAt ?? status.at))}) left ${status.unstarted.tickets.map((n) => `#${n}`).join(", ")} unstarted: ${status.unstarted.why.join("; ")}`);
+
 // ---- Print
 const list = (ns, max = 10) => ns.slice(0, max).map((n) => `#${n}`).join(", ") + (ns.length > max ? `, … (${ns.length} in all)` : "");
 const ranked = [...moves.values()].map((mv) => {
@@ -238,12 +297,17 @@ const agentMoves = ranked.filter((m) => m.owner === "agent");
 const yourMoves = ranked.filter((m) => m.owner === "you");
 const loopMoves = agentMoves.filter((m) => m.loop);
 
-const state = running ? `running, pid ${loopPids.join(", ")}${asleep ? `, asleep since ${clock(asleep.since)}, next pass ~${clock(asleep.until)}` : lastRun ? `, last agent run ${clock(lastRun)}` : ""}` : "NOT running";
+const doing = { building: "building", retrying: "waiting to retry", limit: "waiting out a usage limit", passing: "passing now" }[status?.state];
+const state = running ? `running, pid ${loopPids.join(", ")}${asleep ? `, asleep since ${clock(asleep.since)}, next pass by ~${clock(asleep.until)}`
+  : doing ? `, ${doing}${status.until ? ` until ~${clock(new Date(status.until))}` : ""}${status.building?.length ? ` (${status.building.map((n) => `#${n}`).join(", ")})` : ""}`
+  : lastRun ? `, last agent run ${clock(lastRun)}` : ""}` : "NOT running";
 const out = [`# Why the loop is sleeping (${repo}, mode: ${mode}, loop ${state})`, ""];
 if (loopMoves.length && !running)
   health.push(`the loop isn't running, and ${loopMoves.length} move(s) below are its to make → \`npm run agents:awake\`, or tell an agent to make them`);
 if (loopMoves.length && asleep)
-  health.push(`the loop is asleep with ${loopMoves.length} move(s) it could make now (it sleeps ${Math.round((asleep.until - asleep.since) / 60_000)} min and doesn't see new work until then): wait for ~${clock(asleep.until)}, restart it (\`npm run agents:stop\`, then \`npm run agents:awake\`), or tell an agent to make them`);
+  health.push(status
+    ? `the loop is asleep with ${loopMoves.length} move(s) its next pass would make: it wakes when GitHub changes, or by ~${clock(asleep.until)}; restart it to pass now (\`npm run agents:stop\`, then \`npm run agents:awake\`), or tell an agent to make them`
+    : `the loop is asleep with ${loopMoves.length} move(s) it could make now (it sleeps ${Math.round((asleep.until - asleep.since) / 60_000)} min and doesn't see new work until then): wait for ~${clock(asleep.until)}, restart it (\`npm run agents:stop\`, then \`npm run agents:awake\`), or tell an agent to make them`);
 if (health.length) out.push("## Loop problems (fix first)", ...health.map((h) => `- ${h}`), "");
 
 const line = (m) => `- ${m.what} → \`${m.to}\`${m.note ? `\n  ${m.note}` : ""}\n  frees: ${list(m.frees)}`.replace(/→ `(https:\/\/[^`]+)`/, "→ $1");

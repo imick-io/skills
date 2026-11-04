@@ -16,6 +16,8 @@ Run [scripts/blockers.mjs](./scripts/blockers.mjs) from the repo root: `node <th
 - **Agent work**: building a ready ticket, triage, cutting tickets from an approved spec, working a wayfinder map, verifying an epic PR, fixing its failing checks, resolving an epic's conflicts with `main`, clearing a stuck label or claim. A move marked `[loop]` is one the loop makes on its next pass. If it's waiting, the loop is asleep or not running, and an agent here can make the move now.
 - **Your work**: merging a verified epic PR, reviewing a spec, answering an `agent:asked` or `needs-info` question, deciding a `ready-for-human` item, briefing an epic, taking a blocker out of `backlog`. Each one quotes the loop's last comment, so the user sees what is asked.
 
+When the project's loop is new enough, the script also asks the loop itself. Its status file says what the loop is doing: asleep until when, building what, which jobs are backed off after failing, and why the last pass started nothing. Its dry run (`npm run agents -- --dry-run`) says what its next pass would do. A `[loop]` mark then means the loop's own reading agrees. A move the loop wouldn't make loses the mark. A job the loop has backed off becomes agent work: find out why it keeps failing. The dry run reads the whole queue, so the script can take a minute or two.
+
 The script ranks each list by how much held work a move frees, and lists what's already being built. It takes fast and supersonic modes into account: what the loop decides on its own there is agent work.
 
 Read a line further only when the script can't settle it, such as a failing check whose cause you need to name.
