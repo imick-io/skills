@@ -53,7 +53,7 @@ You decide; agents do the legwork; workflows keep the tracker tidy. Nothing reac
 
 ## The stages
 
-**1. Intake.** Anyone files an issue. [Automatic triage](../README.md#automatic-triage) labels it with what it is and who acts next, and comments its reasoning: a small `enhancement` goes to agents (`ready-for-agent`, with a brief), a `bug` to agents (`ready-for-agent-debugging`), anything big to `needs-scoping`, anything unclear back to the reporter (`needs-info`). You can always re-run or override it with `/triage #n`.
+**1. Intake.** Anyone files an issue. [Automatic triage](../README.md#automatic-triage) labels it with what it is and who acts next, and comments its reasoning: a small `enhancement` goes to agents (`ready-for-agent`, with a brief), a `bug` to agents (`ready-for-agent-debugging`), anything big to `needs-scoping`, anything unclear back to the reporter (`needs-info`). An issue that bundles several asks, such as a client's email pasted as is, is split first into one issue per ask, each triaged on its own; the original keeps a summary and the `split` label. You can always re-run or override it with `/triage #n`.
 
 **2. Scope.** A big idea, yours or a `needs-scoping` issue, goes through `/scope-decomposer`: a high-level interview, then an **initiative** issue with **epics** under it. Each epic has one destination, one area (and so one owner), its own milestone (`NN: Initiative / Epic`) and branch (`epic/NN-slug`), and blocking links to the epics it waits on. Parts too vague to bound stay in the initiative's "Not yet scoped" list until a later run.
 
@@ -81,6 +81,7 @@ You decide; agents do the legwork; workflows keep the tracker tidy. Nothing reac
 | --- | --- | --- |
 | `needs-triage` | Triage hasn't finished | Triage, or `/triage #n` |
 | `bug` / `enhancement` / `needs-scoping` / `needs-info` / `wontfix` | What the issue is | |
+| `split` | Bundled several asks; triage split it into one issue per ask | A person closes it once the children are done |
 | `ready-for-agent` | Agents build it | The agent loop |
 | `ready-for-agent-debugging` | Agents debug it | The agent loop (`debug-and-fix`) |
 | `ready-for-human` | A person acts next | The assignee |

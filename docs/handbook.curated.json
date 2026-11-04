@@ -2186,6 +2186,14 @@
       "next": "A person closes it"
     },
     {
+      "name": "split",
+      "role": "what",
+      "kind": "What",
+      "means": "Bundled several asks, like a pasted client email",
+      "setBy": "Triage",
+      "next": "Each ask is its own issue; a person closes this one"
+    },
+    {
       "name": "ready-for-agent",
       "role": "agent",
       "kind": "Who",

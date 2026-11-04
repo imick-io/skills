@@ -1,6 +1,6 @@
 ---
 name: triage
-description: Classify incoming issues (and optionally external PRs) by what they are and who acts next, write agent-ready briefs, and route big asks to scoping.
+description: Classify incoming issues (and optionally external PRs) by what they are and who acts next, split an issue that bundles several asks (a pasted client email) into one issue per ask, write agent-ready briefs, and route big asks to scoping.
 disable-model-invocation: true
 ---
 
@@ -45,6 +45,8 @@ A triaged issue carries exactly one **what** role and exactly one **who** role, 
 
 `needs-triage` is transient: triage hasn't finished on this issue yet. An untriaged or half-triaged issue carries it; a triaged one never does.
 
+`split` marks an issue that bundled several separate asks, a pasted client email for example, and was split into one issue per ask (see [Split a bundle](#split-a-bundle)). Like `backlog`, it carries no **who** role and sits in nobody's inbox: its children carry the work. A person closes it once they're done.
+
 `backlog` parks an issue for later. It keeps its **what** role and carries no **who** role, so it is in nobody's inbox: no agent builds it, the loop never plans it, and triage leaves it alone. Taking it out of the backlog means removing the label and giving it a **who** role again (or sending it back through triage with `needs-triage`).
 
 These are canonical role names. The actual label strings are mapped in `docs/agents/triage-labels.md`. If it doesn't exist, tell the user to run `/setup-imick-skills`. If an issue carries roles outside the pairings above, flag it and ask before doing anything else.
@@ -83,11 +85,22 @@ When PRs are in scope, include external PRs and tag each line `[PR]` or `[issue]
 
 Show counts and a one-line summary per item. Let the maintainer pick.
 
+## Split a bundle
+
+One issue gets one pairing, but an issue can carry several separate asks: a client's email pasted as is, the notes from a test session, feedback mixed with requests. Check for that first, before classifying, and split such an issue into one issue per ask.
+
+- **When to split.** The issue asks for two or more things that would each be fixed, built or decided on their own, and none needs the others to make sense. Two sentences about the same problem are one ask. If you're unsure whether two things are separate, keep them together. A single big ask is never split: that's `needs-scoping`. Neither is a PR.
+- **One child per ask**, ten at most. With more than ten asks, don't split: classify the whole issue `needs-scoping`. Triage each ask exactly as you would its own issue: the redundancy, prior-rejection and duplicate checks, then one pairing, its area and its assignee. Create the child already triaged, in one command: `gh issue create --title "<the ask, in the codebase's terms>" --body "<body>" --label "<what>,<who>,<area>"`, plus `--assignee <login>` per the assignment rules. The body starts with the disclaimer, then `Split from #<n>.`, then the ask in the reporter's own words, quoted (`>` lines). Then post the child's triage comment per the outcome list, as for any issue. For `needs-info`, the reporter is the original issue's author.
+- **Feedback with nothing to act on** (praise, an impression with no request in it) gets no child. It goes in the summary.
+- **The original** gets a summary comment: one task-list line per child (`- [ ] #<child> <title>: <what> / <who>`), so GitHub tracks them, then the feedback lines. Then label it `split`, remove `needs-triage` and every other triage role, and leave it unassigned. Create the label first if the repo lacks it: `gh label create split --color c5def5 --description "Split into one issue per ask"`.
+
+In manual mode, recommend the split with the children you would create, and wait for direction like any recommendation.
+
 ## Triage a specific issue or PR
 
 1. **Gather context.** Read the full issue or PR (body, comments, labels, author, dates; for a PR, the diff too). Parse prior triage notes so you don't re-ask resolved questions. Explore the codebase using the project's domain glossary, respecting ADRs in the area. Run two checks: (a) **redundancy**: search for an existing implementation of the requested behaviour by domain concept, not just the request's wording, and report where you looked; found means `wontfix`, already built. (b) **prior rejection**: read `.out-of-scope/*.md` and surface any that resembles this request.
 
-2. **Recommend** a pairing from the Roles table with your reasoning, the area, and a brief codebase summary relevant to the request. Wait for direction.
+2. **Recommend** a split when the issue bundles several asks ([Split a bundle](#split-a-bundle)); otherwise a pairing from the Roles table with your reasoning, the area, and a brief codebase summary relevant to the request. Wait for direction.
 
 3. **Verify the claim.** For a PR, confirm the diff does what it claims: check it out, run the relevant tests. Report what happened. (Reproducing a bug is the job of whatever picks up `ready-for-agent-debugging`, not triage.)
 
