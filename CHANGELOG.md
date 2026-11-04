@@ -1,5 +1,76 @@
 # imick-skills
 
+## 1.13.0
+
+### Minor Changes
+
+- [#65](https://github.com/imick-io/skills/pull/65) [`326c9cb`](https://github.com/imick-io/skills/commit/326c9cba76924fe0c2ebf74bb511ee604ecc375b) Thanks [@imick-io](https://github.com/imick-io)! - CI runs far less often on projects that use epics ([#62](https://github.com/imick-io/skills/issues/62)).
+  
+  - **The agent loop and `/run-epic` batch their pushes to an open epic PR.** While more of the epic's work is coming, a push says `[skip ci]`: main merged in before a ticket starts, or a fix landing while others are still building (`/run-epic`: still ready). The batch's last push runs CI, once, on the branch with every fix in. If the batch ends on a skipped push, because its last ticket failed or was handed back, the loop (or `/run-epic finish`) pushes an empty commit so CI still runs. That commit changes no files, so the epic's `verify-epic` status carries over.
+  - **`/verify-epic` and `/run-epic` say not to re-run failed CI jobs by hand** while fixes are open or building: the batch's last push runs CI anyway.
+  - **`/setup-imick-skills`, Section G (Epic PRs), offers CI settings that fit the flow**, for the project's own workflows:
+    - `pull_request: branches: [main]`
+    - `concurrency` with `cancel-in-progress`, so a newer push cancels the run it replaces
+    - no full suite on `push: main`: the push to `main` keeps only the cheap jobs that save caches, so new PRs don't start cold
+  
+    For a project already set up, ask an agent to apply step 4 of Section G of `/setup-imick-skills` to its workflows.
+  
+  To get the loop change, run `/update-imick-skills` in each project, then restart the loop.
+
+- [#66](https://github.com/imick-io/skills/pull/66) [`a121082`](https://github.com/imick-io/skills/commit/a121082c5621bd8b24c3a855279ad6d5242bd166) Thanks [@imick-io](https://github.com/imick-io)! - The agent loop now resolves conflicts between `main` and an epic branch in every mode, not just fast and supersonic.
+  
+  When merging `main` into an epic branch conflicts, the epic still pauses and gets a "Resolve conflicts" issue. An agent then resolves the merge on the epic branch, checks that no conflict markers are left, pushes and closes the issue with the list of files it resolved. Only when it can't does it ask you on the issue (`agent:asked`), with a Slack ping. Before, a normal-mode epic waited for you to merge by hand.
+  
+  The resolved merge reaches `main` only through the epic's PR, so you review it there. A `manual` epic's conflicts stay yours. `npm run agents -- --dry-run` lists the conflicts the next pass would take.
+
+- [#64](https://github.com/imick-io/skills/pull/64) [`6c79729`](https://github.com/imick-io/skills/commit/6c797296dbe016e0957fcf4553cfbbebbee178ea) Thanks [@imick-io](https://github.com/imick-io)! - The agent loop no longer sleeps through work it could do.
+  
+  - **It wakes when GitHub changes.** While it waits (with nothing to do, or for a busy slot), the loop looks at your issues and PRs every 2 minutes. When one changed, for example you approved a spec, answered a question, merged an epic PR, or a ticket became ready, it runs a pass at once instead of sleeping out its 45 minutes. Changes on the tickets it's building don't count. Set `AGENTS_POLL_MINUTES` to change how often it looks, or to `0` for the old behaviour.
+  - **It cleans up after a loop that died.** A crash, a power cut or `kill -9` used to leave tickets claimed and epics labelled `agent:planning` or `agent:unblocking`, so every later loop skipped them until you fixed them by hand. The loop now records what it holds (in `.git/agent-loop-held.json`). On start, it releases what a dead loop in the same folder left, and alerts you when it did. It doesn't release a claim made again since, such as one made with `/claim`. It also frees ticket, planning and check branches that dead sandboxes left checked out in `.sandcastle/worktrees/`; the commits on them are kept.
+  - **A job that keeps failing no longer keeps the loop spinning.** A build, planning run, unblock, follow-up or conflict resolution that failed, or ran and changed nothing, used to count as work. The next pass then started at once and paid for the same model run again, so the loop never slept. Now that job backs off: it's tried again after 5 minutes (`AGENTS_RETRY_MINUTES`), then 10, 20 and so on, up to every 4 hours. You get one Slack alert at its third strike instead of one each time, and the rest of the queue goes on. A planning run counts as progress only when it changed the epic's issues (new tickets, a closed decision, an edited spec), not when it only commented. Restarting the loop clears the backoff.
+  - **Ready tickets no longer wait for a planner that picks none.** With nothing building, there's nothing to clash with, so the oldest ready ticket starts. Each pass now logs why ready tickets didn't start: held back by the planner, an epic paused on a conflict, a claim lost to someone else. A lost claim is tried again after 5 minutes instead of 45.
+  - **`npm run agents -- --dry-run`** prints what the next pass would do (build, plan, verify, triage, unblock), and what is backed off and why, changing nothing. It's safe to run beside a running loop; add `--json` for scripts.
+  - **The loop keeps a status file** (`.git/agent-loop-status.json`): what it's doing, asleep until when, what it's building, what's backed off and why the last pass started nothing. `/why-sleeping` reads it, so it knows the loop's state even when you started the loop by hand.
+  
+  To get it, run `/update-imick-skills` in each project, then restart the loop.
+
+- [#69](https://github.com/imick-io/skills/pull/69) [`80e7dd0`](https://github.com/imick-io/skills/commit/80e7dd0ad3f04211d7dac37802148df7da49c565) Thanks [@imick-io](https://github.com/imick-io)! - `/update-imick-skills` now checks the project's own CI against the epic flow on every run, even when the project is already on the newest release.
+  
+  When the repo uses the epic workflow, it reads each workflow in `.github/workflows/`, except deploys and the skills' own callers. It reports where CI runs more often than the flow needs:
+  - PRs into any branch, instead of only `main`;
+  - pushes to epic branches, which means one full run per ticket the loop lands;
+  - the full suite on `push: main`;
+  - no `cancel-in-progress` for runs a newer push replaces.
+  
+  For each finding, it offers the fix as a diff, applied only on your yes and committed on its own in the update PR. If a workflow saves caches, it keeps `push: main` and limits the expensive jobs to PRs, so `main` still saves the caches new PRs read.
+  
+  This replaces the hand step from the last release: an already-set-up project gets the CI settings from [#62](https://github.com/imick-io/skills/issues/62) the next time you run `/update-imick-skills`.
+
+- [#63](https://github.com/imick-io/skills/pull/63) [`ee526b6`](https://github.com/imick-io/skills/commit/ee526b648ab4e07f325ebccf046ad6149095709a) Thanks [@imick-io](https://github.com/imick-io)! - `/why-sleeping` now answers in two lists: **agent work** and **your work**, each ranked by how much held work a move frees.
+  
+  - **Agent work** is what an agent can do: build a ready ticket, triage, cut tickets from an approved spec, work a map, verify an epic PR or fix its checks, resolve an epic's conflicts with `main`, clear a stuck label or claim. A `[loop]` mark means the loop's next pass would do it anyway. Say "do the agent work" and the agent makes the moves in order, running the check again after each.
+  - **Your work** is what only you can do. Each line quotes the loop's last comment, so you see what is asked without opening the issue.
+  
+  It also flags the loop when it's asleep (or not running) with agent work waiting, and lists what is already being built and the tickets it holds back.
+  
+  With a loop that has the new status file and dry run (update the project's loop), it asks the loop directly. It shows the loop's real state, even when you started the loop by hand. A `[loop]` mark then means the loop's own next pass would take that move. A job the loop backed off after repeated failures shows up as agent work, with its last error.
+  
+  A "Resolve conflicts" issue counts as the loop's work in every mode now, matching the loop. Once the loop has asked you about it, or when the epic is `manual`, it shows as your work.
+
+### Patch Changes
+
+- [#67](https://github.com/imick-io/skills/pull/67) [`3dbf7b9`](https://github.com/imick-io/skills/commit/3dbf7b91fdc51d5d80985ff23d608b605fb2ffca) Thanks [@imick-io](https://github.com/imick-io)! - The tracker page makes what waits on you impossible to miss, and its roadmap is easier to scan.
+  
+  - **Red means you, everywhere:**
+    - A ticket on your turn or for your review is a solid red chip with a "You" tag on the roadmap, a red card on the epic board and a filled red box in the blocking graph.
+    - An epic is outlined in red when anything in it waits on you. Its status turns red when the epic itself does: a brief, a spec to approve, a PR to merge.
+    - "Needs triage", which used to be red, is now amber.
+  - **One plain colour key** replaces the two legends. It says what each colour asks of you: red you, green agent on it, blue agents next, amber not sorted, grey waiting, faded done.
+  - **Done epics fold to one line** on the roadmap ("✓ Done · 26 tickets"). Click one to see its tickets.
+  - The epic board's six lanes now fit on one row.
+  
+  Run `/update-imick-skills` in a project to get the new `tracker/build.mjs`.
+
 ## 1.12.0
 
 ### Minor Changes
