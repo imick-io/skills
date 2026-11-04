@@ -13,7 +13,8 @@
 // of the *installed* version), the Dockerfile's project-additions block,
 // .env.example lines, tracker/build.mjs and tracker/vercel/*, new triage-label
 // rows, and the "Existing setups" steps of every changelog entry between the
-// installed version and the target.
+// installed version and the target, and the project's own CI workflows
+// against the epic flow's conventions (reported only; the skill edits them).
 //
 // `apply` does the mechanical half: reinstalls the changed skills and the
 // chosen new ones in the layout the repo already uses (copies or symlinks),
@@ -96,6 +97,71 @@ process.on("exit", cleanup);
 
 const same = (a, b) => existsSync(a) && existsSync(b) && read(a) === read(b);
 
+// ---- CI: the project's own workflows against the epic flow's conventions
+//
+// Ticket branches merge into the epic branch without a PR; only the epic's PR
+// (or a lone ticket's) goes to main. CI written for one PR per change runs far
+// more than that needs (#62). Read-only, line-based (no YAML parser): it reads
+// each workflow's top-level `on:` and `concurrency:`, and reports what to
+// change. The skill shows the edits and makes them only on a yes.
+const SKILL_WORKFLOWS = new Set(["epics.yml", "triage.yml", "token-checks.yml"]);
+const ciCheck = () => {
+  const dir = ".github/workflows";
+  if (!existsSync(dir) || !existsSync(join(dir, "epics.yml"))) return null; // only for repos on the epic workflow
+  const main = (run("git", ["symbolic-ref", "--short", "refs/remotes/origin/HEAD"]).out || "origin/main").replace(/^origin\//, "");
+  const out = [];
+  for (const f of readdirSync(dir).filter((n) => /\.ya?ml$/.test(n) && !SKILL_WORKFLOWS.has(n))) {
+    const text = read(join(dir, f));
+    const lines = text.split("\n");
+    // A top-level key's block: from `key:` to the next top-level key.
+    const block = (key) => {
+      const i = lines.findIndex((l) => new RegExp(`^["']?${key}["']?\\s*:`).test(l));
+      if (i < 0) return null;
+      const rest = lines.slice(i + 1);
+      const end = rest.findIndex((l) => /^\S/.test(l) && !/^#/.test(l));
+      return { head: lines[i], body: (end < 0 ? rest : rest.slice(0, end)).join("\n") };
+    };
+    const on = block("on");
+    if (!on) continue;
+    const inline = on.head.replace(/^["']?on["']?\s*:\s*/, "").replace(/#.*$/, "").trim(); // `on: [push, pull_request]` or `on: push`
+    const has = (ev) => inline ? new RegExp(`\\b${ev}\\b`).test(inline) : new RegExp(`^[ \\t]{2}${ev}[ \\t]*:`, "m").test(on.body);
+    // The branches listed under one event, or null when it has no filter (every branch).
+    const branchesOf = (ev) => {
+      if (inline) return null;
+      // Line-based: [ \t], never \s, so a pattern can't run on into the next line.
+      const m = on.body.match(new RegExp(`^[ \\t]{2}${ev}[ \\t]*:[^\\n]*\\n((?:[ \\t]{4,}[^\\n]*\\n?)*)`, "m"));
+      const sub = m?.[1] ?? "";
+      const b = sub.match(/^[ \t]{4}branches[ \t]*:[ \t]*(\[[^\]\n]*\])?[^\n]*\n((?:[ \t]{6,}-[^\n]*\n?)*)/m) ?? sub.match(/^[ \t]{4}branches[ \t]*:[ \t]*(\[[^\]\n]*\])/m);
+      if (!b) return null;
+      const list = b[1] ? b[1].slice(1, -1).split(",") : b[2].split("\n").map((l) => l.replace(/^\s*-\s*/, ""));
+      return list.map((x) => x.trim().replace(/^["']|["']$/g, "")).filter(Boolean);
+    };
+    const deploys = /\bdeploy/i.test(f) || /^[ \t]{2}deploy[\w-]*[ \t]*:/m.test(text);
+    const caches = /actions\/cache@|^\s+cache\s*:/m.test(text);
+    const issues = [];
+    if (has("pull_request")) {
+      const b = branchesOf("pull_request");
+      if (!b || !b.includes(main)) issues.push({ id: "pr-any-base", fix: `pull_request: branches: [${main}]`, why: "it runs on PRs into any branch; in this flow every PR targets " + main });
+    }
+    if (has("push")) {
+      const b = branchesOf("push");
+      if (!b) issues.push({ id: "push-any-branch", fix: deploys ? `push: branches: [${main}]` : `push: branches: [${main}], with only the cache-saving jobs (or drop push)`, why: "it runs on every push to every branch, epic branches included: one full run per landed ticket" });
+      else {
+        if (b.some((x) => /^epic\/|^\*\*?$/.test(x))) issues.push({ id: "push-epic", fix: "drop the epic/** push trigger", why: "every ticket the loop lands on an epic branch runs the whole suite, and an open epic PR runs it a second time" });
+        // Already done when a job runs on PRs only, as #62 suggests: a job-level `if:` (four spaces in),
+        // not a step's (`- if:`), which leaves the rest of the job running on every push.
+        const gated = /^ {4}if:[^\n]*github\.event_name\s*(==\s*['"]pull_request['"]|!=\s*['"]push['"])/m.test(text);
+        if (b.includes(main) && !deploys && !gated) issues.push({ id: "push-main-full", fix: caches ? "keep push: main, but gate the expensive jobs to PRs (if: github.event_name == 'pull_request') so only the cache-saving jobs run" : "drop push: main (no caches to keep warm)", why: "a merge re-runs what its PR just passed" });
+      }
+    }
+    const conc = block("concurrency");
+    if ((has("pull_request") || has("push")) && !(conc && /cancel-in-progress\s*:\s*true/.test(conc.body + conc.head)))
+      issues.push({ id: "no-cancel", fix: "concurrency: { group: <workflow>-${{ github.ref }}, cancel-in-progress: true }", why: "a newer push leaves the run it replaces going to the end" });
+    if (issues.length) out.push({ file: join(dir, f), deploys, caches, issues });
+  }
+  return { mainBranch: main, workflows: out };
+};
+
 // ---- the plan
 
 const plan = () => {
@@ -105,7 +171,7 @@ const plan = () => {
   const target = flag("--to") ?? rels[0].tag;
   if (!rels.find((r) => r.tag === target)) stop(`No release ${target}; newest is ${rels[0].tag}.`);
   const installed = rec.version ? `v${rec.version}` : null;
-  if (installed && cmpVer(installed, target) >= 0) { json({ installed, target, upToDate: true }); return; }
+  if (installed && cmpVer(installed, target) >= 0) { json({ installed, target, upToDate: true, ci: ciCheck() }); return; } // CI is the project's own: check it either way
   const next = checkout(target);
   const base = installed && rels.find((r) => r.tag === installed) ? checkout(installed) : null;
   const layout = rec.layout ?? detectLayout();
@@ -192,6 +258,7 @@ const plan = () => {
     skills: { changed: changedSkills, goneUpstream: missingSkills, new: newSkills },
     loop, tracker, labels,
     loopRunning: existsSync(".sandcastle/loop.pid"),
+    ci: ciCheck(),
     changelog: { versions: between.map((s) => s.version), steps },
     note: installed ? undefined : `No ${RECORD}: ask which version is installed (the newest release whose "Existing setups" steps are already applied), then re-run with it recorded (\`record --version X.Y.Z\`). Without it, loop files can only be copied or merged by hand.`,
   });
