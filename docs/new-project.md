@@ -149,5 +149,5 @@ An epic's PR is ready when **`epic-gate`** is green: no open tickets, no `mocks/
 | Tickets time out installing dependencies, or take minutes to start | Docker Desktop's bind mounts are slow to write `node_modules` on a Mac | `AGENTS_SANDBOX=isolated` in `.sandcastle/.env`, then restart the loop ([Sandbox speed on a Mac](#sandbox-speed-on-a-mac)) |
 | The loop says "nothing ready" but tickets exist | They're assigned, blocked, or lack `ready-for-agent` | Unassign, close the blocker, or add the label |
 | An autopilot epic never gets planned | It still has `needs-briefing`, lacks `autopilot`, or is blocked by another epic | Brief it, add the label, or finish the blocker |
-| An epic is paused | Merging `main` into its branch conflicts | Resolve the "Resolve conflicts" ticket on the epic branch |
+| An epic is paused | Merging `main` into its branch conflicts; an agent tries to resolve it first, in every mode | Wait for the agent, or, once it has asked you on the "Resolve conflicts" issue (`agent:asked`), resolve it on the epic branch |
 | `epic-gate` stays red | Its description says why | Close the tickets, remove `mocks/`, or wait for verification |
