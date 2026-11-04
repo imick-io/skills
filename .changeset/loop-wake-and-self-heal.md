@@ -1,0 +1,14 @@
+---
+"imick-skills": minor
+---
+
+The agent loop no longer sleeps through work it could do.
+
+- **It wakes when GitHub changes.** While it waits (with nothing to do, or for a busy slot), the loop looks at your issues and PRs every 2 minutes. When one changed, for example you approved a spec, answered a question, merged an epic PR, or a ticket became ready, it runs a pass at once instead of sleeping out its 45 minutes. Changes on the tickets it's building don't count. Set `AGENTS_POLL_MINUTES` to change how often it looks, or to `0` for the old behaviour.
+- **It cleans up after a loop that died.** A crash, a power cut or `kill -9` used to leave tickets claimed and epics labelled `agent:planning` or `agent:unblocking`, so every later loop skipped them until you fixed them by hand. The loop now records what it holds (in `.git/agent-loop-held.json`). On start, it releases what a dead loop in the same folder left, and alerts you when it did. It doesn't release a claim made again since, such as one made with `/claim`. It also frees ticket, planning and check branches that dead sandboxes left checked out in `.sandcastle/worktrees/`; the commits on them are kept.
+- **A job that keeps failing no longer keeps the loop spinning.** A build, planning run, unblock, follow-up or conflict resolution that failed, or ran and changed nothing, used to count as work. The next pass then started at once and paid for the same model run again, so the loop never slept. Now that job backs off: it's tried again after 5 minutes (`AGENTS_RETRY_MINUTES`), then 10, 20 and so on, up to every 4 hours. You get one Slack alert at its third strike instead of one each time, and the rest of the queue goes on. A planning run counts as progress only when it changed the epic's issues (new tickets, a closed decision, an edited spec), not when it only commented. Restarting the loop clears the backoff.
+- **Ready tickets no longer wait for a planner that picks none.** With nothing building, there's nothing to clash with, so the oldest ready ticket starts. Each pass now logs why ready tickets didn't start: held back by the planner, an epic paused on a conflict, a claim lost to someone else. A lost claim is tried again after 5 minutes instead of 45.
+- **`npm run agents -- --dry-run`** prints what the next pass would do (build, plan, verify, triage, unblock), and what is backed off and why, changing nothing. It's safe to run beside a running loop; add `--json` for scripts.
+- **The loop keeps a status file** (`.git/agent-loop-status.json`): what it's doing, asleep until when, what it's building, what's backed off and why the last pass started nothing. `/why-sleeping` reads it, so it knows the loop's state even when you started the loop by hand.
+
+To get it, run `/update-imick-skills` in each project, then restart the loop.

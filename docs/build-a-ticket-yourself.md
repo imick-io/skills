@@ -117,7 +117,7 @@ gh pr create --fill --body "Fixes #N"
 - **You're the loop here.** The "don't push, don't close the issue" rules in `.sandcastle/implement-prompt.md` are for the sandboxed agents; by hand, pushing and closing are yours.
 - **Conflicts.** If the merge in step 7 conflicts, `git merge --abort`, switch back to your branch, merge the epic branch into it (`git merge origin/epic/NN-slug`), resolve, and run step 6 again. The loop does the same by retrying the ticket on top of the latest epic branch.
 - **Stopping halfway.** Commit, `git switch main` (the loop can't use a branch checked out in your checkout), then unassign yourself (`gh issue edit N --remove-assignee @me`): the loop picks the ticket up again, from the commits already on its branch.
-- **Watching the real loop instead.** `npm run agents -- --once` runs one full pass (plan, build what's ready, land) and exits. Stop a running loop first: two loops on one checkout fight over the same tickets.
+- **Watching the real loop instead.** `npm run agents -- --dry-run` says what the next pass would do, changing nothing; it's safe beside a running loop. `npm run agents -- --once` runs one full pass (plan, build what's ready, land) and exits. Stop a running loop first: two loops on one checkout fight over the same tickets.
 
 ## Steering the loop without building
 
