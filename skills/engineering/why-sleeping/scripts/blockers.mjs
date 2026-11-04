@@ -152,8 +152,12 @@ function step(n) {
       return agent(`approve spec ${t(i)}, or ask you about its low-confidence decisions (${mode} mode)`, link(n), undefined, true);
     return you(`review spec ${t(i)}: add \`spec-approved\`, or comment what to change`, link(n), gist(n));
   }
-  if (e && /^Resolve conflicts between /.test(i.title))
-    return agent(`resolve the conflicts between \`${branchOf(e)}\` and main, then close ${t(i)}`, `git merge origin/main\` on \`${branchOf(e)}`, undefined, unblocks(e));
+  if (e && /^Resolve conflicts between /.test(i.title)) {
+    const manual = is(e, "manual");
+    // The loop resolves these in every mode; once it has asked (agent:asked, handled above) or for a manual epic, they're the person's.
+    if (manual) return you(`resolve the conflicts between \`${branchOf(e)}\` and main (manual epic), then close ${t(i)}`, `git merge origin/main\` on \`${branchOf(e)}`);
+    return agent(`resolve the conflicts between \`${branchOf(e)}\` and main, then close ${t(i)}`, `git merge origin/main\` on \`${branchOf(e)}`, undefined, true);
+  }
   if (is(i, "ready-for-human")) {
     if (unblocks(e ?? i) && !e?.labels.some((l) => l.name === "manual")) return agent(`decide ${t(i)} on your behalf (${mode} mode)`, link(n), undefined, true);
     return you(`do or decide ${t(i)} (ready-for-human)`, link(n), gist(n));
@@ -266,7 +270,7 @@ for (const b of backoff) {
   });
 }
 if (dry) {
-  const lists = ["build", "plan", "verify", "triage", "unblock", "followUp", "specs"];
+  const lists = ["build", "plan", "verify", "conflicts", "triage", "unblock", "followUp", "specs"];
   const planned = new Set(lists.flatMap((l) => dry[l] ?? []).flatMap((i) => [i.number, ...[...i.what.matchAll(/#(\d+)/g)].map((m) => Number(m[1]))]));
   for (const m of moves.values()) {
     if (!m.loop || planned.has(m.n)) continue;
