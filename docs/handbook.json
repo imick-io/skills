@@ -2187,6 +2187,14 @@
       "next": "A person closes it"
     },
     {
+      "name": "split",
+      "role": "what",
+      "kind": "What",
+      "means": "Bundled several asks, like a pasted client email",
+      "setBy": "Triage",
+      "next": "Each ask is its own issue; a person closes this one"
+    },
+    {
       "name": "ready-for-agent",
       "role": "agent",
       "kind": "Who",
@@ -3265,8 +3273,8 @@
     {
       "name": "triage",
       "group": "plan",
-      "summary": "Classify incoming issues (and optionally external PRs) by what they are and who acts next, write agent-ready briefs, and route big asks to scoping.",
-      "description": "Classify incoming issues (and optionally external PRs) by what they are and who acts next, write agent-ready briefs, and route big asks to scoping.",
+      "summary": "Classify incoming issues (and optionally external PRs) by what they are and who acts next, split an issue that bundles several asks (a pasted client email) into one issue per ask, write agent-ready briefs, and route big asks to scoping.",
+      "description": "Classify incoming issues (and optionally external PRs) by what they are and who acts next, split an issue that bundles several asks (a pasted client email) into one issue per ask, write agent-ready briefs, and route big asks to scoping.",
       "runs": [
         "you"
       ],

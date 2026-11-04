@@ -164,6 +164,7 @@ function step(n) {
   }
   if (is(i, "ready-for-review")) return you(`review ${t(i)}`, link(n));
   if (is(i, "needs-info")) return you(`answer the question on ${t(i)} (needs-info), or get the reporter to`, link(n), gist(n));
+  if (is(i, "split")) return {}; // a summary: its children carry the work
   if (is(i, "needs-triage") || !L(i).some((l) => /^ready-for-|^needs-/.test(l)))
     return agent(`triage ${t(i)}`, `/triage ${n}`, undefined, TRIAGE && running);
   if (i.assignees.length) {

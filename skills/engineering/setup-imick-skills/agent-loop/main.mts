@@ -1119,7 +1119,7 @@ type TriageJob = { n: number; title: string; why: string };
 
 const TRUSTED = ["OWNER", "MEMBER", "COLLABORATOR"];
 // Any of these means a person or an earlier triage already decided.
-const TRIAGED = ["bug", "enhancement", "needs-scoping", LABEL.needsInfo, "wontfix", LABEL.build, LABEL.bug, LABEL.human, LABEL.review];
+const TRIAGED = ["bug", "enhancement", "needs-scoping", LABEL.needsInfo, "wontfix", "split", LABEL.build, LABEL.bug, LABEL.human, LABEL.review];
 const SHAPED = [LABEL.epic, "initiative", LABEL.spec, LABEL.backlog];
 const shaped = (labels: string[]) => labels.some((l) => SHAPED.includes(l) || l.startsWith("wayfinder:"));
 const TRIAGE_SKILL = ".claude/skills/triage/UNATTENDED.md";
@@ -1187,6 +1187,7 @@ async function triage(): Promise<number> {
   const jobs = triageJobs().slice(0, MAX_PARALLEL);
   if (!jobs.length) return 0;
   try { gh("label", "create", LABEL.triage, "--color", "ededed", "--description", "Triage hasn't finished", "--force"); } catch { /* exists */ }
+  try { gh("label", "create", "split", "--color", "c5def5", "--description", "Split into one issue per ask", "--force"); } catch { /* exists */ }
   log(`triaging ${jobs.map((j) => `#${j.n}`).join(", ")}`);
 
   const settled = await Promise.allSettled(jobs.map(async (j) => {

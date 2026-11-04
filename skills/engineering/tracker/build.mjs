@@ -108,7 +108,8 @@ const [issues, openPrs] = await Promise.all([fetchIssues(REPO), fetchOpenPrs(REP
 const byNumber = new Map(issues.map((i) => [i.number, i]));
 const has = (i, label) => i.labels.includes(label);
 const isPlanning = (i) => i.labels.some((l) => l.startsWith("wayfinder:")) || has(i, "spec");
-const isTicket = (i) => !has(i, "epic") && !has(i, "initiative") && !isPlanning(i);
+// A split issue is only a summary: its children are the tickets.
+const isTicket = (i) => !has(i, "epic") && !has(i, "initiative") && !has(i, "split") && !isPlanning(i);
 const openBlockers = (i) => i.blockedBy.map((n) => byNumber.get(n)).filter((b) => b && b.open);
 
 // Who acts next on a ticket.

@@ -11,6 +11,7 @@ A triaged issue carries one **what** role and one **who** role; `needs-triage` m
 | `needs-scoping` | what | `needs-scoping` | Too big for one brief; goes to `/scope-decomposer` |
 | `needs-info` | what | `needs-info` | Waiting on the reporter |
 | `wontfix` | what | `wontfix` | Already built, duplicate or rejected; a person closes it |
+| `split` | what | `split` | Bundled several asks; split into one issue per ask, and a person closes it once they're done |
 | `ready-for-agent-debugging` | who | `ready-for-agent-debugging` | An agent reproduces the bug next |
 | `ready-for-agent` | who | `ready-for-agent` | An agent builds it from the brief |
 | `ready-for-human` | who | `ready-for-human` | A person acts next |
