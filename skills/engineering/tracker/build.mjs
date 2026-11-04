@@ -371,26 +371,26 @@ const html = `<!doctype html>
 :root {
   --bg: #f7f7f5; --surface: #ffffff; --surface-2: #f0f0ec; --border: #e2e2dc;
   --text: #1c1c1a; --muted: #6b6b66; --link: #2c5fb3;
-  --you: #b4530a; --you-soft: #fdf0e3;
-  --review: #8a3fb8; --review-soft: #f5ecfb;
+  --you: #c62a1f; --you-soft: #fdeceb;
+  --review: #c62a1f; --review-soft: #fdeceb;
   --working: #1f7a4d; --working-soft: #e5f4ec;
   --queued: #2c5fb3; --queued-soft: #e8effa;
   --blocked: #7a7a73; --blocked-soft: #efefea;
   --done: #9a9a93; --done-soft: #f3f3f0;
-  --triage: #a8323a; --triage-soft: #fbeaeb;
+  --triage: #a36200; --triage-soft: #fbf1de;
   --backlog: #7a7a73; --backlog-soft: #ecece7;
 }
 @media (prefers-color-scheme: dark) {
   :root {
     --bg: #161615; --surface: #1f1f1d; --surface-2: #2a2a27; --border: #34342f;
     --text: #ecece8; --muted: #9b9b94; --link: #8db4f2;
-    --you: #f0a35e; --you-soft: #3a2817;
-    --review: #c99ae8; --review-soft: #2f2238;
+    --you: #ff6b61; --you-soft: #3d1a17;
+    --review: #ff6b61; --review-soft: #3d1a17;
     --working: #6fcf9b; --working-soft: #17301f;
     --queued: #8db4f2; --queued-soft: #1b2638;
     --blocked: #9b9b94; --blocked-soft: #2a2a27;
     --done: #6b6b66; --done-soft: #222220;
-    --triage: #f08a90; --triage-soft: #3a1c1e;
+    --triage: #e8a53e; --triage-soft: #36280f;
     --backlog: #8a8a83; --backlog-soft: #2a2a27;
   }
 }
@@ -433,9 +433,9 @@ tr:last-child td { border-bottom: 0; }
 .table-scroll { overflow-x: auto; }
 .diagram { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px; overflow-x: auto; }
 .diagram svg { max-width: none !important; }
-.legend { display: flex; flex-wrap: wrap; gap: 6px 12px; margin: 10px 0 0; font-size: 13px; color: var(--muted); }
-.board { display: grid; grid-template-columns: repeat(5, minmax(200px, 1fr)); gap: 12px; overflow-x: auto; }
-@media (max-width: 1000px) { .board { grid-template-columns: repeat(5, 240px); } }
+.legend { margin: 10px 0 0; }
+.board { display: grid; grid-template-columns: repeat(6, minmax(180px, 1fr)); gap: 12px; overflow-x: auto; }
+@media (max-width: 1100px) { .board { grid-template-columns: repeat(6, 220px); } }
 .lane { background: var(--surface-2); border-radius: 10px; padding: 10px; }
 .lane h3 { display: flex; justify-content: space-between; }
 .lane .card { padding: 10px; }
@@ -483,6 +483,26 @@ details.spec > .spec { border: 0; padding: 0; margin: 10px 0 0; }
 .chip .ct { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chip.done .ct { text-decoration: line-through; color: var(--muted); }
 .ep .unplanned { font-size: 12.5px; color: var(--muted); margin-top: 8px; font-style: italic; }
+/* Red means you: a ticket or epic waiting on you is filled red, never just tinted. */
+.chip.you, .chip.review { background: var(--you); border-left-color: var(--you); color: #fff; font-weight: 600; }
+.chip.you .cn, .chip.review .cn { color: #fff; opacity: .85; }
+.chip .you-tag { flex: 0 0 auto; font-size: 10.5px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; padding: 0 5px; border-radius: 4px; background: #fff; color: var(--you); }
+.ep.needs-you { border-color: var(--you); box-shadow: 0 0 0 1.5px var(--you); }
+.ep.yours .ep-status { color: #fff; background: var(--you); }
+details.ep.done-ep { border-top-width: 1px; opacity: .8; padding: 6px 12px; }
+details.ep.done-ep > summary { cursor: pointer; list-style: none; display: flex; gap: 6px; align-items: baseline; font-weight: 600; color: var(--muted); }
+details.ep.done-ep > summary::-webkit-details-marker { display: none; }
+details.ep.done-ep > summary::before { content: "▸"; font-size: 11px; }
+details.ep.done-ep[open] > summary::before { content: "▾"; }
+details.ep.done-ep > summary .ok { margin-left: auto; font-size: 12px; font-weight: 600; white-space: nowrap; }
+.key { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 6px 18px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; font-size: 13px; color: var(--text); }
+.key .row { display: flex; gap: 8px; align-items: baseline; }
+.key .sw { flex: 0 0 auto; min-width: 70px; text-align: center; font-size: 11.5px; font-weight: 700; padding: 1px 6px; border-radius: 5px; color: var(--text); background: var(--ks); border-left: 3px solid var(--k); }
+.key .sw.you { background: var(--you); color: #fff; border-left-color: var(--you); }
+.key .row span.what { color: var(--muted); }
+.key .how { grid-column: 1 / -1; color: var(--muted); border-top: 1px solid var(--border); padding-top: 6px; margin-top: 2px; }
+.lane.you h3 { color: var(--you); }
+.lane.you .card { border: 1px solid var(--you); border-left: 5px solid var(--you); background: var(--you-soft); }
 .person { margin-top: 28px; }
 .person > h2 { margin: 0 0 4px; display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; }
 .person > h2 .meta { font-weight: 400; }
@@ -735,8 +755,9 @@ $('epic-table').innerHTML = '<tr><th>Epic</th><th>Status</th><th>Tickets</th><th
 // ---- Diagrams (mermaid, drawn lazily when their tab is visible)
 const label = (s) => s.replace(/"/g, "'").replace(/[<>]/g, '').slice(0, 42) + (s.length > 42 ? '…' : '');
 function classDefs() {
-  return ['you', 'review', 'working', 'queued', 'blocked', 'done', 'triage'].map((s) =>
-    'classDef ' + s + ' fill:' + css('--' + s + '-soft') + ',stroke:' + css('--' + s) + ',color:' + css('--text') + ',stroke-width:1.5px').join('\\n');
+  return ['you', 'review', 'working', 'queued', 'blocked', 'done', 'triage'].map((s) => s === 'you' || s === 'review'
+    ? 'classDef ' + s + ' fill:' + css('--you') + ',stroke:' + css('--you') + ',color:#fff,stroke-width:2px,font-weight:bold'
+    : 'classDef ' + s + ' fill:' + css('--' + s + '-soft') + ',stroke:' + css('--' + s) + ',color:' + css('--text') + ',stroke-width:1.5px').join('\\n');
 }
 // Roadmap: epics in columns by build order, tickets listed inside planned
 // epics, arrows from an epic to the epics waiting on it.
@@ -761,17 +782,31 @@ function renderRoadmap() {
     const chips = withTickets && shownTs.length ? '<div class="chips">' + shownTs.map((t) => {
       const k = t.status === 'dropped' ? 'done' : t.status;
       const tip = '#' + t.number + ' ' + t.title + ' (' + DATA.ticketStatus[t.status] + (t.openBlockers.length ? '; waits on #' + t.openBlockers.join(', #') : '') + ')';
-      return '<a class="chip ' + k + '" style="--k:var(--' + k + ');--ks:var(--' + k + '-soft)" href="' + t.url + '" target="_blank" title="' + esc(tip) + '"><span class="cn">#' + t.number + '</span><span class="ct">' + esc(t.title) + '</span></a>';
+      const mine = k === 'you' || k === 'review' ? '<span class="you-tag">' + (k === 'review' ? 'Review' : 'You') + '</span>' : '';
+      return '<a class="chip ' + k + '" style="--k:var(--' + k + ');--ks:var(--' + k + '-soft)" href="' + t.url + '" target="_blank" title="' + esc(tip) + '">' + mine + '<span class="cn">#' + t.number + '</span><span class="ct">' + esc(t.title) + '</span></a>';
     }).join('') + '</div>' : '';
-    return '<div class="ep" id="ep-' + e.number + '" style="--c:var(--' + c + ');--cs:var(--' + c + '-soft)">' +
+    // A done epic folds to one line; open it to see its tickets.
+    if (e.status === 'done')
+      return '<details class="ep done-ep" id="ep-' + e.number + '" style="--c:var(--done);--cs:var(--done-soft)"' + (openDone.has(e.number) ? ' open' : '') + '>' +
+        '<summary><a class="n" href="' + e.url + '" target="_blank">#' + e.number + '</a><span>' + esc(e.title) + '</span><span class="ok">✓ Done' + (e.total ? ' · ' + e.total + ' tickets' : '') + '</span></summary>' +
+        chips + '</details>';
+    // Outlined red when anything in it waits on you; its status is filled red only when the epic itself does (brief, spec, merge).
+    const needsYou = c === 'you' || e.counts.you + e.counts.review > 0;
+    return '<div class="ep' + (needsYou ? ' needs-you' : '') + (c === 'you' ? ' yours' : '') + '" id="ep-' + e.number + '" style="--c:var(--' + c + ');--cs:var(--' + c + '-soft)">' +
       '<div class="ep-title"><a class="n" href="' + e.url + '" target="_blank">#' + e.number + '</a><span>' + esc(e.title) + manualPill(e) + '</span></div>' +
       '<span class="ep-status">' + esc(epicStatusText(e)) + '</span>' +
       (e.total ? '<div class="ep-meta">' + e.done + ' of ' + e.total + ' tickets done' + (e.counts.you + e.counts.review ? ' · ' + (e.counts.you + e.counts.review) + ' need you' : '') + '</div><div class="bar"><i style="width:' + pct + '%"></i></div>' : '') +
       (e.openBlockers.length ? '<div class="ep-meta">after ' + e.openBlockers.map(ref).join(', ') + '</div>' : '') +
       (e.total ? chips : '<div class="unplanned">Not planned yet: no tickets.</div>') + '</div>';
   }).join('') + '</div>').join('');
+  $('rm').querySelectorAll('details.done-ep').forEach((d) => d.addEventListener('toggle', () => {
+    const n = Number(d.id.slice(3));
+    if (d.open) openDone.add(n); else openDone.delete(n);
+    drawRoadmapLines();
+  }));
   drawRoadmapLines();
 }
+const openDone = new Set();
 function drawRoadmapLines() {
   const rm = $('rm'), svg = $('rm-lines');
   if (!rm || !svg || $('roadmap').hidden) return;
@@ -802,18 +837,26 @@ function epicGraph(epicNum) {
   for (const t of ts) for (const b of t.blockedBy) if (inEpic.has(b)) lines.push('t' + b + ' --> t' + t.number);
   return lines.concat(classDefs()).join('\\n');
 }
-function legend(id, keys) {
-  $(id).innerHTML = keys.map((k) => pill(k)).join(' ') + ' <span>Arrows point from a blocker to what it blocks. Click a box to open the issue.</span>';
+// One colour key for epics and tickets alike: what each colour asks of you.
+const KEY = [
+  ['you', 'Red: you', 'do or decide it. A ticket to answer, do or review; an epic to brief, approve or merge. Nothing moves until you act.'],
+  ['working', 'Green: agent on it', 'an agent is building it now.'],
+  ['queued', 'Blue: agent next', 'queued, or being planned; the loop takes it on its own.'],
+  ['triage', 'Amber: not sorted', 'waiting for triage to say what it is and who acts.'],
+  ['blocked', 'Grey: waiting', 'on another ticket or epic first. Hover a ticket to see which.'],
+  ['done', 'Faded: done', 'closed. Done epics fold to one line on the roadmap; click to open one.'],
+];
+function legend(id, how) {
+  $(id).innerHTML = '<div class="key">' + KEY.map(([k, name, what]) =>
+    '<div class="row"><span class="sw ' + k + '" style="--k:var(--' + k + ');--ks:var(--' + k + '-soft)">' + name.split(':')[0] + '</span><span><b>' + name.split(': ')[1] + '</b>: <span class="what">' + what + '</span></span></div>').join('') +
+    '<div class="how">' + how + '</div></div>';
 }
-legend('roadmap-legend', []);
-$('roadmap-legend').innerHTML = '<span>Epic:</span> ' + Object.entries({ working: 'Building', queued: 'Planning / ready to plan', you: 'Needs your brief, approval or merge', blocked: 'Waiting on earlier epics', done: 'Done' }).map(([k, v]) => '<span class="pill ' + k + '">' + v + '</span>').join(' ') + ' <span class="pill manual">manual</span> <span class="meta">planned and built by you, outside the loop</span>' +
-  '<br><span>Ticket:</span> ' + ['you', 'review', 'working', 'queued', 'blocked', 'done'].map((k) => pill(k)).join(' ') +
-  '<br><span>Columns run left to right in build order; arrows point to the epics that wait on another. Hover a ticket for what it waits on; click to open it.</span>';
+legend('roadmap-legend', 'Columns run left to right in build order; an arrow goes from an epic to the epics that wait on it. An epic outlined in red has something waiting on you. <span class="pill manual">manual</span> epics are planned and built by you, outside the loop. Click anything to open it on GitHub.');
 ['rm-tickets', 'rm-hide-done'].forEach((id) => {
   try { const v = localStorage.getItem('tracker-' + id); if (v !== null) $(id).checked = v === '1'; } catch {}
   $(id).addEventListener('change', () => { try { localStorage.setItem('tracker-' + id, $(id).checked ? '1' : '0'); } catch {} renderDiagrams(); });
 });
-legend('epic-legend', ['you', 'review', 'working', 'queued', 'blocked', 'done']);
+legend('epic-legend', 'An arrow goes from a ticket to the tickets waiting on it. Click a box to open the issue.');
 
 let drawn = {};
 async function draw(id, src) {
@@ -844,7 +887,7 @@ function renderBoard() {
   $('board').innerHTML = LANES.map(([k, name, statuses]) => {
     let items = ts.filter((t) => statuses.includes(t.status));
     if (k === 'done') items = items.sort((a, b) => (b.closedAt ?? '').localeCompare(a.closedAt ?? ''));
-    return '<div class="lane"><h3><span>' + name + '</span><span>' + items.length + '</span></h3>' +
+    return '<div class="lane ' + k + '"><h3><span>' + name + '</span><span>' + items.length + '</span></h3>' +
       (items.map((t) => '<div class="card"><div class="top"><span class="num">' + ref(t.number) + '</span><span class="title">' + esc(t.title) + '</span></div>' +
         (t.status === 'blocked' ? '<div class="sub">waits on ' + t.openBlockers.map(ref).join(', ') + '</div>' : t.status === 'review' ? '<div class="sub">' + pill('review') + '</div>' : '') + '</div>').join('') || '<div class="empty">None</div>') + '</div>';
   }).join('');
