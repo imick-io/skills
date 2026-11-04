@@ -66,3 +66,5 @@ Read the tracker doc, `docs/agents/triage-labels.md`, `docs/agents/preview.md` a
    ```
 
    Then set the status on the head commit: `success` only when every verdict passed; otherwise `failure`, with a description such as "2 failed, 1 needs a person". The `epic-gate` check reads it.
+
+   **Leave CI to the fixes.** Don't push to the epic branch yourself, and don't re-run the PR's failed CI jobs by hand while fix tickets are open or building. Every push and every re-run runs the project's whole suite again. The loop (or `/run-epic`) lands the fixes as one batch: the pushes before the last one say `[skip ci]`, so CI runs once, on the branch with every fix in.

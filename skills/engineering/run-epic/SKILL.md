@@ -26,7 +26,7 @@ Take the first ticket of `frontier.ready` (`run-epic frontier <epic>` re-reads i
 2. **Build.** `run-epic prompt implement <ticket>` (`prompt bug` for a bug) prints the loop's own prompt, filled in, with a RUN-EPIC preamble naming the worktree. Dispatch **one subagent** (general-purpose) with that text as its whole prompt. Wait for it. Never build two tickets at once: they share this machine's database, ports and CPU.
 3. **`run-epic commits <ticket>`.** `0` means the agent couldn't build it and has said why on the issue: `run-epic handback <ticket> "<its reason, one line>"`, then **go to the next ticket**. Don't retry, don't fix it yourself: the loop gives one attempt, and so do you.
 4. **Review.** `run-epic prompt review <ticket>`; dispatch one subagent with it. Wait.
-5. **`run-epic land <ticket>`.** Merges onto the epic branch, pushes, closes the ticket with the loop's wording, deletes the branch and worktree, rebuilds the tracker, posts to the Slack feed. **Exit 3** is a merge conflict with work landed since the branch was cut: as the loop does, `run-epic prepare <ticket> --retry` (drops the branch, recreates it on the latest epic branch) and build once more from step 2. A second conflict is a hand-back.
+5. **`run-epic land <ticket>`.** Merges onto the epic branch, pushes, closes the ticket with the loop's wording, deletes the branch and worktree, rebuilds the tracker, posts to the Slack feed. Once the epic's PR is open (fixes after `/verify-epic`), each push runs the project's CI, so the script batches them as the loop does: while more of the epic's tickets are ready, or this one unblocks another, the push says `[skip ci]`, and the last one runs CI. **Exit 3** is a merge conflict with work landed since the branch was cut: as the loop does, `run-epic prepare <ticket> --retry` (drops the branch, recreates it on the latest epic branch) and build once more from step 2. A second conflict is a hand-back.
 6. Note one line for the final report: landed or handed back, and why.
 
 Then `run-epic frontier <epic>` again: landing unblocks tickets. Repeat until `ready` is empty.
@@ -39,6 +39,7 @@ Then `run-epic frontier <epic>` again: landing unblocks tickets. Repeat until `r
 
 - **`done: true`** with a `pr`: every ticket of the milestone is closed. It merged `main` in once more and opened the epic's PR to `main` (tickets listed, `Closes #<epic>`). Tell the user to run `/verify-epic` on it before merging; don't run it yourself.
 - **`done: false`** with `open`: tickets remain that this run can't take (handed back, blocked by a hand-back, claimed by someone else). No PR yet.
+- **`ciRun: true`**: the batch ended on a `[skip ci]` push (its last ticket was handed back), so `finish` pushed an empty commit to run CI once on everything that landed. Mention it in the report.
 
 ## 3. Report
 
@@ -49,4 +50,5 @@ One message, standing on its own, since the user may have been away: the epic, e
 - **Reuse the loop, don't improvise.** The prompts are the loop's (`.sandcastle/*-prompt.md`, else this repo's templates); if a step needs something they don't say, that is a change to the loop's prompts, not to this run.
 - **Subagents commit; you land.** No subagent pushes, opens a PR, closes or labels an issue. Everything on GitHub goes through the script.
 - **One attempt, one ticket at a time, no questions mid-run.** The hand-back is the question: it reaches the user on the issue, in the tracker and in Slack, and the run goes on.
+- **Never re-run CI by hand mid-run.** The batch's last push runs it; a re-run before that tests a branch that's about to change.
 - **`main` stays untouched.** The checkout never changes branch; all work is in worktrees and pushed to the epic branch.
