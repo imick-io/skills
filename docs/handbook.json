@@ -3361,15 +3361,16 @@
     {
       "name": "why-sleeping",
       "group": "ops",
-      "summary": "Why is the agent loop sleeping? Names what you must do so the agents have work again - the merge, approval, answer or brief that each piece of held work waits on, ranked by how much it frees.",
-      "description": "Why is the agent loop sleeping? Names what you must do so the agents have work again - the merge, approval, answer or brief that each piece of held work waits on, ranked by how much it frees. Use when the user asks why the agents or the loop are sleeping, idle or stuck, or what unblocks them.",
+      "summary": "Why is the agent loop sleeping? Splits what stands between the agents and their next work into agent work (what the loop takes on its next pass, or an agent here does when told) and your work (the merge, approval, answer or brief only you can give), each ranked by how much it frees.",
+      "description": "Why is the agent loop sleeping? Splits what stands between the agents and their next work into agent work (what the loop takes on its next pass, or an agent here does when told) and your work (the merge, approval, answer or brief only you can give), each ranked by how much it frees. Use when the user asks why the agents or the loop are sleeping, idle or stuck, or what unblocks them.",
       "runs": [
         "auto"
       ],
       "uses": [],
       "next": [
         "brief",
-        "triage"
+        "triage",
+        "claim"
       ],
       "source": "iMick",
       "url": "https://github.com/imick-io/skills/tree/main/skills/engineering/why-sleeping"

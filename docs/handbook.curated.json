@@ -3015,7 +3015,8 @@
       "group": "ops",
       "next": [
         "brief",
-        "triage"
+        "triage",
+        "claim"
       ]
     },
     "wizard": {
