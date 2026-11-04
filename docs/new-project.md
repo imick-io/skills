@@ -104,6 +104,7 @@ When an autopilot spec is ready, Slack pings you and the spec issue is labelled 
 npm run agents                    # until you stop it: plans autopilot epics, builds, fixes, verifies
 npm run agents -- --once          # a single pass
 npm run agents -- --no-planning   # build only
+npm run agents -- --dry-run       # what the next pass would do, changing nothing
 npm run agents:awake              # the loop, keeping your laptop awake while it runs (macOS)
 ```
 
