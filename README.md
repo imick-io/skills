@@ -56,6 +56,7 @@ My own skills plus the ones I use from other authors, such as [Matt Pocock](http
 | [`retro`](skills/engineering/retro/SKILL.md) | Matt Pocock | Conduct a retrospective on a coding session. |
 | [`review-work`](skills/engineering/review-work/SKILL.md) | iMick | Refactor-only review pass over a recent commit. |
 | [`run-epic`](skills/engineering/run-epic/SKILL.md) | iMick | Build every ticket of one epic inside this Claude Code session, the way the agent loop would (claim, branch, implement, review, land, next), one ticket at a time until the epic is built and its PR is open. |
+| [`run-ticket`](skills/engineering/run-ticket/SKILL.md) | iMick | Build one ticket inside this Claude Code session, the way the agent loop would (claim, branch, implement, review, land), without Docker or Sandcastle. |
 | [`scope-decomposer`](skills/engineering/scope-decomposer/SKILL.md) | iMick | Break a big idea, product, feature, existing project or broad issue into an initiative of epics on the issue tracker, each one ready for /brief and then /wayfinder. |
 | [`setup-imick-skills`](skills/engineering/setup-imick-skills/SKILL.md) | Matt Pocock | Configure this repo for the engineering skills: set up its issue tracker, triage label vocabulary, and domain doc layout. |
 | [`tdd`](skills/engineering/tdd/SKILL.md) | Matt Pocock | Test-driven development. |
@@ -160,7 +161,7 @@ Then it checks again. With nothing ready it sleeps (45 minutes by default); on a
 
 1. `npx @ai-hero/sandcastle init --agent claude-code --sandbox docker --template blank --issue-tracker github-issues --create-label false --build-image false --install-template-deps false`
 2. Replace the scaffold's `main.mts`/`main.ts` and `prompt.md` with the files in [`setup-imick-skills/agent-loop/`](skills/engineering/setup-imick-skills/agent-loop/) (the loop, four prompts, a Dockerfile with a headless Chromium, and `.env.example`), all into `.sandcastle/`.
-3. `npm i -D @ai-hero/sandcastle zod` (Node 22.6 or later runs the loop's TypeScript itself; no `tsx`), and add the scripts `"agents": "node --env-file-if-exists=.sandcastle/.env .sandcastle/main.mts"`, `"agents:awake": "caffeinate -i npm run agents"` and `"agents:stop": "touch .sandcastle/STOP"`; add `STOP` to `.sandcastle/.gitignore`. `npm run agents:stop` lets a running loop finish its in-flight tickets and exit, so you can close the machine once its Slack message arrives.
+3. `npm i -D @ai-hero/sandcastle zod` (Node 22.6 or later runs the loop's TypeScript itself; no `tsx`), and add the scripts `"agents": "node --env-file-if-exists=.sandcastle/.env .sandcastle/main.mts"`, `"agents:awake": "caffeinate -i npm run agents --"` (the trailing `--` lets npm pass flags like `--epic=12` through; pnpm and yarn don't need it) and `"agents:stop": "touch .sandcastle/STOP"`; add `STOP` to `.sandcastle/.gitignore`. `npm run agents:stop` lets a running loop finish its in-flight tickets and exit, so you can close the machine once its Slack message arrives.
 4. Commit the skills the loop calls into `.claude/skills/` (`implement`, `tdd`, `code-review`, `debug-and-fix`, `diagnosing-bugs` and what they use): agents see only the repo.
 5. Start Docker, then build the image: `npx sandcastle docker build-image`.
 
@@ -182,8 +183,13 @@ npm run agents                    # loop: plans autopilot epics, works everythin
 npm run agents -- --once          # one pass, then exit
 npm run agents -- --no-planning   # build only: leave planning to another machine
 npm run agents -- --dry-run       # what the next pass would do; changes nothing, safe beside a running loop
+npm run agents -- --epic=12,14    # only these epics (planning, tickets, conflicts, PR); stops once they're closed
+npm run agents -- --tickets=31,32 # only these tickets; stops once none is left to build
 npm run agents:awake              # the loop, keeping a laptop awake while it runs (macOS)
+npm run agents:awake -- --epic=12 # the same, scoped (pnpm: `pnpm agents:awake --epic=12`)
 ```
+
+A **scoped run** (`--epic`, `--tickets`, or both) touches nothing else: no triage, no other epic's planning or PR, no other ticket. An epic in scope brings everything under it; a ticket in scope is built and nothing more (its epic's PR opens on a later run that has the epic in scope, or an unscoped one). It still respects the rules: a `manual` epic, a blocked or assigned ticket, a ticket without `ready-for-agent` or `ready-for-agent-debugging` aren't taken, and the run says so at start. It exits once nothing in scope is left. `--dry-run` with the same flags shows what it would do.
 
 **Autopilot planning**, per epic. Every epic from `/scope-decomposer` waits for a **`/brief`**: a short, high-level session where you say what you already have in mind (must-haves, no-gos, the big product calls), saved in the epic's Brief section, the glossary and ADRs. The brief ends with **autopilot or manual?** An epic labelled `autopilot` is planned by the loop: it runs wayfinder on it by itself, takes every Brief line as decided, decides the rest (75% confidence or more directly, below that after researching it with `dig`, still unsure as **assumed**), parks tasks that need you as `ready-for-human`, and writes the spec with a **Decided on autopilot** section (least confident first). The spec waits on `ready-for-human` and Slack pings you: **approve** with the `spec-approved` label and the next pass cuts the tickets; **request changes** with a comment and the next pass revises it. Epics without the label are yours to plan with `/wayfinder <epic>`, and the loop never touches them.
 

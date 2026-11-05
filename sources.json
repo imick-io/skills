@@ -169,6 +169,11 @@
       "source": "own"
     },
     {
+      "local_path": "skills/engineering/run-ticket",
+      "local_name": "run-ticket",
+      "source": "own"
+    },
+    {
       "local_path": "skills/engineering/scope-decomposer",
       "local_name": "scope-decomposer",
       "source": "own"

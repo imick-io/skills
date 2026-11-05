@@ -105,6 +105,8 @@ npm run agents                    # until you stop it: plans autopilot epics, bu
 npm run agents -- --once          # a single pass
 npm run agents -- --no-planning   # build only
 npm run agents -- --dry-run       # what the next pass would do, changing nothing
+npm run agents -- --epic=12,14    # only these epics; stops once they're closed
+npm run agents -- --tickets=31,32 # only these tickets; stops once none is left to build
 npm run agents:awake              # the loop, keeping your laptop awake while it runs (macOS)
 ```
 

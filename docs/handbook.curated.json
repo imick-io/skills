@@ -3100,6 +3100,17 @@
         "verify-epic"
       ]
     },
+    "run-ticket": {
+      "group": "build",
+      "uses": [
+        "implement",
+        "debug-and-fix",
+        "code-review"
+      ],
+      "next": [
+        "verify-epic"
+      ]
+    },
     "update-imick-skills": {
       "group": "ops",
       "uses": [

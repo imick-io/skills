@@ -36,6 +36,7 @@
     "./skills/engineering/retro",
     "./skills/engineering/review-work",
     "./skills/engineering/run-epic",
+    "./skills/engineering/run-ticket",
     "./skills/engineering/scope-decomposer",
     "./skills/engineering/setup-imick-skills",
     "./skills/engineering/tdd",

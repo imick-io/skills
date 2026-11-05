@@ -4,6 +4,8 @@ The agent loop builds `ready-for-agent` tickets on its own, but every step it ta
 
 For a whole epic you'd rather build by hand, put the `manual` label on it instead: the loop then never plans it or touches its tickets (see [How work flows](workflow.md)).
 
+For a single ticket you'd rather have built *here* the same way, under an epic or not, run `/run-ticket <n>`: it claims it, builds and reviews it with the loop's prompts, and lands it as the loop would (on the epic branch, or as a PR to `main` with `Fixes #N`). To have the loop itself build only some tickets or epics, scope it: `npm run agents -- --tickets=12,14` or `--epic=3`.
+
 For a whole `manual` epic you'd rather have built *here*, in a Claude Code session you can watch, run `/run-epic <epic>`: it takes the epic's tickets through this same pipeline one at a time (the loop's prompts, the same claim, branch and landing), hands back what it can't build, and opens the epic's PR at the end.
 
 ## What the loop does with a ticket
