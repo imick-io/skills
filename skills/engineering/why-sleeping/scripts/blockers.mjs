@@ -309,6 +309,12 @@ const state = running ? `running, pid ${loopPids.join(", ")}${asleep ? `, asleep
 const out = [`# Why the loop is sleeping (${repo}, mode: ${mode}, loop ${state})`, ""];
 if (loopMoves.length && !running)
   health.push(`the loop isn't running, and ${loopMoves.length} move(s) below are its to make → \`npm run agents:awake\`, or tell an agent to make them`);
+// A scoped loop (--epic / --tickets) only makes the moves inside its scope;
+// the list below is what an unscoped pass would make.
+if (running && (status?.scope?.epics?.length || status?.scope?.tickets?.length)) {
+  const named = [...(status.scope.epics ?? []).map((n) => `epic #${n}`), ...(status.scope.tickets ?? []).map((n) => `#${n}`)].join(", ");
+  health.push(`the running loop is scoped to ${named}: it makes only the moves for those and stops once they're done; the loop's moves below that fall outside it wait for an unscoped run (\`npm run agents:awake\`)`);
+}
 if (loopMoves.length && asleep)
   health.push(status
     ? `the loop is asleep with ${loopMoves.length} move(s) its next pass would make: it wakes when GitHub changes, or by ~${clock(asleep.until)}; restart it to pass now (\`npm run agents:stop\`, then \`npm run agents:awake\`), or tell an agent to make them`

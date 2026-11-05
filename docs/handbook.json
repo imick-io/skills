@@ -3162,6 +3162,25 @@
       "url": "https://github.com/imick-io/skills/tree/main/skills/engineering/run-epic"
     },
     {
+      "name": "run-ticket",
+      "group": "build",
+      "summary": "Build one ticket inside this Claude Code session, the way the agent loop would (claim, branch, implement, review, land), without Docker or Sandcastle. A ticket under an epic lands on the epic branch, exactly as /run-epic or the loop lands it; any other ticket (a bug, a small enhancement) arrives as a PR to main.",
+      "description": "Build one ticket inside this Claude Code session, the way the agent loop would (claim, branch, implement, review, land), without Docker or Sandcastle. A ticket under an epic lands on the epic branch, exactly as /run-epic or the loop lands it; any other ticket (a bug, a small enhancement) arrives as a PR to main. Use when the user wants a single ticket built here, says \"run the ticket\", \"build #42 here\", or \"run-ticket 42\".",
+      "runs": [
+        "you"
+      ],
+      "uses": [
+        "implement",
+        "debug-and-fix",
+        "code-review"
+      ],
+      "next": [
+        "verify-epic"
+      ],
+      "source": "iMick",
+      "url": "https://github.com/imick-io/skills/tree/main/skills/engineering/run-ticket"
+    },
+    {
       "name": "scope-decomposer",
       "group": "plan",
       "summary": "Breaks a big idea into an initiative of epics on the tracker, each with a milestone, a branch and its blockers. New products default to a local-first v1 with a Go-live epic last.",
