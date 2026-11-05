@@ -197,6 +197,7 @@ const tickets = issues.filter(isTicket).map((i) => {
     status: ticketStatus(i),
     human: has(i, "ready-for-human"),
     epic: epic?.number ?? null,
+    what: ["bug", "enhancement", "needs-scoping", "needs-info", "wontfix"].find((w) => has(i, w)) ?? null,
     area: i.labels.find((l) => l.startsWith("area:"))?.slice(5) ?? null,
     blockedBy: i.blockedBy,
     openBlockers: openBlockers(i).map((b) => b.number),
@@ -374,10 +375,10 @@ const html = `<!doctype html>
   --text: #1c1c1a; --muted: #6b6b66; --link: #2c5fb3;
   --you: #c62a1f; --you-soft: #fdeceb;
   --review: #c62a1f; --review-soft: #fdeceb;
-  --working: #1f7a4d; --working-soft: #e5f4ec;
-  --queued: #2c5fb3; --queued-soft: #e8effa;
+  --working: #2c5fb3; --working-soft: #e8effa;
+  --queued: #7a3fb8; --queued-soft: #f3ecfb;
   --blocked: #7a7a73; --blocked-soft: #efefea;
-  --done: #9a9a93; --done-soft: #f3f3f0;
+  --done: #1f7a4d; --done-soft: #e5f4ec;
   --triage: #a36200; --triage-soft: #fbf1de;
   --backlog: #7a7a73; --backlog-soft: #ecece7;
 }
@@ -387,10 +388,10 @@ const html = `<!doctype html>
     --text: #ecece8; --muted: #9b9b94; --link: #8db4f2;
     --you: #ff6b61; --you-soft: #3d1a17;
     --review: #ff6b61; --review-soft: #3d1a17;
-    --working: #6fcf9b; --working-soft: #17301f;
-    --queued: #8db4f2; --queued-soft: #1b2638;
+    --working: #8db4f2; --working-soft: #1b2638;
+    --queued: #c99ae8; --queued-soft: #2f2238;
     --blocked: #9b9b94; --blocked-soft: #2a2a27;
-    --done: #6b6b66; --done-soft: #222220;
+    --done: #6fcf9b; --done-soft: #17301f;
     --triage: #e8a53e; --triage-soft: #36280f;
     --backlog: #8a8a83; --backlog-soft: #2a2a27;
   }
@@ -430,7 +431,7 @@ th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--bo
 th { font-size: 12px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; background: var(--surface-2); }
 tr:last-child td { border-bottom: 0; }
 .bar { height: 6px; background: var(--surface-2); border-radius: 3px; overflow: hidden; min-width: 90px; margin-top: 6px; }
-.bar i { display: block; height: 100%; background: var(--working); }
+.bar i { display: block; height: 100%; background: var(--done); }
 .table-scroll { overflow-x: auto; }
 .diagram { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px; overflow-x: auto; }
 .diagram svg { max-width: none !important; }
@@ -453,7 +454,7 @@ nav.tabs .badge { display: inline-block; margin-left: 6px; min-width: 18px; padd
 .spec ol, .spec ul { margin: 0; padding-left: 0; list-style: none; }
 .spec li { display: flex; gap: 10px; align-items: baseline; padding: 5px 0; border-bottom: 1px solid var(--border); font-size: 14px; }
 .spec li:last-child { border-bottom: 0; }
-.conf { flex: 0 0 auto; font-size: 12px; font-weight: 700; padding: 1px 7px; border-radius: 999px; font-variant-numeric: tabular-nums; color: var(--working); background: var(--working-soft); }
+.conf { flex: 0 0 auto; font-size: 12px; font-weight: 700; padding: 1px 7px; border-radius: 999px; font-variant-numeric: tabular-nums; color: var(--done); background: var(--done-soft); }
 .conf.low { color: var(--you); background: var(--you-soft); }
 .conf.na { color: var(--muted); background: var(--surface-2); }
 .tag { flex: 0 0 auto; font-size: 11px; font-weight: 600; color: var(--triage); border: 1px solid var(--triage); border-radius: 4px; padding: 0 5px; }
@@ -461,8 +462,8 @@ nav.tabs .badge { display: inline-block; margin-left: 6px; min-width: 18px; padd
 .approve code { font-size: 12.5px; }
 button.copy { font: inherit; font-size: 13px; padding: 4px 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface-2); color: var(--text); cursor: pointer; }
 .spec.revising { border-left-color: var(--queued); }
-.spec.approved { border-left-color: var(--working); }
-.spec.done { border-left-color: var(--done); }
+.spec.approved { border-left-color: var(--done); }
+.spec.done { border-left-color: var(--blocked); }
 details.spec > summary { cursor: pointer; }
 details.spec > .spec { border: 0; padding: 0; margin: 10px 0 0; }
 .rm-scroll { overflow-x: auto; background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; }
@@ -492,6 +493,7 @@ details.spec > .spec { border: 0; padding: 0; margin: 10px 0 0; }
 .chip:hover { text-decoration: none; filter: brightness(.97); }
 .chip .cn { color: var(--muted); font-variant-numeric: tabular-nums; flex: 0 0 auto; }
 .chip .ct { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chip.done { background: var(--done-soft); border-left-color: var(--done); }
 .chip.done .ct { text-decoration: line-through; color: var(--muted); }
 .ep .unplanned { font-size: 12.5px; color: var(--muted); margin-top: 8px; font-style: italic; }
 /* Red means you: a ticket or epic waiting on you is filled red, never just tinted. */
@@ -500,15 +502,17 @@ details.spec > .spec { border: 0; padding: 0; margin: 10px 0 0; }
 .chip .you-tag { flex: 0 0 auto; font-size: 10.5px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; padding: 0 5px; border-radius: 4px; background: #fff; color: var(--you); }
 .ep.needs-you { border-color: var(--you); box-shadow: 0 0 0 1.5px var(--you); }
 .ep.yours .ep-status { color: #fff; background: var(--you); }
-.ep.outside { border-style: dashed; border-top: 4px solid var(--queued); }
+.ep.outside { border-style: dashed; border-top: 4px solid var(--c); }
 .ep.outside .ep-title span { font-weight: 650; }
-details.ep.done-ep { border-top-width: 1px; opacity: .8; padding: 6px 12px; }
-details.ep.done-ep > summary { cursor: pointer; list-style: none; display: flex; gap: 6px; align-items: baseline; font-weight: 600; color: var(--muted); }
+details.ep.done-ep { border: 1px solid var(--done); border-left: 5px solid var(--done); background: var(--done-soft); padding: 6px 12px; }
+details.ep.done-ep > summary { cursor: pointer; list-style: none; display: flex; gap: 6px; align-items: baseline; font-weight: 600; color: var(--text); }
 details.ep.done-ep > summary::-webkit-details-marker { display: none; }
 details.ep.done-ep > summary::before { content: "▸"; font-size: 11px; }
 details.ep.done-ep[open] > summary::before { content: "▾"; }
-details.ep.done-ep > summary .ok { margin-left: auto; font-size: 12px; font-weight: 600; white-space: nowrap; }
-.key { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 6px 18px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; font-size: 13px; color: var(--text); }
+details.ep.done-ep > summary .ok { margin-left: auto; font-size: 12px; font-weight: 700; white-space: nowrap; color: var(--done); }
+.keys { display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: 12px; }
+.key .key-title { grid-column: 1 / -1; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+.key { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 6px 18px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; font-size: 13px; color: var(--text); }
 .key .row { display: flex; gap: 8px; align-items: baseline; }
 .key .sw { flex: 0 0 auto; min-width: 70px; text-align: center; font-size: 11.5px; font-weight: 700; padding: 1px 6px; border-radius: 5px; color: var(--text); background: var(--ks); border-left: 3px solid var(--k); }
 .key .sw.you { background: var(--you); color: #fff; border-left-color: var(--you); }
@@ -534,7 +538,7 @@ details.ep.done-ep > summary .ok { margin-left: auto; font-size: 12px; font-weig
 .hitl li { display: flex; gap: 8px; font-size: 14px; padding: 3px 0; }
 .hitl li::before { content: ""; flex: 0 0 14px; height: 14px; margin-top: 3px; border: 1.5px solid var(--muted); border-radius: 3px; }
 .hitl li.done { color: var(--muted); text-decoration: line-through; }
-.hitl li.done::before { background: var(--working); border-color: var(--working); }
+.hitl li.done::before { background: var(--done); border-color: var(--done); }
 .hitl details summary { margin: 8px 0 0 46px; font-size: 13px; color: var(--link); cursor: pointer; }
 .hitl .noitems { margin: 8px 0 0 46px; font-size: 13px; color: var(--muted); }
 @media (max-width: 600px) { .hitl .sub, .hitl ul, .hitl .noitems, .hitl details summary { margin-left: 0; } }
@@ -699,7 +703,7 @@ function specCard(sp) {
   const stageText = { review: 'Waiting for your approval', revising: 'Agent is revising your changes', approved: 'Approved; tickets being cut', done: 'Validated' }[sp.stage];
   const cmd = 'gh issue edit ' + sp.number + ' --add-label spec-approved';
   return '<div class="spec ' + sp.stage + '"><div class="top"><span class="title">' + (e ? esc(e.title) : esc(sp.title)) + '</span>' +
-    '<span class="pill ' + (sp.stage === 'review' ? 'you' : sp.stage === 'approved' ? 'working' : 'queued') + '">' + stageText + '</span></div>' +
+    '<span class="pill ' + (sp.stage === 'review' ? 'you' : sp.stage === 'approved' ? 'done' : 'queued') + '">' + stageText + '</span></div>' +
     '<div class="meta">Spec ' + ref(sp.number) + (e ? ' · epic ' + ref(e.number) : '') + ' · ' + sp.decisions.length + ' decisions taken on autopilot' +
     (low ? ' · <b>' + low + ' below 75%</b>' : '') + (assumed ? ' · ' + assumed + ' assumed' : '') + '</div>' +
     (sp.openForReview.length ? '<h4>Flagged for your review</h4><ul>' + sp.openForReview.map((l) => '<li><span>' + md(l) + '</span></li>').join('') + '</ul>' : '') +
@@ -800,18 +804,31 @@ function chipsOf(ts, hideDone) {
 const RECENT_DAYS = 14;
 const outsideTickets = () => DATA.tickets.filter((t) => !t.epic &&
   (!isDone(t) || (t.closedAt && Date.now() - Date.parse(t.closedAt) < RECENT_DAYS * 86_400_000)));
-function outsideCard(withTickets, hideDone) {
+// Tickets in no epic, grouped by what they are, each group its own card at the
+// bottom of "Now": bugs and small changes each ship as their own PR to main.
+const GROUPS = [
+  ['bug', 'Bugs', 'Each reproduced and fixed on its own, as a PR to main.', (t) => t.what === 'bug'],
+  ['change', 'Small changes', 'Each built from its brief, as a PR to main.', (t) => t.what === 'enhancement'],
+  ['scoping', 'To scope', 'Too big for one ticket: /scope-decomposer turns each into epics.', (t) => t.what === 'needs-scoping'],
+  ['info', 'Waiting on the reporter', 'Triage asked a question; it triages again on the reply.', (t) => t.what === 'needs-info'],
+  ['wontfix', 'Not doing', 'Already built, a duplicate or rejected; a person closes each.', (t) => t.what === 'wontfix'],
+  ['triage', 'Not sorted', 'Waiting for triage to say what each is and who acts.', (t) => !t.what],
+];
+const groupOf = (t) => t.status === 'backlog' ? 'backlog' : (GROUPS.find(([, , , m]) => m(t)) ?? GROUPS.at(-1))[0];
+function outsideCards(withTickets, hideDone) {
   const ts = outsideTickets();
-  const parked = ts.filter((t) => t.status === 'backlog').length;
-  const open = ts.filter((t) => !isDone(t) && t.status !== 'backlog');
-  if (!open.length && !parked && (hideDone || !ts.length)) return '';
-  const mine = open.filter((t) => t.status === 'you' || t.status === 'review').length;
-  const closed = ts.filter(isDone).length;
-  return '<div class="ep outside' + (mine ? ' needs-you' : '') + '" id="ep-outside" style="--c:var(--queued);--cs:var(--queued-soft)">' +
-    '<div class="ep-title"><span>Outside epics</span></div>' +
-    '<div class="ep-meta">Standalone bugs and small changes, each shipped as its own PR to main.</div>' +
-    '<div class="ep-meta">' + open.length + ' open' + (mine ? ' · ' + mine + ' need you' : '') + (closed ? ' · ' + closed + ' closed in the last ' + RECENT_DAYS + ' days' : '') + (parked ? ' · ' + parked + ' parked in the backlog, at the end' : '') + '</div>' +
-    (withTickets ? chipsOf(ts, hideDone) : '') + '</div>';
+  return GROUPS.concat([['backlog', 'Backlog', 'Parked for later, of any kind: no agent touches them.', null]]).map(([key, name, what]) => {
+    const g = ts.filter((t) => groupOf(t) === key);
+    const open = g.filter((t) => !isDone(t));
+    if (!open.length && (hideDone || !g.length)) return '';
+    const mine = open.filter((t) => t.status === 'you' || t.status === 'review').length;
+    const closed = g.length - open.length;
+    const c = key === 'backlog' ? 'backlog' : key === 'triage' ? 'triage' : mine ? 'you' : open.some((t) => t.status === 'working') ? 'working' : open.length ? 'queued' : 'done';
+    return '<div class="ep outside' + (mine ? ' needs-you' : '') + '" id="ep-outside-' + key + '" style="--c:var(--' + c + ');--cs:var(--' + c + '-soft)">' +
+      '<div class="ep-title"><span>' + name + '</span><span class="meta">' + open.length + ' open</span></div>' +
+      '<div class="ep-meta">' + what + (mine ? ' · <b>' + mine + ' need you</b>' : '') + (closed ? ' · ' + closed + ' closed in the last ' + RECENT_DAYS + ' days' : '') + '</div>' +
+      (withTickets ? chipsOf(g, hideDone) : '') + '</div>';
+  }).join('');
 }
 // The open epics waiting on this one.
 const unblocks = (e) => DATA.epics.filter((x) => x.status !== 'done' && x.blockedBy.includes(e.number)).map((x) => x.number);
@@ -819,7 +836,7 @@ function renderRoadmap() {
   const withTickets = $('rm-tickets').checked, hideDone = $('rm-hide-done').checked;
   const cols = [[]];
   for (const e of DATA.epics) (cols[levelOf(e)] ??= []).push(e);
-  const outside = outsideCard(withTickets, hideDone);
+  const outside = outsideCards(withTickets, hideDone);
   $('rm').innerHTML = '<svg class="lines" id="rm-lines"></svg>' + cols.map((list, i) => '<div class="rm-col"><div class="rm-step">' + (i === 0 ? 'Now' : 'Step ' + (i + 1)) + '</div>' + list.map((e) => {
     const c = epicColor(e);
     const pct = e.total ? Math.round((e.done / e.total) * 100) : 0;
@@ -839,7 +856,7 @@ function renderRoadmap() {
       (unblocks(e).length ? '<div class="ep-meta">then ' + unblocks(e).map(ref).join(', ') + '</div>' : '') +
       (e.total ? chips : '<div class="unplanned">Not planned yet: no tickets.</div>') + '</div>';
   }).join('') + (i === 0 ? outside : '') + '</div>').join(''); // outside epics last in "Now", so the epics' rows stay level
-  $('rm').querySelectorAll('.ep[id^="ep-"]:not(#ep-outside)').forEach((el) => {
+  $('rm').querySelectorAll('.ep[id^="ep-"]:not([id^="ep-outside"])').forEach((el) => {
     const n = Number(el.id.slice(3));
     el.addEventListener('mouseenter', () => focusEpic(n));
     el.addEventListener('mouseleave', () => focusEpic(null));
@@ -923,26 +940,36 @@ function epicGraph(epicNum) {
   for (const t of ts) for (const b of t.blockedBy) if (inEpic.has(b)) lines.push('t' + b + ' --> t' + t.number);
   return lines.concat(classDefs()).join('\\n');
 }
-// One colour key for epics and tickets alike: what each colour asks of you.
-const KEY = [
-  ['you', 'Red: you', 'do or decide it. A ticket to answer, do or review; an epic to brief, approve or merge. Nothing moves until you act.'],
-  ['working', 'Green: agent on it', 'an agent is building it now.'],
-  ['queued', 'Blue: agent next', 'queued, or being planned; the loop takes it on its own.'],
-  ['triage', 'Amber: not sorted', 'waiting for triage to say what it is and who acts.'],
-  ['blocked', 'Grey: waiting', 'on another ticket or epic first. Hover a ticket to see which.'],
-  ['done', 'Faded: done', 'closed. Done epics fold to one line on the roadmap; click to open one.'],
+// Two keys, one for epics and one for tickets: what each colour asks of you.
+const EPIC_KEY = [
+  ['you', 'Red', 'Needs you', 'its brief, its spec to approve, or its finished PR to merge. An epic outlined in red has a ticket waiting on you.'],
+  ['working', 'Blue', 'Building', 'agents are building its tickets.'],
+  ['queued', 'Purple', 'Planning', 'agents are planning it, or plan it next.'],
+  ['blocked', 'Grey', 'Waiting', 'on earlier epics: it starts when they finish.'],
+  ['done', 'Green', 'Done', 'merged. Folded to one line; click it to see its tickets.'],
 ];
-function legend(id, how) {
-  $(id).innerHTML = '<div class="key">' + KEY.map(([k, name, what]) =>
-    '<div class="row"><span class="sw ' + k + '" style="--k:var(--' + k + ');--ks:var(--' + k + '-soft)">' + name.split(':')[0] + '</span><span><b>' + name.split(': ')[1] + '</b>: <span class="what">' + what + '</span></span></div>').join('') +
-    '<div class="how">' + how + '</div></div>';
-}
-legend('roadmap-legend', 'Columns run left to right in build order. An arrow goes from an epic to the epics that wait on it: solid while it still holds them back, dashed once it\'s done. Hover an epic to see only its links. Each card also says it in words: <i>after</i> what it waits on, <i>then</i> what waits on it. An epic outlined in red has something waiting on you. <b>Outside epics</b>, at the bottom of Now, holds the standalone bugs and changes, backlog last. <span class="pill manual">manual</span> epics are planned and built by you, outside the loop. Click anything to open it on GitHub.');
+const TICKET_KEY = [
+  ['you', 'Red', 'You', 'answer it, do it, or review its fix. Nothing moves until you act.'],
+  ['working', 'Blue', 'Agent on it', 'an agent is building or fixing it now.'],
+  ['queued', 'Purple', 'Agent next', 'queued; the loop takes it on its own.'],
+  ['triage', 'Amber', 'Not sorted', 'waiting for triage to say what it is and who acts.'],
+  ['blocked', 'Grey', 'Waiting', 'on another ticket first. Hover it to see which.'],
+  ['done', 'Green', 'Done', 'closed, struck through.'],
+  ['backlog', 'Grey', 'Backlog', 'parked for later; always last in a list.'],
+];
+const keyBox = (title, rows, how) => '<div class="key"><div class="key-title">' + title + '</div>' + rows.map(([k, colour, name, what]) =>
+  '<div class="row"><span class="sw ' + k + '" style="--k:var(--' + k + ');--ks:var(--' + k + '-soft)">' + colour + '</span><span><b>' + name + '</b>: <span class="what">' + what + '</span></span></div>').join('') +
+  (how ? '<div class="how">' + how + '</div>' : '') + '</div>';
+function legend(id, boxes) { $(id).innerHTML = '<div class="keys">' + boxes.join('') + '</div>'; }
+legend('roadmap-legend', [
+  keyBox('Epics', EPIC_KEY, 'Columns run left to right in build order. An arrow goes from an epic to the epics waiting on it: solid while it holds them back, dashed once it is done. Hover an epic to see only its links; each card also says <i>after</i> and <i>then</i> in words. <span class="pill manual">manual</span>: planned and built by you, outside the loop.'),
+  keyBox('Tickets', TICKET_KEY, 'Inside each epic, and in the cards at the bottom of Now for the tickets in no epic: bugs, small changes, to scope, waiting on the reporter, not sorted, backlog. Click a ticket to open it on GitHub.'),
+]);
 ['rm-tickets', 'rm-hide-done'].forEach((id) => {
   try { const v = localStorage.getItem('tracker-' + id); if (v !== null) $(id).checked = v === '1'; } catch {}
   $(id).addEventListener('change', () => { try { localStorage.setItem('tracker-' + id, $(id).checked ? '1' : '0'); } catch {} renderDiagrams(); });
 });
-legend('epic-legend', 'An arrow goes from a ticket to the tickets waiting on it. Click a box to open the issue.');
+legend('epic-legend', [keyBox('Tickets', TICKET_KEY, 'An arrow goes from a ticket to the tickets waiting on it. Click a box to open the issue.')]);
 
 let drawn = {};
 async function draw(id, src) {
@@ -963,7 +990,7 @@ if (window.mermaid) mermaid.initialize({ startOnLoad: false, securityLevel: 'loo
 
 // ---- Epic board
 const planned = DATA.epics.filter((e) => e.total);
-$('epic-pick').innerHTML = '<option value="0">Outside epics (standalone bugs and changes)</option>' +
+$('epic-pick').innerHTML = '<option value="0">Not in an epic (bugs, small changes, backlog)</option>' +
   planned.concat(DATA.epics.filter((e) => !e.total)).map((e) => '<option value="' + e.number + '">#' + e.number + ' ' + esc(e.title) + (e.total ? '' : ' (not planned)') + '</option>').join('');
 // Open an epic by default; the outside entry when there's no epic, or when you last picked it.
 if (planned.length) $('epic-pick').value = String(planned[0].number);
