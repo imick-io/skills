@@ -1,5 +1,11 @@
 # imick-skills
 
+## 1.18.1
+
+### Patch Changes
+
+- [#79](https://github.com/imick-io/skills/pull/79) [`ed4d9a2`](https://github.com/imick-io/skills/commit/ed4d9a2bd69328f0d1f12435638975c492a2df4b) Thanks [@imick-io](https://github.com/imick-io)! - The agent loop no longer gets stuck when an epic branch is pushed to from outside the loop while the loop still holds landed tickets it hasn't pushed. Each pass used to fail with `Not possible to fast-forward` and retry every 5 minutes. Now the loop merges the remote epic branch into its own, pushes, and carries on. If that merge conflicts, it stops with a message saying which worktree to merge in by hand.
+
 ## 1.18.0
 
 ### Minor Changes
