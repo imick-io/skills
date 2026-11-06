@@ -13,9 +13,9 @@ Pick the ready tickets that can be worked **at the same time**, beside each othe
 Two tickets must not run together when:
 
 - one needs code, an API shape or a decision the other introduces,
-- they'd make large, overlapping changes to the same code: rewriting the same functions or components, or the same schema.
+- they'd edit the same files beyond the small edits below: the same functions, components, forms or schema.
 
-Small edits to a shared file are fine side by side: a route registered, an export or a list entry added, a line in the same config. When two branches do conflict, the loop sends the later one back to be redone on top of the first, which costs one ticket's time, not the batch's. Hold a ticket back for a conflict only when it's likely and would mean a large redo.
+Small edits to a shared file are fine side by side: a route registered, an export or a list entry added, a line in the same config. Anything more is not. When two branches conflict, the loop sends the later one back to be rebuilt from scratch on top of the first, build and review again, which costs hours. So hold a ticket back when it would edit the same files as another one picked or building, beyond those small edits, even if the two edits look separate (two handlers added to the same listener, two sections added to the same page or form). One ticket held back for a pass costs less than one rebuilt.
 
 Prefer tickets of the same epic, oldest first; bugs (`bug` kind) before builds when they conflict. Don't modify anything.
 
