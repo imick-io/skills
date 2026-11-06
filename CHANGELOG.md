@@ -1,5 +1,13 @@
 # imick-skills
 
+## 1.19.0
+
+### Minor Changes
+
+- [#81](https://github.com/imick-io/skills/pull/81) [`2e344fe`](https://github.com/imick-io/skills/commit/2e344fe4b59cb5bae07dd56887b378abd90fad0a) Thanks [@imick-io](https://github.com/imick-io)! - Agent loop tickets finish much faster: the implement, review, bug and conflict agents now run the typecheck and only the tests their change can reach (`vitest related` with Vitest), in the foreground with a time limit, instead of the whole suite. The full suite still runs in CI on the epic's PR. Running every package's tests in several sandboxes at once overloaded the machine. Tests timed out on load, agents re-ran them, and then polled background runs for hours. The planner is also stricter about running tickets side by side: it holds a ticket back when it would edit the same files as one building, beyond a registration line or a list entry, because a conflict rebuilds the later ticket from scratch. Projects that changed the test line in `.sandcastle/implement-prompt.md` should merge the new rules into their own wording by hand.
+
+- [#82](https://github.com/imick-io/skills/pull/82) [`fe67161`](https://github.com/imick-io/skills/commit/fe67161a95b0ac9e0b8193fb9855910089409f6d) Thanks [@imick-io](https://github.com/imick-io)! - When a built and reviewed ticket conflicts with its epic branch (other tickets landed meanwhile), the agent loop no longer throws the work away and rebuilds the ticket from scratch. It merges the epic branch into the ticket's branch, hands the conflict markers to an agent (`ticket-conflicts-prompt.md`, new) and lands the resolved result as one clean merge commit. Rebuilding stays the fallback when the agent can't resolve it or needs a product decision. Projects update by copying `main.mts` and the new prompt into `.sandcastle/`; the loop picks them up on restart.
+
 ## 1.18.1
 
 ### Patch Changes
