@@ -547,6 +547,7 @@ details.ep.done-ep > summary .ok { margin-left: auto; font-size: 12px; font-weig
 .pill.brief, .pill.spec { color: var(--queued); background: var(--queued-soft); }
 .pill.merge { color: var(--you); background: var(--you-soft); }
 .pill.manual { color: var(--you); background: transparent; border: 1px solid var(--you); padding-top: 0; padding-bottom: 0; }
+.pill.area { color: var(--muted); background: transparent; border: 1px solid var(--border); padding-top: 0; padding-bottom: 0; font-weight: 500; }
 label.check { display: inline-flex; gap: 6px; align-items: center; font-size: 14px; }
 </style>
 </head>
@@ -760,10 +761,12 @@ const MANUAL_COLORS = { planning: 'you', building: 'you', ready: 'you' };
 const epicColor = (e) => (e.manual && MANUAL_COLORS[e.status]) || EPIC_COLORS[e.status];
 const epicStatusText = (e) => (e.manual && DATA.manualStatus[e.status]) || DATA.epicStatus[e.status];
 const manualPill = (e) => e.manual ? ' <span class="pill manual" title="Planned and built by you; the agent loop never touches this epic or its tickets">manual</span>' : '';
+// The epic's area: a loop started with --area=<it> builds this epic and nothing outside its areas.
+const areaPill = (e) => e.area ? ' <span class="pill area" title="Area ' + esc(e.area) + ': npm run agents -- --area=' + esc(e.area.split(':')[0]) + ' runs a loop for this area only">' + esc(e.area) + '</span>' : '';
 $('epic-table').innerHTML = '<tr><th>Epic</th><th>Status</th><th>Tickets</th><th>Waits on</th></tr>' + DATA.epics.map((e) => {
   const pct = e.total ? Math.round((e.done / e.total) * 100) : 0;
   const counts = e.total ? Object.entries(e.counts).filter(([s, n]) => n && s !== 'done' && s !== 'dropped').map(([s, n]) => n + ' ' + DATA.ticketStatus[s].toLowerCase()).join(' · ') : '';
-  return '<tr><td>' + ref(e.number) + ' ' + esc(e.title) + manualPill(e) + '</td>' +
+  return '<tr><td>' + ref(e.number) + ' ' + esc(e.title) + areaPill(e) + manualPill(e) + '</td>' +
     '<td><span class="pill ' + epicColor(e) + '">' + esc(epicStatusText(e)) + '</span></td>' +
     '<td>' + (e.total ? e.done + ' / ' + e.total + ' done<div class="bar"><i style="width:' + pct + '%"></i></div><div class="meta">' + counts + '</div>' : '<span class="meta">not planned yet</span>') + '</td>' +
     '<td>' + (e.openBlockers.map(ref).join(', ') || '<span class="meta">nothing</span>') + '</td></tr>';
@@ -844,12 +847,12 @@ function renderRoadmap() {
     // A done epic folds to one line; open it to see its tickets.
     if (e.status === 'done')
       return '<details class="ep done-ep" id="ep-' + e.number + '" style="--c:var(--done);--cs:var(--done-soft)"' + (openDone.has(e.number) ? ' open' : '') + '>' +
-        '<summary><a class="n" href="' + e.url + '" target="_blank">#' + e.number + '</a><span>' + esc(e.title) + '</span><span class="ok">✓ Done' + (e.total ? ' · ' + e.total + ' tickets' : '') + '</span></summary>' +
+        '<summary><a class="n" href="' + e.url + '" target="_blank">#' + e.number + '</a><span>' + esc(e.title) + areaPill(e) + '</span><span class="ok">✓ Done' + (e.total ? ' · ' + e.total + ' tickets' : '') + '</span></summary>' +
         chips + '</details>';
     // Outlined red when anything in it waits on you; its status is filled red only when the epic itself does (brief, spec, merge).
     const needsYou = c === 'you' || e.counts.you + e.counts.review > 0;
     return '<div class="ep' + (needsYou ? ' needs-you' : '') + (c === 'you' ? ' yours' : '') + '" id="ep-' + e.number + '" style="--c:var(--' + c + ');--cs:var(--' + c + '-soft)">' +
-      '<div class="ep-title"><a class="n" href="' + e.url + '" target="_blank">#' + e.number + '</a><span>' + esc(e.title) + manualPill(e) + '</span></div>' +
+      '<div class="ep-title"><a class="n" href="' + e.url + '" target="_blank">#' + e.number + '</a><span>' + esc(e.title) + areaPill(e) + manualPill(e) + '</span></div>' +
       '<span class="ep-status">' + esc(epicStatusText(e)) + '</span>' +
       (e.total ? '<div class="ep-meta">' + e.done + ' of ' + e.total + ' tickets done' + (e.counts.you + e.counts.review ? ' · ' + (e.counts.you + e.counts.review) + ' need you' : '') + '</div><div class="bar"><i style="width:' + pct + '%"></i></div>' : '') +
       (e.openBlockers.length ? '<div class="ep-meta">after ' + e.openBlockers.map(ref).join(', ') + '</div>' : '') +
@@ -962,7 +965,7 @@ const keyBox = (title, rows, how) => '<div class="key"><div class="key-title">' 
   (how ? '<div class="how">' + how + '</div>' : '') + '</div>';
 function legend(id, boxes) { $(id).innerHTML = '<div class="keys">' + boxes.join('') + '</div>'; }
 legend('roadmap-legend', [
-  keyBox('Epics', EPIC_KEY, 'Columns run left to right in build order. An arrow goes from an epic to the epics waiting on it: solid while it holds them back, dashed once it is done. Hover an epic to see only its links; each card also says <i>after</i> and <i>then</i> in words. <span class="pill manual">manual</span>: planned and built by you, outside the loop.'),
+  keyBox('Epics', EPIC_KEY, 'Columns run left to right in build order. An arrow goes from an epic to the epics waiting on it: solid while it holds them back, dashed once it is done. Hover an epic to see only its links; each card also says <i>after</i> and <i>then</i> in words. <span class="pill manual">manual</span>: planned and built by you, outside the loop. <span class="pill area">mobile</span>: the area of the epic; <code>npm run agents -- --area=mobile</code> runs a loop on that area alone, so loops on other machines can take the other areas.'),
   keyBox('Tickets', TICKET_KEY, 'Inside each epic, and in the cards at the bottom of Now for the tickets in no epic: bugs, small changes, to scope, waiting on the reporter, not sorted, backlog. Click a ticket to open it on GitHub.'),
 ]);
 ['rm-tickets', 'rm-hide-done'].forEach((id) => {

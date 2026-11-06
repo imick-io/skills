@@ -15,6 +15,13 @@
 //                                     handed to a person). Both flags
 //                                     combine, with each other and with the
 //                                     ones above; a scoped run never triages
+//   npm run agents -- --area=mobile   only epics labelled area:mobile (or
+//                                     area:mobile:<part>) and the tickets
+//                                     outside epics labelled so; `none` is
+//                                     what has no area label. Runs on like
+//                                     an unscoped loop. Give each machine its
+//                                     own areas and their loops never touch
+//                                     the same epic branch or ticket
 //   npm run agents:awake              the loop under `caffeinate -i`: the Mac
 //                                     doesn't idle-sleep while it runs (macOS)
 //   npm run agents:stop               ask a running loop to stop nicely: it
@@ -141,13 +148,14 @@ const ONCE = process.argv.includes("--once");
 const DRY_RUN = process.argv.includes("--dry-run");
 const JSON_OUT = process.argv.includes("--json");
 const PLANNING = !process.argv.includes("--no-planning");
-// A scoped run (--epic=1,2 and/or --tickets=3,4; `--epic 1,2` works too)
-// works only on what it names. An epic in scope brings everything under it:
+// A scoped run (--epic=1,2, --tickets=3,4 and/or --area=mobile,crm;
+// `--epic 1,2` works too) works only on what it names. An epic in scope brings everything under it:
 // its planning, its tickets, its conflicts with main, its PR and its check.
 // A ticket in scope is built, and nothing else. Triage is off: new issues are
 // out of scope by definition. Fast mode's unblocking keeps to the scope too.
-// The run exits once nothing in scope is left (scopeLeft).
-function listFlag(names: string[]): Set<number> | undefined {
+// An --epic/--tickets run exits once nothing in scope is left (scopeLeft);
+// one with --area runs on, since new epics and tickets keep arriving in an area.
+function flagValues(names: string[]): string[] | undefined {
   const argv = process.argv.slice(2);
   let values: string[] | undefined;
   argv.forEach((arg, i) => {
@@ -156,8 +164,12 @@ function listFlag(names: string[]): Set<number> | undefined {
     if (!names.includes(flag)) return;
     values = [...(values ?? []), ...(eq < 0 ? argv[i + 1] ?? "" : arg.slice(eq + 1)).split(",")];
   });
+  return values?.map((v) => v.trim()).filter(Boolean);
+}
+function listFlag(names: string[]): Set<number> | undefined {
+  const values = flagValues(names);
   if (!values) return undefined;
-  const numbers = values.map((v) => v.trim().replace(/^#/, "")).filter(Boolean);
+  const numbers = values.map((v) => v.replace(/^#/, ""));
   if (!numbers.length || numbers.some((v) => !/^\d+$/.test(v))) {
     console.error(`[agents] ${names[0]} takes issue numbers, comma-separated: ${names[0]}=12,14`);
     process.exit(1);
@@ -166,15 +178,36 @@ function listFlag(names: string[]): Set<number> | undefined {
 }
 const SCOPE_EPICS = listFlag(["--epic", "--epics"]);
 const SCOPE_TICKETS = listFlag(["--tickets", "--ticket"]);
-const SCOPED = Boolean(SCOPE_EPICS || SCOPE_TICKETS);
+// Areas as named in docs/agents/team.md, with or without the `area:` prefix.
+const SCOPE_AREAS = (() => {
+  const values = flagValues(["--area", "--areas"]);
+  if (!values) return undefined;
+  if (!values.length) {
+    console.error("[agents] --area takes area names, comma-separated: --area=mobile,crm (`none`: issues with no area label)");
+    process.exit(1);
+  }
+  return new Set(values.map((v) => v.replace(/^area:/, "")));
+})();
+const SCOPED = Boolean(SCOPE_EPICS || SCOPE_TICKETS || SCOPE_AREAS);
+// Runs until its named epics and tickets are done; an area never is.
+const SCOPE_ENDS = SCOPED && !SCOPE_AREAS;
 const SCOPE_LABEL = [
+  SCOPE_AREAS && `area ${[...SCOPE_AREAS].join(", ")}`,
   SCOPE_EPICS && `epic ${[...SCOPE_EPICS].map((n) => `#${n}`).join(", ")}`,
   SCOPE_TICKETS && `ticket ${[...SCOPE_TICKETS].map((n) => `#${n}`).join(", ")}`,
 ].filter(Boolean).join("; ");
+// The areas on an issue: `area:mobile` and `area:mobile:shelf` are both in mobile.
+const areasOf = (labels: { name: string }[]) => labels.map((l) => l.name).filter((l) => l.startsWith("area:")).map((l) => l.slice(5));
+const areaInScope = (areas: string[]) => Boolean(SCOPE_AREAS) &&
+  (areas.length ? areas.some((a) => [...SCOPE_AREAS!].some((s) => a === s || a.startsWith(`${s}:`))) : SCOPE_AREAS!.has("none"));
 // Epic-level work (planning, the PR and its check, conflicts with main).
-const epicInScope = (epic: number | undefined) => !SCOPED || (epic !== undefined && Boolean(SCOPE_EPICS?.has(epic)));
-// An issue: named itself, or under an epic in scope.
-const inScope = (n: number, epic?: number) => !SCOPED || Boolean(SCOPE_TICKETS?.has(n)) || epicInScope(epic);
+const epicInScope = (epic: { number: number; areas: string[] } | undefined) =>
+  !SCOPED || (epic !== undefined && (Boolean(SCOPE_EPICS?.has(epic.number)) || areaInScope(epic.areas)));
+// An issue: named itself, under an epic in scope, or outside epics with an area in scope.
+const inScope = (n: number, epic: Epic | undefined, labels: { name: string }[]) =>
+  !SCOPED || Boolean(SCOPE_TICKETS?.has(n)) || (epic ? epicInScope(epic) : areaInScope(areasOf(labels)));
+// An epic straight from `gh issue list`, for epicInScope.
+const listedEpic = (e: { number: number; labels: { name: string }[] }) => ({ number: e.number, areas: areasOf(e.labels) });
 const IDLE_MINUTES = Number(process.env.AGENTS_IDLE_MINUTES ?? 45);
 // After a failed pass (not a usage limit) the loop retries soon, doubling the
 // wait for each failure in a row, up to AGENTS_IDLE_MINUTES.
@@ -355,7 +388,7 @@ const container = (branch?: string, opts: { merges?: boolean } = {}) =>
 // Helpers
 // ---------------------------------------------------------------------------
 
-type Epic = { number: number; title: string; branch: string; milestone: string; mode: Mode; manual: boolean };
+type Epic = { number: number; title: string; branch: string; milestone: string; mode: Mode; manual: boolean; areas: string[] };
 type Ticket = { number: number; title: string; kind: "build" | "bug"; epic?: Epic; branch: string };
 
 const sh = (cmd: string, args: string[], cwd?: string) =>
@@ -445,7 +478,7 @@ function epicFor(milestone?: string): Epic | undefined {
   const branch = epic?.body.match(/`(epic\/[^`]+)`/)?.[1];
   const labels = epic?.labels.map((l) => l.name) ?? [];
   const mode = modeOf(labels);
-  const found = epic && branch ? { number: epic.number, title: epic.title, branch, milestone, mode, manual: labels.includes(LABEL.manual) } : undefined;
+  const found = epic && branch ? { number: epic.number, title: epic.title, branch, milestone, mode, manual: labels.includes(LABEL.manual), areas: areasOf(epic.labels) } : undefined;
   epicCache.set(milestone, found);
   return found;
 }
@@ -463,7 +496,7 @@ function readyTickets(): Ticket[] {
       const blocked = Number(gh("api", `repos/${repo}/issues/${issue.number}`, "--jq", ".issue_dependencies_summary.blocked_by // 0"));
       if (blocked > 0) continue;
       const epic = epicFor(issue.milestone?.title);
-      if (!inScope(issue.number, epic?.number)) continue;
+      if (!inScope(issue.number, epic, issue.labels)) continue;
       if (epic?.manual) continue; // a hand-run epic: its tickets are never the loop's, whatever their labels
       if (epic && EPIC_GATE === "epic" && epicBlocked(epic)) continue;
       tickets.push({
@@ -629,7 +662,7 @@ function writeStatus(state: LoopState, minutes?: number) {
       until: minutes ? new Date(Date.now() + minutes * 60_000).toISOString() : undefined,
       lastPassAt,
       mode: MODE,
-      scope: SCOPED ? { epics: [...(SCOPE_EPICS ?? [])], tickets: [...(SCOPE_TICKETS ?? [])] } : undefined,
+      scope: SCOPED ? { epics: [...(SCOPE_EPICS ?? [])], tickets: [...(SCOPE_TICKETS ?? [])], areas: [...(SCOPE_AREAS ?? [])] } : undefined,
       building: [...inFlight].map((t) => t.number),
       checking: [...checking.keys()],
       unstarted,
@@ -883,13 +916,13 @@ function planJobs(): PlanJob[] {
   const epics = ghJson<Issue[]>("issue", "list", "--state", "open", "--label", LABEL.epic, "--label", LABEL.autopilot, "--json", "number,title,state,body,labels", "--limit", "100");
   const jobs: PlanJob[] = [];
   for (const e of epics) {
-    if (!epicInScope(e.number)) continue;
+    if (!epicInScope(listedEpic(e))) continue;
     if (has(e, LABEL.planning) || has(e, LABEL.briefing) || has(e, LABEL.backlog) || has(e, LABEL.manual)) continue; // another loop is on it, no brief yet, parked, or hand-run
     const milestone = ghJson<{ milestone: { title: string } | null }>("issue", "view", String(e.number), "--json", "milestone").milestone?.title;
     const branch = e.body.match(/`(epic\/[^`]+)`/)?.[1];
     if (!milestone || !branch) continue;
     if (EPIC_GATE === "epic" && Number(gh("api", `repos/${repo}/issues/${e.number}`, "--jq", ".issue_dependencies_summary.blocked_by // 0")) > 0) continue;
-    const epic = { number: e.number, title: e.title, branch, milestone, mode: modeOf(e.labels.map((l) => l.name)), manual: false }; // manual epics were skipped above
+    const epic = { number: e.number, title: e.title, branch, milestone, mode: modeOf(e.labels.map((l) => l.name)), manual: false, areas: areasOf(e.labels) }; // manual epics were skipped above
     const items = ghJson<Issue[]>("issue", "list", "--state", "all", "--milestone", milestone, "--json", "number,title,state,body,labels,comments", "--limit", "300")
       .filter((i) => i.number !== e.number);
     const specs = items.filter((i) => i.state === "OPEN" && isSpec(i.labels.map((l) => l.name), i.body));
@@ -1016,7 +1049,7 @@ async function verifyEpics(): Promise<number> {
   let ran = 0;
   for (const e of epics) {
     if (checking.has(e.number)) continue; // its check is still running
-    if (!epicInScope(e.number)) continue;
+    if (!epicInScope(listedEpic(e))) continue;
     if (e.labels.some((l) => l.name === LABEL.backlog || l.name === LABEL.manual)) continue; // parked or hand-run: its PR is a person's too
     try {
       ran += await verifyEpic(e);
@@ -1304,7 +1337,7 @@ function unblockCandidates() {
       return { i, epic, mode: epic ? epic.mode : modeOf(i.labels.map((l) => l.name)) };
     })
     .filter(({ epic, mode }) => !epic?.manual && unblocks(mode)) // a hand-run epic's questions are the person's
-    .filter(({ i, epic }) => inScope(i.number, epic?.number))
+    .filter(({ i, epic }) => inScope(i.number, epic, i.labels))
     .filter(({ i, epic }) => !(epic && i.title === conflictTitle(epic))); // conflicts have their own step, in every mode
 }
 
@@ -1316,7 +1349,7 @@ function conflictCandidates() {
     "--json", "number,title,state,body,labels,comments,milestone", "--limit", "50")
     .filter((i) => !has(i, LABEL.backlog) && !has(i, LABEL.unblocking) && !(has(i, LABEL.asked) && lastIsAi(i)))
     .map((i) => ({ i, epic: epicFor(i.milestone?.title) }))
-    .filter(({ i, epic }) => epic && !epic.manual && epicInScope(epic.number) && i.title === conflictTitle(epic)) as { i: Waiting; epic: Epic }[];
+    .filter(({ i, epic }) => epic && !epic.manual && epicInScope(epic) && i.title === conflictTitle(epic)) as { i: Waiting; epic: Epic }[];
 }
 
 // An agent resolves each paused epic's merge with main. Returns how many moved on.
@@ -1404,7 +1437,7 @@ async function unblock(): Promise<number> {
 // The assumed issues you've commented on since. Reads only.
 const followUpCandidates = () => ghJson<Waiting[]>("issue", "list", "--state", "all", "--label", LABEL.assumed,
   "--json", "number,title,state,body,labels,comments,milestone", "--limit", "50")
-  .filter((i) => !lastIsAi(i) && !has(i, LABEL.unblocking) && inScope(i.number, epicFor(i.milestone?.title)?.number));
+  .filter((i) => !lastIsAi(i) && !has(i, LABEL.unblocking) && inScope(i.number, epicFor(i.milestone?.title), i.labels));
 
 async function followUps(): Promise<number> {
   const answered = followUpCandidates().filter((i) => !benched(`follow#${i.number}`)).slice(0, MAX_PARALLEL);
@@ -1558,7 +1591,7 @@ const SPEC_ASK = "**Fast mode: your call needed**";
 const specCandidates = () => ghJson<Waiting[]>("issue", "list", "--state", "open", "--label", LABEL.spec, "--label", LABEL.human,
   "--json", "number,title,state,body,labels,comments,milestone", "--limit", "50")
   .filter((s) => !has(s, LABEL.approved) && !has(s, LABEL.backlog) && unblocks(epicFor(s.milestone?.title)?.mode))
-  .filter((s) => epicInScope(epicFor(s.milestone?.title)?.number))
+  .filter((s) => epicInScope(epicFor(s.milestone?.title)))
   .filter((s) => lastIsAi(s) && !s.comments?.at(-1)?.body.includes(SPEC_ASK)); // not a revision pending, nor waiting for you
 
 async function approveSpecs(): Promise<number> {
@@ -1617,7 +1650,7 @@ const alive = (pid: number) => {
 };
 
 // ---------------------------------------------------------------------------
-// Scope (--epic, --tickets)
+// Scope (--epic, --tickets, --area)
 // ---------------------------------------------------------------------------
 
 type ScopeIssue = { number: number; title: string; state: string; labels: { name: string }[]; assignees: { login: string }[]; milestone: { title: string } | null };
@@ -1629,6 +1662,15 @@ const viewScoped = (n: number) =>
 function scopeNotes(): string[] {
   const notes: string[] = [];
   const labelled = (i: ScopeIssue, l: string) => i.labels.some((x) => x.name === l);
+  if (SCOPE_AREAS) {
+    const epics = ghJson<{ number: number; labels: { name: string }[] }[]>(
+      "issue", "list", "--state", "open", "--label", LABEL.epic, "--json", "number,labels", "--limit", "200");
+    for (const a of SCOPE_AREAS) {
+      if (a === "none") continue;
+      if (!epics.some((e) => areasOf(e.labels).some((x) => x === a || x.startsWith(`${a}:`))))
+        notes.push(`no open epic is labelled \`area:${a}\` (a typo? see docs/agents/team.md): only tickets outside epics with that label would run`);
+    }
+  }
   for (const n of SCOPE_EPICS ?? []) {
     try {
       const e = viewScoped(n);
@@ -1711,7 +1753,7 @@ function dryRun() {
     .map(({ i, epic }) => item(i.number, i.title, `resolve ${epic.branch}'s merge with main (epic #${epic.number})`));
   const followUp = fastOn ? followUpCandidates().filter((i) => !off(`follow#${i.number}`)).map((i) => item(i.number, i.title, "follow up your comment")) : [];
   const specs = fastOn ? specCandidates().map((s) => item(s.number, s.title, "approve the spec, or ask you")) : [];
-  const scope = SCOPED ? { epics: [...(SCOPE_EPICS ?? [])], tickets: [...(SCOPE_TICKETS ?? [])], notes: scopeNotes(), left: scopeLeft() } : null;
+  const scope = SCOPED ? { epics: [...(SCOPE_EPICS ?? [])], tickets: [...(SCOPE_TICKETS ?? [])], areas: [...(SCOPE_AREAS ?? [])], notes: scopeNotes(), left: scopeLeft() } : null;
   const result = {
     loop: live.pid ? { pid: live.pid, state: live.state, until: live.until, lastPassAt: live.lastPassAt, building: live.building ?? [], checking: live.checking ?? [], unstarted: live.unstarted } : null,
     freeSlots: Math.max(free, 0),
@@ -1726,7 +1768,9 @@ function dryRun() {
     ? `Loop running (pid ${live.pid}): ${live.state}${live.until ? ` until ~${at(live.until)}` : ""}, last pass ${at(live.lastPassAt)}${live.building?.length ? `, building ${live.building.map((n) => `#${n}`).join(", ")}` : ""}.`
     : "No loop running here: this is what one would do if started now.", "");
   if (scope) {
-    out.push(`Scoped to ${SCOPE_LABEL}: nothing else is touched, and the run exits once nothing in scope is left${scope.left.length ? ` (left now: ${scope.left.join(", ")})` : " (nothing is: it would exit at once)"}.`, "");
+    out.push(SCOPE_ENDS
+      ? `Scoped to ${SCOPE_LABEL}: nothing else is touched, and the run exits once nothing in scope is left${scope.left.length ? ` (left now: ${scope.left.join(", ")})` : " (nothing is: it would exit at once)"}.`
+      : `Scoped to ${SCOPE_LABEL}: nothing else is touched (no triage), and the run keeps going like an unscoped one.`, "");
     if (scope.notes.length) out.push("## Named but not worked", ...scope.notes.map((n) => `- ${n}`), "");
   }
   const section = (title: string, items: DryItem[]) => {
@@ -1743,7 +1787,7 @@ function dryRun() {
   section("Decide specs (fast mode)", specs);
   if (backoff.length) out.push("## Backed off (failed or changed nothing)", ...backoff.map((b) => `- ${b.what}: ${b.count} strike(s), next try ~${at(b.until)}. ${b.why}`), "");
   if (![build, plan, verify, conflicts, triage, unblock, followUp, specs].some((l) => l.length))
-    out.push(scope && !scope.left.length ? "Nothing to do, and nothing in scope is left: the run would exit after one pass." : "Nothing to do: the next pass would find no work, and the loop would sleep.");
+    out.push(scope && SCOPE_ENDS && !scope.left.length ? "Nothing to do, and nothing in scope is left: the run would exit after one pass." : "Nothing to do: the next pass would find no work, and the loop would sleep.");
   console.log(out.join("\n").trimEnd());
 }
 
@@ -1754,7 +1798,7 @@ function epicsToCheck(): DryItem[] {
     "issue", "list", "--state", "open", "--label", LABEL.epic, "--json", "number,title,body,labels,milestone", "--limit", "100");
   const items: DryItem[] = [];
   for (const e of epics) {
-    if (!epicInScope(e.number)) continue;
+    if (!epicInScope(listedEpic(e))) continue;
     if (e.labels.some((l) => l.name === LABEL.backlog || l.name === LABEL.manual)) continue;
     const branch = e.body.match(/`(epic\/[^`]+)`/)?.[1];
     const milestone = e.milestone?.title;
@@ -1925,7 +1969,7 @@ async function stopNicely(worked: number) {
 
 log(`started (pid ${process.pid}); \`npm run agents:stop\` stops it nicely`);
 if (SCOPED) {
-  log(`scoped to ${SCOPE_LABEL}: nothing else is touched (no triage), and it exits once nothing in scope is left`);
+  log(`scoped to ${SCOPE_LABEL}: nothing else is touched (no triage)${SCOPE_ENDS ? ", and it exits once nothing in scope is left" : ""}`);
   try { for (const note of scopeNotes()) log(`scope: ${note}`); } catch (error) { log(`scope check skipped: ${String(error).slice(0, 200)}`); }
 }
 let limitAlerted = false;
@@ -1973,7 +2017,7 @@ for (;;) {
   if (stopRequested()) await stopNicely(worked);
   // A scoped run ends with its scope: every ticket in it landed, in a PR or
   // handed to a person, every epic in it closed.
-  if (SCOPED && !busy()) {
+  if (SCOPE_ENDS && !busy()) {
     let left: string[] | undefined;
     try { left = scopeLeft(); } catch { /* gh down: look again next time */ }
     if (left && !left.length) {
