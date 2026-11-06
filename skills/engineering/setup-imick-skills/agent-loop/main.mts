@@ -590,9 +590,13 @@ function conflictTicket(epic: Epic) {
   log(`epic #${epic.number} paused: ${epic.branch} conflicts with main; an agent tries to resolve it next`);
 }
 
+// A branch with commits of its own keeps that progress. One without (the
+// agent found the ticket blocked and made none) is reset to the base: left
+// where it was cut, every retry would re-read the code from before whatever
+// landed on the epic branch since, and block on the same gap again.
 function prepareBranch(t: Ticket, epicPath?: string) {
-  if (tryGit(undefined, "rev-parse", "--verify", "--quiet", t.branch)) return; // keep earlier progress
-  git(undefined, "branch", t.branch, epicPath ? t.epic!.branch : "origin/main");
+  if (tryGit(undefined, "rev-parse", "--verify", "--quiet", t.branch) && unlanded(t) > 0) return;
+  git(undefined, "branch", "-f", t.branch, epicPath ? t.epic!.branch : "origin/main");
 }
 
 // Commits on the ticket's branch that its base doesn't have yet. Not just
