@@ -555,7 +555,10 @@ function prepareEpic(epic: Epic, { ticketNext = false } = {}): string | undefine
   return path;
 }
 
-// The epic's worktree, created or fast-forwarded to its remote branch.
+// The epic's worktree, created or brought up to its remote branch. When both
+// moved (the loop landed tickets it hasn't pushed yet, and someone pushed to
+// the epic branch meanwhile), it merges the remote in and pushes, keeping
+// both; only a conflict stops it, for you to merge by hand.
 function epicWorktree(epic: Epic): string {
   const path = `${WORKTREES}/${epic.branch.replaceAll("/", "-")}`;
   git(undefined, "fetch", "--quiet", "origin");
@@ -564,8 +567,13 @@ function epicWorktree(epic: Epic): string {
     mkdirSync(WORKTREES, { recursive: true });
     if (remote) git(undefined, "worktree", "add", "-B", epic.branch, path, `origin/${epic.branch}`);
     else git(undefined, "worktree", "add", "-b", epic.branch, path, "origin/main");
-  } else if (remote) {
-    git(path, "merge", "--ff-only", "--quiet", `origin/${epic.branch}`);
+  } else if (remote && !tryGit(path, "merge", "--ff-only", "--quiet", `origin/${epic.branch}`)) {
+    if (!tryGit(path, "merge", "--no-edit", "--quiet", `origin/${epic.branch}`)) {
+      tryGit(path, "merge", "--abort");
+      throw new Error(`${epic.branch} and origin/${epic.branch} both moved and conflict: merge origin/${epic.branch} into ${epic.branch} in ${path}, then push`);
+    }
+    git(path, "push", "--quiet", "origin", epic.branch);
+    log(`${epic.branch}: merged in what was pushed to it outside the loop`);
   }
   return path;
 }
