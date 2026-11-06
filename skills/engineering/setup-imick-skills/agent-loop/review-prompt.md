@@ -14,7 +14,7 @@ Review the work for issue #{{ISSUE}} on branch `{{BRANCH}}` before it lands on `
 
 Call the Skill tool with "code-review", reviewing this branch against `{{BASE}}` and against issue #{{ISSUE}} as the spec.
 
-Fix what it finds on this branch, preserving behaviour: correctness bugs, missing tests for changed behaviour, violations of the project's coding standards. Run the typecheck and tests, and commit the fixes. If the work is already sound, change nothing.
+Fix what it finds on this branch, preserving behaviour: correctness bugs, missing tests for changed behaviour, violations of the project's coding standards. Run the typecheck and the tests your fixes can reach (the test files of the changed code, and those that import it: with Vitest, `vitest related --run <changed files>`), in the foreground with a time limit, and commit the fixes. Don't run the whole suite: the epic's PR runs it in CI. If the work is already sound, change nothing.
 
 Don't push, open PRs or touch the issue.
 
