@@ -56,6 +56,8 @@ Used by `/scope-decomposer`, and by every skill that creates an issue under an e
 
 **Inheritance.** Every issue created anywhere under an epic (its map, the map's tickets, the spec, build tickets, bugs) gets the epic's milestone (`gh issue edit <n> --milestone "<title>"`) and the epic's `area:*` label (see `docs/agents/team.md`; skip when the repo has a single area).
 
+**Run tickets.** The slow suites in `test-suites/` (see its `README.md`) run through issues titled `Run <suite>`, labelled `suite-run` plus `ready-for-agent` (or `ready-for-human` for a suite a person runs). Under an epic: its milestone and area, blocked by every other ticket so it runs last; `/to-tickets` cuts them, and the agent loop adds any the epic's diff calls for before it opens the PR. Outside an epic: a run against `main`, started from the tracker when a suite is stale. Green closes the ticket with `Ran <suite> on <sha>: green.`; red files `bug` tickets and blocks the Run ticket on them.
+
 **Assignment.** The assignee means *claimed*: someone is working on it now.
 
 - Initiatives and epics are assigned to their owner (from `docs/agents/team.md`).

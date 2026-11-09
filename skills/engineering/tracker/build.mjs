@@ -9,6 +9,11 @@
 // tracker/api/index.mjs): with GITHUB_TOKEN set it calls GitHub's GraphQL API
 // directly, since there is no `gh` there, and the repo comes from
 // TRACKER_REPO (owner/name) or Vercel's git env vars.
+//
+// When the repo has a test-suites/ folder (slow suites run through "Run
+// <suite>" tickets, see its README), a Test suites tab reads the suite files
+// on the default branch and tells, from each suite's last green run and the
+// commits since, whether it is stale. That needs Contents: read on the token.
 
 import { execFileSync } from "node:child_process";
 import { writeFileSync } from "node:fs";
@@ -62,6 +67,57 @@ async function graphql(query, variables) {
   return JSON.parse(execFileSync("gh", args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 })).data;
 }
 
+// REST, for what GraphQL doesn't offer (comparing two commits).
+async function rest(path) {
+  const token = process.env.GITHUB_TOKEN;
+  if (token) {
+    const res = await fetch(`https://api.github.com/${path}`, { headers: { authorization: `Bearer ${token}`, accept: "application/vnd.github+json" } });
+    if (!res.ok) throw new Error(`GitHub REST: ${res.status} ${path}`);
+    return res.json();
+  }
+  return JSON.parse(execFileSync("gh", ["api", path], { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 }));
+}
+
+// The slow suites: test-suites/*.md on the default branch, each a frontmatter
+// (name, command, covers, takes, runs-via) over a paragraph. `present` is
+// false when the repo has no such folder, and the tab is left out.
+async function fetchSuites(REPO) {
+  const data = await graphql(`query($owner: String!, $name: String!) {
+    repository(owner: $owner, name: $name) {
+      defaultBranchRef { name }
+      object(expression: "HEAD:test-suites") { ... on Tree { entries { name object { ... on Blob { text } } } } }
+    }
+  }`, { owner: REPO.owner, name: REPO.name });
+  const branch = data.repository.defaultBranchRef?.name ?? "main";
+  const entries = data.repository.object?.entries ?? [];
+  const suites = entries
+    .filter((e) => e.name.endsWith(".md") && e.name !== "README.md")
+    .map((e) => parseSuite(e.object?.text ?? "", e.name))
+    .filter(Boolean)
+    .map((s) => ({ ...s, url: `https://github.com/${REPO.owner}/${REPO.name}/blob/${branch}/${s.file}` }));
+  return { branch, present: Boolean(data.repository.object), suites };
+}
+function parseSuite(text, file) {
+  const fm = text.match(/^---\r?\n([\s\S]*?)\r?\n---/)?.[1];
+  if (!fm) return null;
+  const field = (k) => fm.match(new RegExp(`^${k}:[ \\t]*(.*)$`, "m"))?.[1].trim() ?? "";
+  const unquote = (s) => s.trim().replace(/^["']|["']$/g, "");
+  const list = (k) => {
+    const inline = field(k);
+    if (inline.startsWith("[")) return inline.slice(1, inline.lastIndexOf("]")).split(",").map(unquote).filter(Boolean);
+    const block = fm.match(new RegExp(`^${k}:[ \\t]*\\n((?:[ \\t]+-[^\\n]*\\n?)*)`, "m"))?.[1] ?? "";
+    return block.split("\n").map((l) => unquote(l.replace(/^\s*-\s*/, ""))).filter(Boolean);
+  };
+  const body = text.slice(text.indexOf("---", 3) + 3).trim();
+  return { name: field("name") || file.replace(/\.md$/, ""), file: `test-suites/${file}`, command: field("command"), covers: list("covers"), takes: field("takes"), runsVia: field("runs-via") || "sandbox", about: body.split(/\n\s*\n/)[0] ?? "" };
+}
+// `**` crosses folders, `*` doesn't; a glob with no `/` matches the file name
+// in any folder, like .gitignore. Same rule as the agent loop's.
+function matchesGlob(file, glob) {
+  const re = glob.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*\*/g, "\0").replace(/\*/g, "[^/]*").replace(/\?/g, "[^/]").replace(/\0/g, ".*");
+  return new RegExp(`^${glob.includes("/") ? "" : "(.*/)?"}${re}$`).test(file);
+}
+
 // Open PRs by head branch, for an epic's "merge" status.
 async function fetchOpenPrs(REPO) {
   const data = await graphql(`query($owner: String!, $name: String!) {
@@ -104,7 +160,7 @@ async function fetchIssues(REPO) {
 
 export async function render() {
 const REPO = await resolveRepo();
-const [issues, openPrs] = await Promise.all([fetchIssues(REPO), fetchOpenPrs(REPO)]);
+const [issues, openPrs, suiteFiles] = await Promise.all([fetchIssues(REPO), fetchOpenPrs(REPO), fetchSuites(REPO).catch(() => ({ present: false, suites: [], branch: "main" }))]);
 const byNumber = new Map(issues.map((i) => [i.number, i]));
 const has = (i, label) => i.labels.includes(label);
 const isPlanning = (i) => i.labels.some((l) => l.startsWith("wayfinder:")) || has(i, "spec");
@@ -344,14 +400,56 @@ const backlog = issues
     createdAt: i.createdAt,
   }));
 
+// Test suites: each suite file, its open Run tickets, its last green run
+// (the "Run <suite>" ticket closed with "Ran <suite> on <sha>"), and whether
+// main moved on what it covers since: the compare of that sha with the
+// default branch, filtered by the suite's globs.
+const suiteRuns = issues.filter((i) => has(i, "suite-run"));
+const suites = suiteFiles.present ? await Promise.all(suiteFiles.suites.map(async (s) => {
+  const runs = suiteRuns.filter((r) => r.title.match(/^Run (\S+)/)?.[1] === s.name);
+  const open = runs.filter((r) => r.open).sort((a, b) => a.number - b.number);
+  const green = runs.filter((r) => !r.open && !r.notPlanned).sort((a, b) => (b.closedAt ?? "").localeCompare(a.closedAt ?? ""))[0] ?? null;
+  const sha = green?.lastComment?.body.match(/\bRan \S+ on ([0-9a-f]{7,40})\b/)?.[1] ?? null;
+  let since = null;
+  if (sha) {
+    try {
+      const cmp = await rest(`repos/${REPO.owner}/${REPO.name}/compare/${sha}...${suiteFiles.branch}`);
+      const touched = (cmp.files ?? []).map((f) => f.filename).filter((f) => s.covers.some((g) => matchesGlob(f, g)));
+      since = { commits: cmp.total_commits ?? cmp.commits?.length ?? 0, touched: touched.slice(0, 8), touchedCount: touched.length, truncated: (cmp.files ?? []).length >= 300 };
+    } catch { /* an unknown sha, or no Contents access: stale stays unknown */ }
+  }
+  const current = open[0];
+  const state = current ? (current.assigned ? "working" : openBlockers(current).length ? "blocked" : has(current, "ready-for-human") ? "you" : "queued")
+    : !green ? "never" : !since ? "unknown" : since.touchedCount ? "stale" : "fresh";
+  return {
+    ...s,
+    state,
+    open: open.map((r) => ({ number: r.number, epic: epicOf(r)?.number ?? null, blockedBy: openBlockers(r).map((b) => b.number) })),
+    last: green ? { number: green.number, closedAt: green.closedAt, sha, epic: epicOf(green)?.number ?? null } : null,
+    since,
+    fileCmd: `gh issue create --title "Run ${s.name}" --label "suite-run,${s.runsVia === "human" ? "ready-for-human" : "ready-for-agent"}" --body "Run against ${suiteFiles.branch}: ${s.file} is stale. Green closes this; red files bugs."`,
+  };
+})) : null;
+// A stale suite with no run on its way is something to decide on: an action item.
+for (const s of suites ?? []) {
+  if (s.state !== "stale") continue;
+  hitl.push({
+    number: 0, suite: s.name, title: `${s.name} is stale`, url: s.url, kind: "suite", assignees: [], epic: null,
+    canStart: true, waitsOn: [], unblocks: [], holdsUp: 0,
+    items: [{ done: false, text: `${s.since.commits} commit(s) on ${suiteFiles.branch} touched what it covers since its last run (#${s.last.number}, ${s.last.sha.slice(0, 7)}). Run it (${s.takes || "?"}, ${s.runsVia}): \`${s.fileCmd}\`` }],
+  });
+}
+
 const data = {
   generatedAt: new Date().toISOString(),
   repo: `${REPO.owner}/${REPO.name}`,
+  branch: suiteFiles.branch,
   epics: epicData,
   tickets,
   hitl,
   backlog,
   specs,
+  suites,
   titles: Object.fromEntries(issues.map((i) => [i.number, i.title])),
   urls: Object.fromEntries(issues.map((i) => [i.number, i.url])),
   epicStatus: EPIC_STATUS,
@@ -548,6 +646,17 @@ details.ep.done-ep > summary .ok { margin-left: auto; font-size: 12px; font-weig
 .pill.merge { color: var(--you); background: var(--you-soft); }
 .pill.manual { color: var(--you); background: transparent; border: 1px solid var(--you); padding-top: 0; padding-bottom: 0; }
 .pill.area { color: var(--muted); background: transparent; border: 1px solid var(--border); padding-top: 0; padding-bottom: 0; font-weight: 500; }
+.pill.suite, .pill.stale { color: var(--triage); background: var(--triage-soft); }
+.pill.fresh { color: var(--done); background: var(--done-soft); }
+.pill.never, .pill.unknown { color: var(--blocked); background: var(--blocked-soft); }
+.suite-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; margin: 10px 0; }
+.suite-card.stale { border-color: var(--triage); }
+.suite-card .top { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.suite-card .top .title { font-weight: 600; }
+.suite-card .about { color: var(--muted); margin: 6px 0; }
+.suite-card .facts { display: flex; gap: 14px; flex-wrap: wrap; font-size: 14px; color: var(--muted); }
+.suite-card .run { margin-top: 8px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.suite-card .run code { font-size: 12px; }
 label.check { display: inline-flex; gap: 6px; align-items: center; font-size: 14px; }
 </style>
 </head>
@@ -564,7 +673,13 @@ label.check { display: inline-flex; gap: 6px; align-items: center; font-size: 14
     <button role="tab" data-tab="specs" aria-selected="false">Specs to validate<span id="spec-count"></span></button>
     <button role="tab" data-tab="epic" aria-selected="false">Epic board</button>
     <button role="tab" data-tab="backlog" aria-selected="false">Backlog<span id="backlog-count"></span></button>
+    ${data.suites ? '<button role="tab" data-tab="suites" aria-selected="false">Test suites<span id="suites-count"></span></button>' : ""}
   </nav>
+
+  <section id="suites" hidden>
+    <p class="meta" style="margin-top:20px">The slow suites in <code>test-suites/</code> don't run on every PR: an epic that touches what a suite covers gets a <b>Run</b> ticket, and a suite is <b>stale</b> when commits to <code>${suiteFiles.branch.replace(/[<>&"]/g, "")}</code> touched what it covers since its last green run. File a run against it with the command on its card.</p>
+    <div id="suites-body"></div>
+  </section>
 
   <section id="actions" hidden>
     <div class="filters" style="margin-top:20px">
@@ -628,7 +743,7 @@ $('when').textContent = new Date(DATA.generatedAt).toLocaleString();
 const tabs = [...document.querySelectorAll('nav.tabs button')];
 function showTab(name) {
   tabs.forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === name)));
-  ['actions', 'specs', 'roadmap', 'epic', 'backlog'].forEach((id) => { $(id).hidden = id !== name; });
+  ['actions', 'specs', 'roadmap', 'epic', 'backlog', 'suites'].forEach((id) => { $(id).hidden = id !== name; });
   try { localStorage.setItem('tracker-tab', name); } catch {}
   renderDiagrams();
 }
@@ -640,7 +755,7 @@ function card(t, extra) {
 }
 
 // ---- Action items (HITL, by assignee)
-const KIND = { task: 'Task', review: 'Review', brief: 'Epic brief', spec: 'Spec approval', merge: 'Merge the epic' };
+const KIND = { task: 'Task', review: 'Review', brief: 'Epic brief', spec: 'Spec approval', merge: 'Merge the epic', suite: 'Stale suite' };
 function md(text) {
   return esc(text)
     .replace(/\`([^\`]+)\`/g, '<code>$1</code>')
@@ -659,7 +774,8 @@ function hitlCard(h) {
   const sub = [esc(epicName(h.epic))];
   if (h.unblocks.length) sub.push('unblocks ' + h.unblocks.map(ref).join(', '));
   if (!h.canStart) sub.push('waits on ' + h.waitsOn.map((w) => ref(w.number) + (w.human ? ' (person)' : ' (agent)')).join(', '));
-  return '<div class="hitl' + (h.canStart ? '' : ' waiting') + '"><div class="top"><span class="num">' + ref(h.number) + '</span>' +
+  const num = h.suite ? '<a href="' + h.url + '" target="_blank">test-suites/' + esc(h.suite) + '.md</a>' : ref(h.number);
+  return '<div class="hitl' + (h.canStart ? '' : ' waiting') + '"><div class="top"><span class="num">' + num + '</span>' +
     '<span class="title">' + esc(h.title) + '</span>' +
     (h.holdsUp ? '<span class="holds' + (h.holdsUp >= 5 ? ' high' : '') + '" title="Open issues and epics that wait on this, directly or down the chain">holds up ' + h.holdsUp + '</span>' : '') +
     '<span class="pill ' + h.kind + '">' + KIND[h.kind] + '</span>' +
@@ -753,6 +869,35 @@ function renderBacklog() {
   $('backlog-body').innerHTML = html || '<div class="empty">Nothing is parked. Add the <code>backlog</code> label to an issue to park it here.</div>';
 }
 renderBacklog();
+
+// ---- Test suites
+const SUITE_STATE = { working: 'Agent running it', queued: 'Run queued', blocked: 'Red: waits on its bugs', you: 'Your run', stale: 'Stale', fresh: 'Fresh', never: 'Never run', unknown: 'Last run unknown' };
+const SUITE_PILL = { working: 'working', queued: 'queued', blocked: 'blocked', you: 'you', stale: 'stale', fresh: 'fresh', never: 'never', unknown: 'unknown' };
+function suiteCard(s) {
+  const run = s.open[0];
+  const last = s.last ? 'last green run ' + ref(s.last.number) + (s.last.epic ? ' (' + esc(epicName(s.last.epic)) + ')' : '') + ' on ' + new Date(s.last.closedAt).toLocaleDateString() + (s.last.sha ? ' at <code>' + s.last.sha.slice(0, 7) + '</code>' : '') : 'no green run yet';
+  const since = s.since ? (s.since.touchedCount ? s.since.touchedCount + ' covered file(s) changed in ' + s.since.commits + ' commit(s) since' + (s.since.truncated ? ' (compare truncated)' : '') : s.since.commits + ' commit(s) since, none on what it covers') : (s.last && !s.last.sha ? 'the closing comment names no commit' : '');
+  return '<div class="suite-card ' + s.state + '"><div class="top"><a class="title" href="' + s.url + '" target="_blank">' + esc(s.name) + '</a>' +
+    '<span class="pill ' + SUITE_PILL[s.state] + '">' + SUITE_STATE[s.state] + '</span>' +
+    (run ? '<span class="meta">' + ref(run.number) + (run.epic ? ' in ' + esc(epicName(run.epic)) : ' against ' + esc(DATA.branch)) + (run.blockedBy.length ? ', blocked by ' + run.blockedBy.map(ref).join(', ') : '') + '</span>' : '') + '</div>' +
+    (s.about ? '<div class="about">' + md(s.about) + '</div>' : '') +
+    '<div class="facts"><span>takes ' + esc(s.takes || '?') + '</span><span>runs via ' + esc(s.runsVia) + '</span><span>covers ' + s.covers.map((c) => '<code>' + esc(c) + '</code>').join(' ') + '</span></div>' +
+    '<div class="facts" style="margin-top:6px"><span>' + last + '</span>' + (since ? '<span>' + since + '</span>' : '') + '</div>' +
+    (s.since && s.since.touched.length ? '<details><summary class="meta">Changed files it covers</summary><ul>' + s.since.touched.map((f) => '<li><code>' + esc(f) + '</code></li>').join('') + (s.since.touchedCount > s.since.touched.length ? '<li class="meta">and ' + (s.since.touchedCount - s.since.touched.length) + ' more</li>' : '') + '</ul></details>' : '') +
+    (!run ? '<div class="run"><span class="meta">File a run against ' + esc(DATA.branch) + ':</span> <code>' + esc(s.fileCmd) + '</code> <button class="copy" data-cmd="' + esc(s.fileCmd) + '">Copy</button></div>' : '') + '</div>';
+}
+function renderSuites() {
+  if (!DATA.suites) return;
+  const stale = DATA.suites.filter((s) => s.state === 'stale').length;
+  $('suites-count').innerHTML = stale ? '<span class="badge">' + stale + '</span>' : '';
+  const order = ['stale', 'blocked', 'you', 'working', 'queued', 'unknown', 'never', 'fresh'];
+  const list = [...DATA.suites].sort((a, b) => order.indexOf(a.state) - order.indexOf(b.state) || a.name.localeCompare(b.name));
+  $('suites-body').innerHTML = list.map(suiteCard).join('') || '<div class="empty">No suite files in <code>test-suites/</code> yet. Add one per slow suite (see its README).</div>';
+  document.querySelectorAll('#suites button.copy').forEach((b) => b.addEventListener('click', async () => {
+    try { await navigator.clipboard.writeText(b.dataset.cmd); b.textContent = 'Copied'; } catch { b.textContent = 'Select and copy it'; }
+  }));
+}
+renderSuites();
 
 // ---- Roadmap
 const EPIC_COLORS = { done: 'done', brief: 'you', spec: 'you', merge: 'you', held: 'blocked', waiting: 'blocked', planning: 'queued', building: 'working', ready: 'queued', backlog: 'backlog' };
@@ -1033,7 +1178,7 @@ setInterval(() => { if (Date.now() - loadedAt > 180_000 && Date.now() - lastInpu
 try { const y = sessionStorage.getItem('tracker-scroll'); if (y) { sessionStorage.removeItem('tracker-scroll'); requestAnimationFrame(() => scrollTo(0, Number(y))); } } catch {}
 
 let startTab = 'roadmap';
-try { const t = localStorage.getItem('tracker-tab'); if (['actions', 'specs', 'roadmap', 'epic', 'backlog'].includes(t)) startTab = t; } catch {}
+try { const t = localStorage.getItem('tracker-tab'); if (['actions', 'specs', 'roadmap', 'epic', 'backlog'].includes(t) || (t === 'suites' && DATA.suites)) startTab = t; } catch {}
 showTab(startTab);
 </script>
 </body>

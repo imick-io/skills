@@ -1,5 +1,6 @@
 // Serves the tracker page on Vercel, built from GitHub on request.
-// Env: GITHUB_TOKEN (read-only: Issues, Pull requests, Metadata),
+// Env: GITHUB_TOKEN (read-only: Issues, Pull requests, Metadata, and
+// Contents for the Test suites tab, which reads test-suites/*.md on main),
 // TRACKER_USER and TRACKER_PASSWORD (basic auth), optional TRACKER_REPO.
 // Responses are never CDN-cached, so every visit passes the password check;
 // a warm instance reuses its last page for CACHE_MS.

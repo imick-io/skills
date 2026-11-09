@@ -12,6 +12,7 @@ A triaged issue carries one **what** role and one **who** role; `needs-triage` m
 | `needs-info` | what | `needs-info` | Waiting on the reporter |
 | `wontfix` | what | `wontfix` | Already built, duplicate or rejected; a person closes it |
 | `split` | what | `split` | Bundled several asks; split into one issue per ask, and a person closes it once they're done |
+| `suite-run` | what | `suite-run` | Run one of the slow suites in `test-suites/` on a finished branch: green closes it, red files bugs it then waits on |
 | `ready-for-agent-debugging` | who | `ready-for-agent-debugging` | An agent reproduces the bug next |
 | `ready-for-agent` | who | `ready-for-agent` | An agent builds it from the brief |
 | `ready-for-human` | who | `ready-for-human` | A person acts next |

@@ -17,7 +17,7 @@ Two tickets must not run together when:
 
 Small edits to a shared file are fine side by side: a route registered, an export or a list entry added, a line in the same config. Anything more is not. When two branches conflict, the loop sends the later one back to be rebuilt from scratch on top of the first, build and review again, which costs hours. So hold a ticket back when it would edit the same files as another one picked or building, beyond those small edits, even if the two edits look separate (two handlers added to the same listener, two sections added to the same page or form). One ticket held back for a pass costs less than one rebuilt.
 
-Prefer tickets of the same epic, oldest first; bugs (`bug` kind) before builds when they conflict. Don't modify anything.
+Prefer tickets of the same epic, oldest first; bugs (`bug` kind) before builds when they conflict. A `suite` ticket runs a test suite and edits nothing: it can always run beside the others. Don't modify anything.
 
 When you pick fewer than {{MAX_PARALLEL}} while more tickets are listed, say why in one line per ticket left out, before the plan (e.g. "#121: needs the API #120 adds", "#124: rewrites the same checkout form as #123"). It stays in the planner's log, so a chain of tickets holding the loop back is visible.
 

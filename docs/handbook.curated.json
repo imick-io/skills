@@ -2116,11 +2116,15 @@
     {
       "title": "Verify",
       "who": "Agent loop",
-      "body": "When a milestone has no open tickets, the loop opens the epic's PR and runs verify-epic in the running app: acceptance criteria, stories, API contracts, agreed screens. Failures become bug tickets, the loop fixes them, and verification runs again.",
+      "body": "When a milestone has no open tickets, the loop opens the epic's PR and runs verify-epic in the running app: acceptance criteria, stories, API contracts, agreed screens. Failures become bug tickets, the loop fixes them, and verification runs again. Before the PR opens, a slow suite in test-suites/ that the epic's diff touches gets a Run ticket, run last on the epic branch.",
       "tags": [
         {
           "label": "ready-for-agent-debugging",
           "role": "agent"
+        },
+        {
+          "label": "suite-run",
+          "role": "what"
         }
       ]
     },
@@ -2192,6 +2196,14 @@
       "means": "Bundled several asks, like a pasted client email",
       "setBy": "Triage",
       "next": "Each ask is its own issue; a person closes this one"
+    },
+    {
+      "name": "suite-run",
+      "role": "what",
+      "kind": "What",
+      "means": "Run a slow suite from test-suites/ on a finished branch; green closes it, red files bugs it waits on",
+      "setBy": "/to-tickets, or the loop before an epic's PR",
+      "next": "The loop runs it last in the epic (or against main), and the epic's PR waits for it"
     },
     {
       "name": "ready-for-agent",
@@ -2860,7 +2872,7 @@
         "implement"
       ],
       "loop": true,
-      "summary": "Cuts a spec into tracer-bullet tickets with blocking edges, labelled ready-for-agent."
+      "summary": "Cuts a spec into tracer-bullet tickets with blocking edges, labelled ready-for-agent, plus a Run ticket for each slow suite the work touches."
     },
     "prototype": {
       "group": "plan"
@@ -3006,7 +3018,7 @@
     },
     "tracker": {
       "group": "ops",
-      "summary": "Builds the tracker page: what waits on you, the epics' roadmap, each epic's board and blocking graph, and the backlog."
+      "summary": "Builds the tracker page: what waits on you, the epics' roadmap, each epic's board and blocking graph, the backlog, and which slow test suites went stale."
     },
     "whats-next": {
       "group": "ops",

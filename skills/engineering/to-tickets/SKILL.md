@@ -45,6 +45,16 @@ Give each ticket its **blocking edges**: the other tickets that must complete be
 
 **Wide refactors are the exception to vertical slicing.** A **wide refactor** is one mechanical change (rename a column, retype a shared symbol) whose **blast radius** fans across the whole codebase, so a single edit breaks thousands of call sites at once and no vertical slice can land green. Don't force it into a tracer bullet; sequence it as **expand–contract**. First expand: add the new form beside the old so nothing breaks. Then migrate the call sites over in batches sized by blast radius (per package, per directory), each batch its own ticket blocked by the expand, keeping CI green batch to batch because the old form still exists. Finally contract: delete the old form once no caller remains, in a ticket blocked by every migrate batch. When even the batches can't stay green alone, keep the sequence but let them share an integration branch that all block a final integrate-and-verify ticket; green is promised only there.
 
+### 3b. Run tickets for the slow suites
+
+When the repo has a `test-suites/` folder (read its `README.md`), it holds the suites that don't run on every PR: too slow, or needing a device or an emulator. Read each suite file's frontmatter and compare its `covers` globs with the code the slices will touch (the areas of the codebase you explored for them, not a guess from the titles). For every suite that overlaps, add one **Run \<name\>** ticket to the batch:
+
+- title `Run <name>`, body: the suite file's path, its `command`, `takes` and `runs-via`, and "Runs last, on the finished epic branch; green closes it, red files bugs under this epic"
+- **blocked by every other ticket in the batch**, so it runs once the epic's code is complete
+- labelled `suite-run`, with `ready-for-agent` (or `ready-for-human` when `runs-via` is `human`)
+
+A Run ticket doesn't count in the batch's shape; say it beside it ("+ 1 suite run: android-e2e, ~40 min"). Skip suites the slices don't reach, and say which you skipped and why in the quiz: the loop checks the epic's real diff before it opens the PR and adds a Run ticket you missed, so a wrong call here costs a run, not a bug on `main`.
+
 ### 4. Quiz the user
 
 Present the proposed breakdown as a numbered list, headed by its shape ("7 tickets, at most 4 at once, longest chain 3"). When the longest chain covers more than half the tickets, propose a wider split alongside it before asking. For each ticket, show:
@@ -66,7 +76,7 @@ Iterate until the user approves the breakdown.
 Publish the approved tickets. **How** depends on the tracker `/setup-imick-skills` configured; the tickets are the same either way, only the shape of the blocking edges changes:
 
 - **Local files** → write one file per ticket under `.scratch/<feature-slug>/issues/<NN>-<slug>.md`, numbered from `01` in dependency order (blockers first). Each file's "Blocked by" lists the numbers/titles it depends on. Use the per-ticket file template below: one ticket per file, never a single combined file.
-- **A real issue tracker (GitHub, Linear, …)** → publish one issue per ticket in dependency order (blockers first) so each ticket's blocking edges can reference real identifiers. Use the platform's native blocking / sub-issue relationship where it has one; otherwise set each ticket's "Blocked by" to the blocking issues. Apply the `ready-for-agent` triage label unless instructed otherwise; the tickets are agent-grabbable by construction.
+- **A real issue tracker (GitHub, Linear, …)** → publish one issue per ticket in dependency order (blockers first) so each ticket's blocking edges can reference real identifiers. Use the platform's native blocking / sub-issue relationship where it has one; otherwise set each ticket's "Blocked by" to the blocking issues. Apply the `ready-for-agent` triage label unless instructed otherwise; the tickets are agent-grabbable by construction. A Run ticket (step 3b) also gets `suite-run`, and is published last, blocked by every other ticket.
 
 Work the **frontier**: any ticket whose blockers are all done. For a purely linear chain that means top to bottom.
 
