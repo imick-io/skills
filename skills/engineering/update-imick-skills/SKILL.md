@@ -35,13 +35,14 @@ Read the plan and present it as one message, in this order:
    - `no-aggregator`: several jobs and no `if: always()` aggregator, so each job is a required check to list by name. Add `ci-ok`, and update the branch protection, or the loop's `merge-gate.mts` where the project has one, to require it alone (beside `epic-gate`).
 
    These files are the project's, not the release's, so offer them separately: "Also fix CI? (shows the diff per file)". On a yes, edit each file, show its diff, and keep everything else in it as it was. Never touch a workflow that deploys (`deploys: true` is already left out), and say what changes for them: a PR into a branch other than `main` gets no checks, and a run replaced by a newer push shows as cancelled.
-5. If `loopRunning`, say the loop picks `main.mts` up on its next start; never stop it.
+5. **Versions** (`unversioned`, present when the repo uses the epic workflow): the epics with no `version:*` label, which the tracker's roadmap can't place. Ask once: "Which version is the work so far? (v1)". Apply then labels every one of them with it; list them in the PR so the person can move the ones that are really later work (`gh issue edit <n> --remove-label version:v1 --add-label version:v2`). A person who declines gets the roadmap's banner instead.
+6. If `loopRunning`, say the loop picks `main.mts` up on its next start; never stop it.
 
 Then ask once: proceed? `--yes` on the invocation skips the question; `--dry-run` stops here.
 
 ## 3. Apply
 
-Save the plan to a file and run `update apply <plan.json> --skills <chosen,new,skills> --env-keys <chosen,keys>` (`--no-labels` to skip the GitHub side). Read the result:
+Save the plan to a file and run `update apply <plan.json> --skills <chosen,new,skills> --env-keys <chosen,keys> --epic-version <answer>` (`--no-labels` to skip the GitHub side; omit `--epic-version` when the person declined). Read the result:
 
 - **`conflicts`**: files where the three-way merge left markers (`<<<<<<< project`). Resolve each by hand: keep the project's customization and take the template's change, as a careful maintainer would; then re-read the file top to bottom. The loop's `main.mts` must stay valid TypeScript: `node --check` won't parse `.mts` with types, so run the project's typecheck if it covers `.sandcastle/`, else read carefully.
 - **`manual`**: things the script couldn't do; do them or list them.

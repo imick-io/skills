@@ -51,6 +51,7 @@ Used by `/scope-decomposer`, and by every skill that creates an issue under an e
 - **Initiative**: an issue labelled `initiative`.
 - **Epic**: an issue labelled `epic` (plus `needs-briefing` and `ready-for-human` until `/brief` has run, and `autopilot` when its planning is left to the agent loop), linked to its initiative as a sub-issue: `gh api --method POST repos/<owner>/<repo>/issues/<initiative>/sub_issues -F sub_issue_id=<epic-db-id>` (the epic's database id, as for blocking). Its branch is `epic/NN-<slug>`, recorded in its body.
 - **Epic order**: native blocking between epics, as in Wayfinding operations.
+- **Version**: every epic carries one `version:<v>` label (`version:v1`, `version:v1.1`, `version:v2`…), set by `/scope-decomposer` from the initiative's version and moved by hand when an epic slips. The tracker's roadmap shows one version at a time and flags an epic without one, or one blocked by an epic of a later version. Tickets don't carry it; they follow their epic. Create a new version's label with `gh label create version:<v> --color 0e8a16 --force`.
 - **Milestone**: one per epic, titled `NN: <Initiative> / <Epic>`. `NN` is repo-wide, zero-padded, never reused: the next number is one above the highest `NN:` across all milestones, open and closed (`gh api "repos/<owner>/<repo>/milestones?state=all" --paginate --jq '.[].title'`). Create with `gh api --method POST repos/<owner>/<repo>/milestones -f title="<title>"`.
 - **Map for an epic**: the map `/wayfinder` charts for an epic is a sub-issue of that epic.
 

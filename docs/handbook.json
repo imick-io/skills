@@ -2021,7 +2021,7 @@
     {
       "title": "Scope",
       "who": "You + agent",
-      "body": "A big idea, yours or a needs-scoping issue, becomes an initiative with epics. Each epic has one destination, one owner area, its own milestone (NN: Initiative / Epic) and branch (epic/NN-slug), and blocking links to the epics it waits on. New products default to a local-first v1.",
+      "body": "A big idea, yours or a needs-scoping issue, becomes an initiative with epics. Each epic has one destination, one owner area, its own milestone (NN: Initiative / Epic) and branch (epic/NN-slug), and blocking links to the epics it waits on. New products default to a local-first v1. Every epic carries the initiative's version (version:v1, v1.1, v2…), which the tracker's roadmap shows one at a time.",
       "tags": [
         {
           "cmd": "/scope-decomposer"
@@ -2032,6 +2032,10 @@
         },
         {
           "label": "epic",
+          "role": "plan"
+        },
+        {
+          "label": "version:*",
           "role": "plan"
         }
       ]
@@ -2301,6 +2305,14 @@
       "means": "Which part of the product, so who owns it",
       "setBy": "/scope-decomposer, triage",
       "next": "See docs/agents/team.md"
+    },
+    {
+      "name": "version:*",
+      "role": "plan",
+      "kind": "Planning",
+      "means": "The version an epic ships in (version:v1, version:v1.1, version:v2); the tracker's roadmap shows one version at a time",
+      "setBy": "/scope-decomposer, or you",
+      "next": "Move the label when an epic slips; an epic without one is flagged on the roadmap"
     },
     {
       "name": "agent:planning",

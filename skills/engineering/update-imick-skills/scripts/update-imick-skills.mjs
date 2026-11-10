@@ -261,6 +261,14 @@ const plan = () => {
   if (!existsSync("test-suites/README.md") && (existsSync(".sandcastle") || existsSync(".github/workflows/epics.yml")) && existsSync(join(next, SUITES_TEMPLATE)))
     suites.push({ file: "test-suites/README.md", action: "copy" });
 
+  // Versions: epics without a version:* label, for a repo on the epic workflow.
+  // The skill asks once which version the work so far is, and apply labels them all.
+  let unversioned = [];
+  if (existsSync(".github/workflows/epics.yml")) {
+    const r = run("gh", ["issue", "list", "--label", "epic", "--state", "all", "--limit", "500", "--json", "number,title,labels", "--jq", '[.[] | select([.labels[].name] | map(startswith("version:")) | any | not) | {number, title}]']);
+    if (r.ok) try { unversioned = JSON.parse(r.out); } catch { /* reported as none */ }
+  }
+
   // Triage labels: rows in the template whose Role isn't in the project's table.
   const labels = [];
   if (existsSync("docs/agents/triage-labels.md") && existsSync(join(next, LABELS_TEMPLATE))) {
@@ -278,7 +286,7 @@ const plan = () => {
   json({
     installed, target, layout, skillsDir,
     skills: { changed: changedSkills, goneUpstream: missingSkills, new: newSkills },
-    loop, tracker, suites, labels,
+    loop, tracker, suites, labels, unversioned,
     loopRunning: existsSync(".sandcastle/loop.pid"),
     ci: ciCheck(),
     changelog: { versions: between.map((s) => s.version), steps },
@@ -373,6 +381,16 @@ const apply = (file) => {
     }
   }
 
+  // Versions: every epic without one gets the version the person named (--epic-version v1).
+  const epicVersion = flag("--epic-version");
+  if (epicVersion && p.unversioned?.length) {
+    const label = `version:${epicVersion.replace(/^version:/, "")}`;
+    run("gh", ["label", "create", label, "--color", "0e8a16", "--force"]);
+    const failed = p.unversioned.filter((e) => !run("gh", ["issue", "edit", String(e.number), "--add-label", label]).ok);
+    done.push(`${label} on ${p.unversioned.length - failed.length} epic(s): ${p.unversioned.filter((e) => !failed.includes(e)).map((e) => `#${e.number}`).join(", ")}`);
+    for (const e of failed) manual.push(`#${e.number}: couldn't add ${label}`);
+  }
+
   writeRecord(p.target.replace(/^v/, ""), p.layout);
   done.push(`${RECORD}: Version ${p.target.replace(/^v/, "")}`);
   const conflicts = run("git", ["grep", "-l", "^<<<<<<< project", "--", ".sandcastle"]).out.split("\n").filter(Boolean);
@@ -382,4 +400,4 @@ const apply = (file) => {
 if (cmd === "plan") plan();
 else if (cmd === "apply") apply(positional[0]);
 else if (cmd === "record") { const v = flag("--version"); if (!v) stop("Usage: record --version X.Y.Z"); writeRecord(v.replace(/^v/, ""), record().layout ?? detectLayout()); json({ recorded: v }); }
-else stop("Usage: plan [--to vX.Y.Z] | apply <plan.json> [--skills a,b] [--env-keys K1,K2] [--no-labels] | record --version X.Y.Z");
+else stop("Usage: plan [--to vX.Y.Z] | apply <plan.json> [--skills a,b] [--env-keys K1,K2] [--no-labels] [--epic-version v1] | record --version X.Y.Z");
