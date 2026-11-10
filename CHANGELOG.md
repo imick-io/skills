@@ -1,5 +1,11 @@
 # imick-skills
 
+## 1.20.2
+
+### Patch Changes
+
+- [#90](https://github.com/imick-io/skills/pull/90) [`671dd0b`](https://github.com/imick-io/skills/commit/671dd0b31f8632298a67bcdfbb4665225aece56b) Thanks [@imick-io](https://github.com/imick-io)! - **`/update-imick-skills` keeps a symlinks repo's layout.** In a repo whose `.claude/skills` holds links into `.agents/skills`, the update reinstalled each changed or new skill as a plain folder in `.claude/skills`, over its link, and left the old version in `.agents/skills`. It now moves the new folder into `.agents/skills` and puts the link back. Existing setups updated by an earlier version: for each skill that is a plain folder in `.claude/skills` but a link in the rest of the repo, move it over the old copy in `.agents/skills` and link it back (`ln -s ../../.agents/skills/<name> .claude/skills/<name>`).
+
 ## 1.20.1
 
 ### Patch Changes
