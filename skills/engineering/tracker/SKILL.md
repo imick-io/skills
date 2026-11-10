@@ -13,6 +13,7 @@ description: Build and open the issue tracker page, a snapshot of the repo's Git
 
 The roadmap has two keys, one for epics and one for tickets, with the same colours: red is you, blue an agent on it (an epic being built), purple an agent next (an epic being planned, a ticket queued), amber not triaged yet, grey waiting on something else, green done. A ticket on your turn or for your review is solid red with a "You" tag. An epic is outlined in red when anything in it waits on you, and its status is red when the epic itself does (a brief, a spec to approve, a PR to merge). A done epic is folded and green.
 - **Epic board**: one epic's tickets by status, and a diagram of what blocks what.
+- **Test suites** (when the repo has a `test-suites/` folder): each slow suite from `test-suites/*.md` on `main`, how long it takes and who runs it, its last green run (the `Run <suite>` ticket that closed with `Ran <suite> on <sha>`), and whether it is **stale**: commits to `main` touched its `covers` paths since that run. A stale suite also gets an Action item with the command that files a Run ticket against `main`.
 
 It reads the conventions set up by `/setup-imick-skills` and used by `/scope-decomposer`, `/wayfinder` and `/triage`: the triage labels, `epic` and `spec` labels, one milestone per epic, and GitHub's native issue dependencies for blocking. GitHub only.
 
@@ -34,7 +35,7 @@ The page can also be served from Vercel, built from GitHub on every visit behind
 2. **Create the project** from `tracker/`: `vercel link --yes --project <repo>-tracker`. Confirm the Vercel scope (personal account or team) with the user first: it is the CLI's default otherwise.
 3. **Set the repo**: `vercel env add TRACKER_REPO production` with `<owner>/<repo>`. A project connected to the Git repo gets it from Vercel's git variables instead.
 4. **Secrets**: the user adds them themselves, never ask for or handle the values. Each `vercel env add <NAME> production` from `tracker/` prompts for one:
-   - `GITHUB_TOKEN`: a fine-grained token for this repo with **Issues: read**, **Pull requests: read** and **Metadata: read**.
+   - `GITHUB_TOKEN`: a fine-grained token for this repo with **Issues: read**, **Pull requests: read**, **Metadata: read**, and **Contents: read** for the Test suites tab (it reads `test-suites/*.md` and compares commits on `main`).
    - `TRACKER_USER` and `TRACKER_PASSWORD`: the basic-auth login for the page.
 5. **Deploy**: `vercel deploy --prod` from `tracker/`, again after the secrets are added. Then check that `/` and `/index.html` answer **401** without the login, and the page loads with it.
 

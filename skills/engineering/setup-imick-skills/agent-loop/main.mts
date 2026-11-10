@@ -54,7 +54,9 @@
 //      comes out ready-for-agent is picked up by the next pass, at once.
 //   1. Queue: open, unassigned, unblocked issues labelled ready-for-agent or
 //      ready-for-agent-debugging. Specs are skipped (they're read by
-//      /to-tickets, never built directly).
+//      /to-tickets, never built directly). A `suite-run` ticket ("Run
+//      <suite>", for a slow suite in test-suites/) is run, not built: green
+//      closes it, red files bugs it then waits on.
 //   2. Plan: an agent picks the tickets that can safely run in parallel,
 //      beside the ones already building, to fill the free slots.
 //   3. Claim each one (assignee = claimed), prepare its branch: tickets under
@@ -66,7 +68,9 @@
 //      lands, so a free slot is refilled without waiting for a whole batch.
 //   5. Land: epic tickets merge into the epic branch and close; the others
 //      get a PR with "Fixes #n". An epic with no open tickets left gets its
-//      PR to main ("Closes #epic").
+//      PR to main ("Closes #epic"), unless its diff touches what a suite in
+//      test-suites/ covers and no "Run <suite>" ticket ran: that ticket is
+//      filed first, and the PR waits for it.
 //   6. Verify: an epic PR whose milestone is empty is checked with
 //      /verify-epic, once per commit, beside the tickets; its failures become tickets that the
 //      next pass picks up, and its status feeds the epic-gate merge check. A
@@ -317,6 +321,7 @@ const LABEL = {
   manual: process.env.AGENTS_LABEL_MANUAL ?? "manual",
   briefing: "needs-briefing",
   backlog: process.env.AGENTS_LABEL_BACKLOG ?? "backlog",
+  suiteRun: "suite-run",
   triage: "needs-triage",
   needsInfo: process.env.AGENTS_LABEL_NEEDS_INFO ?? "needs-info",
   fast: "fast",
@@ -389,7 +394,11 @@ const container = (branch?: string, opts: { merges?: boolean } = {}) =>
 // ---------------------------------------------------------------------------
 
 type Epic = { number: number; title: string; branch: string; milestone: string; mode: Mode; manual: boolean; areas: string[] };
-type Ticket = { number: number; title: string; kind: "build" | "bug"; epic?: Epic; branch: string };
+// A `suite` ticket runs one of test-suites/'s slow suites on the finished
+// branch instead of building: it's queued by its `ready-for-agent` label like
+// a build, and told apart by `suite-run`.
+type Ticket = { number: number; title: string; kind: "build" | "bug" | "suite"; epic?: Epic; branch: string };
+const whoLabel = (t: Ticket) => (t.kind === "bug" ? LABEL.bug : LABEL.build);
 
 const sh = (cmd: string, args: string[], cwd?: string) =>
   execFileSync(cmd, args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
@@ -499,12 +508,13 @@ function readyTickets(): Ticket[] {
       if (!inScope(issue.number, epic, issue.labels)) continue;
       if (epic?.manual) continue; // a hand-run epic: its tickets are never the loop's, whatever their labels
       if (epic && EPIC_GATE === "epic" && epicBlocked(epic)) continue;
+      const suite = kind === "build" && labels.includes(LABEL.suiteRun);
       tickets.push({
         number: issue.number,
         title: issue.title,
-        kind,
+        kind: suite ? "suite" : kind,
         epic,
-        branch: epic ? `agent/issue-${issue.number}` : `${kind === "bug" ? "fix" : "feat"}/${issue.number}`,
+        branch: epic ? `agent/issue-${issue.number}` : `${suite ? "suite" : kind === "bug" ? "fix" : "feat"}/${issue.number}`,
       });
     }
   }
@@ -841,13 +851,14 @@ async function work(t: Ticket, epicPath?: string) {
 // Whether the ticket moved on: landed, or handed to a person. A conflict with
 // the epic branch sends it back to the queue, to be built again.
 async function settle(t: Ticket, commits: number, epicPath?: string): Promise<boolean> {
+  if (t.kind === "suite") return settleSuite(t, commits);
   if (!commits) {
     // No commits: a bug diagnosed for a person / not reproducible, or a
     // build the agent couldn't finish. The agent has commented; make sure a
     // person sees it.
     const labels = ghJson<string[]>("issue", "view", String(t.number), "--json", "labels", "--jq", "[.labels[].name]");
-    if (labels.includes(LABEL[t.kind])) {
-      gh("issue", "edit", String(t.number), "--remove-label", LABEL[t.kind], "--add-label", LABEL.human);
+    if (labels.includes(whoLabel(t))) {
+      gh("issue", "edit", String(t.number), "--remove-label", whoLabel(t), "--add-label", LABEL.human);
     }
     release(t, "no commits; handed to a person");
     return true;
@@ -857,17 +868,39 @@ async function settle(t: Ticket, commits: number, epicPath?: string): Promise<bo
   return land(t, epicPath);
 }
 
+// A Run ticket lands nothing: the agent closed it (green), blocked it on the
+// bugs it filed (red: it runs again once they close), or handed it to a
+// person. An agent that did none of those is treated like a build with no
+// commits. Its branch is only the code under test: dropped either way.
+async function settleSuite(t: Ticket, commits: number): Promise<boolean> {
+  if (commits) log(`#${t.number}: a suite run made ${commits} commit(s); dropped, a Run ticket changes nothing`);
+  freeBranch(t.branch);
+  tryGit(undefined, "branch", "-D", t.branch);
+  const issue = ghJson<{ state: string; labels: { name: string }[] }>("issue", "view", String(t.number), "--json", "state,labels");
+  const labels = issue.labels.map((l) => l.name);
+  if (issue.state !== "OPEN") { log(`#${t.number}: suite green, closed by the agent`); return true; }
+  const blocked = Number(gh("api", `repos/${repo}/issues/${t.number}`, "--jq", ".issue_dependencies_summary.blocked_by // 0"));
+  if (blocked > 0) { release(t, `suite red; waits on the ${blocked} bug(s) it filed`); return true; }
+  if (labels.includes(LABEL.human)) { release(t, "handed to a person by the agent"); return true; }
+  if (labels.includes(LABEL.build)) gh("issue", "edit", String(t.number), "--remove-label", LABEL.build, "--add-label", LABEL.human);
+  release(t, "the run neither passed, failed nor asked; handed to a person");
+  return true;
+}
+
 async function build(t: Ticket): Promise<number> {
   const box = await sandcastle.createSandbox({ branch: t.branch, sandbox: container(t.branch), hooks });
   try {
+    // A Run ticket tests the branch it was cut from: the epic's, or main.
+    const base = t.epic ? t.epic.branch : "main";
+    const suiteArgs = t.kind === "suite" ? { BASE: `origin/${base}`, REF: base, SHA: git(undefined, "rev-parse", `origin/${base}`), REPO: repo } : {};
     await box.run({
       name: `#${t.number}`,
       maxIterations: 100,
       agent: sandcastle.claudeCode(WORKER),
-      promptFile: t.kind === "bug" ? "./.sandcastle/bug-prompt.md" : "./.sandcastle/implement-prompt.md",
-      promptArgs: { ISSUE: String(t.number), TITLE: t.title, BRANCH: t.branch },
+      promptFile: t.kind === "bug" ? "./.sandcastle/bug-prompt.md" : t.kind === "suite" ? "./.sandcastle/suite-prompt.md" : "./.sandcastle/implement-prompt.md",
+      promptArgs: { ISSUE: String(t.number), TITLE: t.title, BRANCH: t.branch, ...suiteArgs },
     });
-    if (!unlanded(t)) return 0;
+    if (t.kind === "suite" || !unlanded(t)) return unlanded(t); // a run has nothing to review
     await box.run({
       name: `#${t.number} review`,
       maxIterations: 1,
@@ -917,7 +950,7 @@ async function land(t: Ticket, epicPath?: string): Promise<boolean> {
   git(undefined, "push", "--quiet", "-u", "origin", t.branch);
   const url = gh("pr", "create", "--base", "main", "--head", t.branch, "--title", t.title, "--body",
     `Fixes #${t.number}\n\n> *This was generated by AI in the agent loop.* See the issue for the reasoning and evidence.`);
-  gh("issue", "edit", String(t.number), "--remove-label", LABEL[t.kind], "--add-label", LABEL.review);
+  gh("issue", "edit", String(t.number), "--remove-label", whoLabel(t), "--add-label", LABEL.review);
   log(`#${t.number} → ${url}`);
   return true;
 }
@@ -1144,12 +1177,13 @@ async function verifyEpic(e: { number: number; title: string; body: string; labe
   const branch = e.body.match(/`(epic\/[^`]+)`/)?.[1];
   const milestone = e.milestone?.title;
   if (!branch || !milestone || !tryGit(undefined, "ls-remote", "--exit-code", "--heads", "origin", branch)) return 0;
-  const items = ghJson<{ number: number; state: string; labels: { name: string }[] }[]>("issue", "list", "--state", "all", "--milestone", milestone, "--json", "number,state,labels", "--limit", "300")
+  const items = ghJson<{ number: number; title: string; state: string; labels: { name: string }[] }[]>("issue", "list", "--state", "all", "--milestone", milestone, "--json", "number,title,state,labels", "--limit", "300")
     .filter((i) => i.number !== e.number && !i.labels.some((l) => l.name === LABEL.backlog));
   if (!items.length || items.some((i) => i.state === "OPEN")) return 0; // not planned yet, or still building (backlog items don't count)
 
   let [pr] = ghJson<{ number: number; headRefOid: string }[]>("pr", "list", "--state", "open", "--head", branch, "--json", "number,headRefOid");
   if (!pr) {
+    if (suiteRunsFor(e, branch, milestone, items)) return 1; // the PR waits for the Run tickets just filed; they're ready now, so the next pass runs at once
     const url = gh("pr", "create", "--base", "main", "--head", branch, "--title", e.title, "--body",
       `Closes #${e.number}\n\nEvery ticket in milestone **${milestone}** is done. Verification runs next.`);
     log(`epic #${e.number} complete → ${url}`);
@@ -1195,6 +1229,60 @@ async function check(epic: number, pr: { number: number; headRefOid: string }, v
     freeBranch(verifyBranch); // a run that died keeps its worktree otherwise
     tryGit(undefined, "branch", "-D", verifyBranch);
   }
+}
+
+// The slow suites of test-suites/ (see its README) as the branch under test
+// defines them: a planner may have missed one, or added one on the branch.
+type Suite = { name: string; file: string; command: string; covers: string[]; takes: string; runsVia: string };
+function suitesAt(ref: string): Suite[] {
+  let files: string[];
+  try {
+    files = git(undefined, "ls-tree", "--name-only", `${ref}:test-suites`).split("\n").filter((f) => f.endsWith(".md") && f !== "README.md");
+  } catch { return []; } // no test-suites/ on that branch
+  return files.flatMap((f) => { const s = parseSuite(git(undefined, "show", `${ref}:test-suites/${f}`), f); return s ? [s] : []; });
+}
+// The frontmatter's fields; `covers` as a `- ` list or an inline `[a, b]`.
+function parseSuite(text: string, file: string): Suite | undefined {
+  const fm = text.match(/^---\r?\n([\s\S]*?)\r?\n---/)?.[1];
+  if (!fm) return undefined;
+  const field = (k: string) => fm.match(new RegExp(`^${k}:[ \\t]*(.*)$`, "m"))?.[1].trim() ?? "";
+  const unquote = (s: string) => s.trim().replace(/^["']|["']$/g, "");
+  const list = (k: string) => {
+    const inline = field(k);
+    if (inline.startsWith("[")) return inline.slice(1, inline.lastIndexOf("]")).split(",").map(unquote).filter(Boolean);
+    const block = fm.match(new RegExp(`^${k}:[ \\t]*\\n((?:[ \\t]+-[^\\n]*\\n?)*)`, "m"))?.[1] ?? "";
+    return block.split("\n").map((l) => unquote(l.replace(/^\s*-\s*/, ""))).filter(Boolean);
+  };
+  const name = field("name") || file.replace(/\.md$/, "");
+  return { name, file: `test-suites/${file}`, command: field("command"), covers: list("covers"), takes: field("takes"), runsVia: field("runs-via") || "sandbox" };
+}
+
+// Before an epic's PR goes up: every suite whose `covers` the epic's diff
+// touches, with no "Run <suite>" ticket in the milestone yet, gets one, in
+// the epic, labelled for an agent (or a person, for `runs-via: human`). The
+// PR waits for it: a Run ticket is an open ticket like any other. Returns
+// how many were filed.
+function suiteRunsFor(e: { number: number; labels: { name: string }[] }, branch: string, milestone: string, items: { title: string }[]): number {
+  tryGit(undefined, "fetch", "--quiet", "origin", "main", branch);
+  const suites = suitesAt(`origin/${branch}`);
+  if (!suites.length) return 0;
+  const changed = git(undefined, "diff", "--name-only", `origin/main...origin/${branch}`).split("\n").filter(Boolean);
+  const ran = new Set(items.map((i) => i.title.match(/^Run (\S+)/)?.[1]).filter(Boolean));
+  let filed = 0;
+  for (const s of suites) {
+    if (ran.has(s.name) || !s.covers.length) continue;
+    const touched = changed.filter((f) => s.covers.some((g) => matchesGlob(f, g)));
+    if (!touched.length) continue;
+    const labels = [LABEL.suiteRun, s.runsVia === "human" ? LABEL.human : LABEL.build, ...areasOf(e.labels).map((a) => `area:${a}`)];
+    const shown = touched.slice(0, 5).map((f) => `\`${f}\``).join(", ") + (touched.length > 5 ? ` and ${touched.length - 5} more` : "");
+    gh("issue", "create", "--title", `Run ${s.name}`, "--label", labels.join(","), "--milestone", milestone, "--body",
+      `> *This was generated by AI in the agent loop.*\n\n\`${branch}\` changes files that \`${s.file}\` covers (${shown}), and this epic has no run of **${s.name}** yet. ` +
+      `It runs on the finished epic branch; green closes this ticket, red files bugs under this epic that it then waits on. The epic's PR opens once it is closed.\n\n` +
+      `- Suite: \`${s.file}\`\n- Command: \`${s.command}\`\n- Takes: ${s.takes || "?"}\n- Runs via: ${s.runsVia}\n\nPart of #${e.number}.`);
+    log(`epic #${e.number}: filed "Run ${s.name}" (${s.runsVia}); its diff touches ${touched.length} file(s) the suite covers`);
+    filed++;
+  }
+  return filed;
 }
 
 // The commit's verify-epic status: its state ("" when none) and when it was set.
@@ -1394,7 +1482,9 @@ const unblockSchema = z.object({
 const followSchema = z.object({ outcome: z.enum(["kept", "updated", "followup"]), summary: z.string() });
 // Issues fast mode leaves to you: parked ones (backlog), planning artefacts
 // with their own flow, and an epic waiting for its /brief.
-const NOT_UNBLOCKED = [LABEL.backlog, LABEL.manual, LABEL.epic, LABEL.spec, LABEL.map, LABEL.briefing, LABEL.unblocking, "initiative", "needs-scoping"];
+// A Run ticket handed to a person (a suite only they can run, or a run that
+// couldn't start) is theirs to run, not a question to answer.
+const NOT_UNBLOCKED = [LABEL.backlog, LABEL.manual, LABEL.epic, LABEL.spec, LABEL.map, LABEL.briefing, LABEL.unblocking, LABEL.suiteRun, "initiative", "needs-scoping"];
 const labelledEpics = () => [LABEL.fast, LABEL.supersonic].some((label) => {
   try {
     return ghJson<unknown[]>("issue", "list", "--state", "open", "--label", label, "--json", "number", "--limit", "1").length > 0;

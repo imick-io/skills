@@ -15,6 +15,7 @@ Scaffold the per-repo configuration that the engineering skills assume:
 - **Automatic triage** (optional, GitHub only): triages each new issue, in a GitHub Actions workflow or inside the agent loop
 - **Agent loop** (optional, GitHub only): Sandcastle agents that work the ready tickets
 - **Epic PRs** (optional, GitHub only): the epic-gate merge check and the closing chain
+- **Slow test suites** (optional, GitHub only): `test-suites/`, the suites that run through Run tickets instead of on every PR
 
 This is a prompt-driven skill, not a deterministic script. Explore, present what you found, confirm with the user, then write.
 
@@ -118,7 +119,7 @@ On **yes**:
    - optional `SLACK_USER_ID`, so the alerts that need an answer mention the user.
    - `AGENTS_TRIAGE=1` when Section E chose triage inside the loop, and optionally `SLACK_FEED_WEBHOOK_URL` for every triage decision (the same feed channel as the workflow's).
 6. **Fast or supersonic**: ask whether this project values speed over review (a personal project, an MVP). If so, add `AGENTS_MODE=fast` to `.sandcastle/.env`: the loop then answers what waits on the user when it's confident enough (asking them in Slack otherwise), approves confident autopilot specs and merges verified epics. For a throwaway MVP, offer `AGENTS_MODE=supersonic` instead: `/scope-decomposer` briefs every epic in its one interview, reversible calls below the threshold are assumed instead of asked, specs are always approved, and a daily Slack digest lists the assumptions; add `.sandcastle/digest.json` to `.gitignore`. Both use `AGENTS_THRESHOLD` (70 by default). Otherwise mention the `fast` and `supersonic` labels, which do the same for one epic. Neither mode touches `backlog` issues or epics, nor a `manual` epic or its tickets.
-7. **Labels**: make sure `ready-for-agent`, `ready-for-agent-debugging`, `ready-for-human`, `ready-for-review`, `backlog` and `manual` exist.
+7. **Labels**: make sure `ready-for-agent`, `ready-for-agent-debugging`, `ready-for-human`, `ready-for-review`, `backlog`, `manual` and `suite-run` exist.
 
 The loop needs the skills it calls committed in the repo (`implement`, `tdd`, `code-review`, `debug-and-fix`, `diagnosing-bugs`, `verify-epic`, and their dependencies; for planning `autopilot` epics also `wayfinder`, `dig`, `research`, `to-spec`, `to-tickets` and `prototype`; for fast or supersonic mode also `dig` and `wayfinder`; for triage inside the loop also `triage`): agents in the sandbox see only the repo. Check `.claude/skills/` and offer `npx skills@latest add imick-io/skills` for any missing.
 
@@ -136,6 +137,8 @@ On **yes**:
    - **`concurrency: { group: <workflow>-${{ github.ref }}, cancel-in-progress: true }`**: a new push to a PR cancels the run it replaces, instead of both running to the end.
    - **No full suite on `push: main`**: the merge would re-run what its PR just passed. Don't remove `push: main` outright when the workflow saves caches (dependencies, builds, emulator images): a PR can read caches only from its own ref or `main`'s, so every new PR would start cold. Keep the trigger and gate the expensive jobs to PRs (`if: github.event_name == 'pull_request'`), so a push to `main` runs only the cheap jobs that save the caches.
 
+   - **Skip what didn't change**, when a workflow runs expensive steps (services, database setup, Playwright, an emulator) on every PR: a `changes` job that decides what the PR touched (`turbo --affected` for the Turbo tasks, `dorny/paths-filter` for the rest), the expensive **steps** gated on its outputs, and one always-running `ci-ok` job as the single required check. [ci-change-gates.md](./ci-change-gates.md) has the shape, why each piece is there and the pitfalls (a shallow checkout or a missing `TURBO_SCM_BASE` silently runs everything; a workflow-level `paths:` filter leaves a required check pending forever; a Turbo graph missing a cross-package link skips tests that should run). Offer it as a rewrite of the workflow, shown as a diff; `ci-ok` then replaces the job list in the branch protection, or in the loop's `merge-gate.mts` where a project has one.
+
    Say what changes for them: a PR into a branch other than `main` gets no checks, and a run cancelled by a newer push shows as cancelled, not failed. Leave a workflow alone when it's already like this, or deploys on `push: main`. `/update-imick-skills` runs the same check on every update, so a project set up before this step gets it too. The agent loop batches its own pushes to an open epic PR (`[skip ci]` until the batch's last push), so CI runs once per batch of fixes, not once per fix.
 
 **Section H: Tracker page.** GitHub only; skip otherwise, and when `tracker/build.mjs` already exists. Ask:
@@ -150,6 +153,12 @@ On **yes**: copy the `tracker` skill's [build.mjs](../tracker/build.mjs) to `tra
 > - **Vercel**: a page built from GitHub on every visit, behind a password. Needs the Vercel CLI logged in, a read-only GitHub token and a password, which you set yourself.
 
 On **Vercel**: follow the `tracker` skill's **Hosting on Vercel** steps.
+
+**Section I: Slow test suites.** GitHub only, with the agent loop or epics; skip when `test-suites/README.md` already exists. Look at the project's CI for suites that don't belong on every PR: a job with a long `timeout-minutes` (over 20), an emulator or device, a `schedule` or `workflow_dispatch`-only workflow, a `test:slow`, `bench` or e2e script that the default test run excludes. Ask:
+
+> Keep the slow suites out of every PR? `test-suites/` holds one file per suite (its command, the paths it covers, how long it takes, who can run it). An epic that touches what a suite covers gets a **Run \<suite\>** ticket, run last on the finished epic branch: green closes it, red files bugs. The tracker shows which suites went stale since their last run. (recommended: **yes** when CI has a suite over about 5 minutes, or one that needs an emulator or a device)
+
+On **yes**: write `test-suites/README.md` from [test-suites-readme.md](./test-suites-readme.md), create the `suite-run` label, and draft one suite file per suite found, as the README describes, confirming each `covers` list with the user: it should name what the suite depends on, not only what it tests. A suite the sandbox can't run (an emulator, KVM, a device) is `runs-via: workflow <file>`: give that workflow a `workflow_dispatch` trigger, drop its `pull_request` trigger if the Run tickets now cover it (say so: a standalone PR that breaks it is caught by the next run, and the tracker's stale flag), and note that the loop's `GH_TOKEN` then needs **Actions: read and write**. With the hosted tracker, its `GITHUB_TOKEN` needs **Contents: read** for the new tab.
 
 ### 3. Confirm and edit
 

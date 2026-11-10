@@ -38,6 +38,7 @@ const RECORD = "docs/agents/imick-skills.md";
 const LOOP_TEMPLATES = "skills/engineering/setup-imick-skills/agent-loop";
 const LABELS_TEMPLATE = "skills/engineering/setup-imick-skills/triage-labels.md";
 const TRACKER = "skills/engineering/tracker";
+const SUITES_TEMPLATE = "skills/engineering/setup-imick-skills/test-suites-readme.md";
 const ADDITIONS = /^# --- project additions ---$/m;
 const ADDITIONS_END = /^# --- end project additions ---$/m;
 
@@ -157,6 +158,21 @@ const ciCheck = () => {
     const conc = block("concurrency");
     if ((has("pull_request") || has("push")) && !(conc && /cancel-in-progress\s*:\s*true/.test(conc.body + conc.head)))
       issues.push({ id: "no-cancel", fix: "concurrency: { group: <workflow>-${{ github.ref }}, cancel-in-progress: true }", why: "a newer push leaves the run it replaces going to the end" });
+    // Expensive, uncached steps (services, e2e, an emulator) on every PR, with
+    // nothing deciding whether the PR touched what they test. See ci-change-gates.md.
+    const expensive = /playwright|docker compose|^\s+services\s*:|emulator|android|maestro|db:setup|migrat|\be2e\b/im.test(text);
+    const gated = /dorny\/paths-filter|--affected|^[ \t]{2}changes[ \t]*:/m.test(text);
+    if (has("pull_request") && expensive && !gated && !deploys)
+      issues.push({ id: "no-change-gate", fix: "a `changes` job (turbo --affected for the Turbo tasks, dorny/paths-filter for the rest) whose outputs gate the expensive steps, and one always-running `ci-ok` job as the required check (ci-change-gates.md)", why: "services, e2e and other uncached steps run on every PR, whatever it touched" });
+    // A workflow-level paths filter skips the whole workflow, and GitHub then
+    // leaves the required checks it holds pending forever.
+    if (has("pull_request") && /^[ \t]{4}paths(-ignore)?[ \t]*:/m.test(on.body))
+      issues.push({ id: "paths-on-required", fix: "move the paths filter into a `changes` job (dorny/paths-filter) and gate the steps on its outputs; a job skipped by `if:` reports success, a workflow skipped by `paths:` reports nothing", why: "when no path matches, a required check from this workflow stays pending and the PR can't merge" });
+    // Several jobs, each a required check to list by name, and no aggregator.
+    const jobs = block("jobs");
+    const jobCount = jobs ? jobs.body.split("\n").filter((l) => /^[ \t]{2}[\w-]+[ \t]*:/.test(l)).length : 0;
+    if (has("pull_request") && jobCount > 2 && !/if:\s*always\(\)/.test(text) && !deploys)
+      issues.push({ id: "no-aggregator", fix: "one `ci-ok` job with `if: always()` that `needs:` every other job and fails when any failed or was cancelled, as the single required check", why: "every job has to be listed as a required check by name (or in the loop's merge-gate.mts), and a renamed or added job slips past the gate" });
     if (issues.length) out.push({ file: join(dir, f), deploys, caches, issues });
   }
   return { mainBranch: main, workflows: out };
@@ -239,6 +255,20 @@ const plan = () => {
     }
   }
 
+  // Slow test suites: the folder's README, for a project on the loop or the
+  // epic workflow that has none yet (the suite files themselves are the project's).
+  const suites = [];
+  if (!existsSync("test-suites/README.md") && (existsSync(".sandcastle") || existsSync(".github/workflows/epics.yml")) && existsSync(join(next, SUITES_TEMPLATE)))
+    suites.push({ file: "test-suites/README.md", action: "copy" });
+
+  // Versions: epics without a version:* label, for a repo on the epic workflow.
+  // The skill asks once which version the work so far is, and apply labels them all.
+  let unversioned = [];
+  if (existsSync(".github/workflows/epics.yml")) {
+    const r = run("gh", ["issue", "list", "--label", "epic", "--state", "all", "--limit", "500", "--json", "number,title,labels", "--jq", '[.[] | select([.labels[].name] | map(startswith("version:")) | any | not) | {number, title}]']);
+    if (r.ok) try { unversioned = JSON.parse(r.out); } catch { /* reported as none */ }
+  }
+
   // Triage labels: rows in the template whose Role isn't in the project's table.
   const labels = [];
   if (existsSync("docs/agents/triage-labels.md") && existsSync(join(next, LABELS_TEMPLATE))) {
@@ -256,7 +286,7 @@ const plan = () => {
   json({
     installed, target, layout, skillsDir,
     skills: { changed: changedSkills, goneUpstream: missingSkills, new: newSkills },
-    loop, tracker, labels,
+    loop, tracker, suites, labels, unversioned,
     loopRunning: existsSync(".sandcastle/loop.pid"),
     ci: ciCheck(),
     changelog: { versions: between.map((s) => s.version), steps },
@@ -334,6 +364,13 @@ const apply = (file) => {
     copyFileSync(src, t.file); done.push(`${t.file} copied`);
   }
 
+  // Slow test suites.
+  for (const s of p.suites ?? []) {
+    mkdirSync("test-suites", { recursive: true });
+    copyFileSync(join(next, SUITES_TEMPLATE), s.file);
+    done.push(`${s.file} copied: describe each slow suite in a file beside it (the README says how)`);
+  }
+
   // Labels.
   if (!has("--no-labels") && p.labels.length) {
     const path = "docs/agents/triage-labels.md";
@@ -342,6 +379,16 @@ const apply = (file) => {
       const r = run("gh", ["label", "create", l.label, "--force"]);
       (r.ok ? done : manual).push(r.ok ? `label ${l.label} created, row added` : `label ${l.label}: ${r.err}`);
     }
+  }
+
+  // Versions: every epic without one gets the version the person named (--epic-version v1).
+  const epicVersion = flag("--epic-version");
+  if (epicVersion && p.unversioned?.length) {
+    const label = `version:${epicVersion.replace(/^version:/, "")}`;
+    run("gh", ["label", "create", label, "--color", "0e8a16", "--force"]);
+    const failed = p.unversioned.filter((e) => !run("gh", ["issue", "edit", String(e.number), "--add-label", label]).ok);
+    done.push(`${label} on ${p.unversioned.length - failed.length} epic(s): ${p.unversioned.filter((e) => !failed.includes(e)).map((e) => `#${e.number}`).join(", ")}`);
+    for (const e of failed) manual.push(`#${e.number}: couldn't add ${label}`);
   }
 
   writeRecord(p.target.replace(/^v/, ""), p.layout);
@@ -353,4 +400,4 @@ const apply = (file) => {
 if (cmd === "plan") plan();
 else if (cmd === "apply") apply(positional[0]);
 else if (cmd === "record") { const v = flag("--version"); if (!v) stop("Usage: record --version X.Y.Z"); writeRecord(v.replace(/^v/, ""), record().layout ?? detectLayout()); json({ recorded: v }); }
-else stop("Usage: plan [--to vX.Y.Z] | apply <plan.json> [--skills a,b] [--env-keys K1,K2] [--no-labels] | record --version X.Y.Z");
+else stop("Usage: plan [--to vX.Y.Z] | apply <plan.json> [--skills a,b] [--env-keys K1,K2] [--no-labels] [--epic-version v1] | record --version X.Y.Z");

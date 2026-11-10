@@ -9,6 +9,11 @@
 // tracker/api/index.mjs): with GITHUB_TOKEN set it calls GitHub's GraphQL API
 // directly, since there is no `gh` there, and the repo comes from
 // TRACKER_REPO (owner/name) or Vercel's git env vars.
+//
+// When the repo has a test-suites/ folder (slow suites run through "Run
+// <suite>" tickets, see its README), a Test suites tab reads the suite files
+// on the default branch and tells, from each suite's last green run and the
+// commits since, whether it is stale. That needs Contents: read on the token.
 
 import { execFileSync } from "node:child_process";
 import { writeFileSync } from "node:fs";
@@ -62,6 +67,57 @@ async function graphql(query, variables) {
   return JSON.parse(execFileSync("gh", args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 })).data;
 }
 
+// REST, for what GraphQL doesn't offer (comparing two commits).
+async function rest(path) {
+  const token = process.env.GITHUB_TOKEN;
+  if (token) {
+    const res = await fetch(`https://api.github.com/${path}`, { headers: { authorization: `Bearer ${token}`, accept: "application/vnd.github+json" } });
+    if (!res.ok) throw new Error(`GitHub REST: ${res.status} ${path}`);
+    return res.json();
+  }
+  return JSON.parse(execFileSync("gh", ["api", path], { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 }));
+}
+
+// The slow suites: test-suites/*.md on the default branch, each a frontmatter
+// (name, command, covers, takes, runs-via) over a paragraph. `present` is
+// false when the repo has no such folder, and the tab is left out.
+async function fetchSuites(REPO) {
+  const data = await graphql(`query($owner: String!, $name: String!) {
+    repository(owner: $owner, name: $name) {
+      defaultBranchRef { name }
+      object(expression: "HEAD:test-suites") { ... on Tree { entries { name object { ... on Blob { text } } } } }
+    }
+  }`, { owner: REPO.owner, name: REPO.name });
+  const branch = data.repository.defaultBranchRef?.name ?? "main";
+  const entries = data.repository.object?.entries ?? [];
+  const suites = entries
+    .filter((e) => e.name.endsWith(".md") && e.name !== "README.md")
+    .map((e) => parseSuite(e.object?.text ?? "", e.name))
+    .filter(Boolean)
+    .map((s) => ({ ...s, url: `https://github.com/${REPO.owner}/${REPO.name}/blob/${branch}/${s.file}` }));
+  return { branch, present: Boolean(data.repository.object), suites };
+}
+function parseSuite(text, file) {
+  const fm = text.match(/^---\r?\n([\s\S]*?)\r?\n---/)?.[1];
+  if (!fm) return null;
+  const field = (k) => fm.match(new RegExp(`^${k}:[ \\t]*(.*)$`, "m"))?.[1].trim() ?? "";
+  const unquote = (s) => s.trim().replace(/^["']|["']$/g, "");
+  const list = (k) => {
+    const inline = field(k);
+    if (inline.startsWith("[")) return inline.slice(1, inline.lastIndexOf("]")).split(",").map(unquote).filter(Boolean);
+    const block = fm.match(new RegExp(`^${k}:[ \\t]*\\n((?:[ \\t]+-[^\\n]*\\n?)*)`, "m"))?.[1] ?? "";
+    return block.split("\n").map((l) => unquote(l.replace(/^\s*-\s*/, ""))).filter(Boolean);
+  };
+  const body = text.slice(text.indexOf("---", 3) + 3).trim();
+  return { name: field("name") || file.replace(/\.md$/, ""), file: `test-suites/${file}`, command: field("command"), covers: list("covers"), takes: field("takes"), runsVia: field("runs-via") || "sandbox", about: body.split(/\n\s*\n/)[0] ?? "" };
+}
+// `**` crosses folders, `*` doesn't; a glob with no `/` matches the file name
+// in any folder, like .gitignore. Same rule as the agent loop's.
+function matchesGlob(file, glob) {
+  const re = glob.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*\*/g, "\0").replace(/\*/g, "[^/]*").replace(/\?/g, "[^/]").replace(/\0/g, ".*");
+  return new RegExp(`^${glob.includes("/") ? "" : "(.*/)?"}${re}$`).test(file);
+}
+
 // Open PRs by head branch, for an epic's "merge" status.
 async function fetchOpenPrs(REPO) {
   const data = await graphql(`query($owner: String!, $name: String!) {
@@ -104,7 +160,7 @@ async function fetchIssues(REPO) {
 
 export async function render() {
 const REPO = await resolveRepo();
-const [issues, openPrs] = await Promise.all([fetchIssues(REPO), fetchOpenPrs(REPO)]);
+const [issues, openPrs, suiteFiles] = await Promise.all([fetchIssues(REPO), fetchOpenPrs(REPO), fetchSuites(REPO).catch(() => ({ present: false, suites: [], branch: "main" }))]);
 const byNumber = new Map(issues.map((i) => [i.number, i]));
 const has = (i, label) => i.labels.includes(label);
 const isPlanning = (i) => i.labels.some((l) => l.startsWith("wayfinder:")) || has(i, "spec");
@@ -217,6 +273,7 @@ const epicData = epics.map((e) => {
     milestone: e.milestone,
     status: epicStatus(e),
     area: e.labels.find((l) => l.startsWith("area:"))?.slice(5) ?? null,
+    version: e.labels.find((l) => l.startsWith("version:"))?.slice(8) ?? null,
     autopilot: has(e, "autopilot"),
     manual: has(e, "manual"),
     blockedBy: e.blockedBy,
@@ -344,14 +401,72 @@ const backlog = issues
     createdAt: i.createdAt,
   }));
 
+// Test suites: each suite file, its open Run tickets, its last green run
+// (the "Run <suite>" ticket closed with "Ran <suite> on <sha>"), and whether
+// main moved on what it covers since: the compare of that sha with the
+// default branch, filtered by the suite's globs.
+const suiteRuns = issues.filter((i) => has(i, "suite-run"));
+const suites = suiteFiles.present ? await Promise.all(suiteFiles.suites.map(async (s) => {
+  const runs = suiteRuns.filter((r) => r.title.match(/^Run (\S+)/)?.[1] === s.name);
+  const open = runs.filter((r) => r.open).sort((a, b) => a.number - b.number);
+  const green = runs.filter((r) => !r.open && !r.notPlanned).sort((a, b) => (b.closedAt ?? "").localeCompare(a.closedAt ?? ""))[0] ?? null;
+  const sha = green?.lastComment?.body.match(/\bRan \S+ on ([0-9a-f]{7,40})\b/)?.[1] ?? null;
+  let since = null;
+  if (sha) {
+    try {
+      const cmp = await rest(`repos/${REPO.owner}/${REPO.name}/compare/${sha}...${suiteFiles.branch}`);
+      const touched = (cmp.files ?? []).map((f) => f.filename).filter((f) => s.covers.some((g) => matchesGlob(f, g)));
+      since = { commits: cmp.total_commits ?? cmp.commits?.length ?? 0, touched: touched.slice(0, 8), touchedCount: touched.length, truncated: (cmp.files ?? []).length >= 300 };
+    } catch { /* an unknown sha, or no Contents access: stale stays unknown */ }
+  }
+  const current = open[0];
+  const state = current ? (current.assigned ? "working" : openBlockers(current).length ? "blocked" : has(current, "ready-for-human") ? "you" : "queued")
+    : !green ? "never" : !since ? "unknown" : since.touchedCount ? "stale" : "fresh";
+  return {
+    ...s,
+    state,
+    open: open.map((r) => ({ number: r.number, epic: epicOf(r)?.number ?? null, blockedBy: openBlockers(r).map((b) => b.number) })),
+    last: green ? { number: green.number, closedAt: green.closedAt, sha, epic: epicOf(green)?.number ?? null } : null,
+    since,
+    fileCmd: `gh issue create --title "Run ${s.name}" --label "suite-run,${s.runsVia === "human" ? "ready-for-human" : "ready-for-agent"}" --body "Run against ${suiteFiles.branch}: ${s.file} is stale. Green closes this; red files bugs."`,
+  };
+})) : null;
+// A stale suite with no run on its way is something to decide on: an action item.
+for (const s of suites ?? []) {
+  if (s.state !== "stale") continue;
+  hitl.push({
+    number: 0, suite: s.name, title: `${s.name} is stale`, url: s.url, kind: "suite", assignees: [], epic: null,
+    canStart: true, waitsOn: [], unblocks: [], holdsUp: 0,
+    items: [{ done: false, text: `${s.since.commits} commit(s) on ${suiteFiles.branch} touched what it covers since its last run (#${s.last.number}, ${s.last.sha.slice(0, 7)}). Run it (${s.takes || "?"}, ${s.runsVia}): \`${s.fileCmd}\`` }],
+  });
+}
+
+// Versions: the `version:*` label on epics (v1, v1.1, v2…), sorted numerically.
+// An open epic with none, or one that waits on an epic of a later version, is
+// something to fix before the roadmap reads right: an action item each.
+const verParts = (v) => String(v).replace(/^v/i, "").split(".").map(Number);
+const verCmp = (a, b) => { const x = verParts(a), y = verParts(b); for (let i = 0; i < Math.max(x.length, y.length); i++) { const d = (x[i] ?? 0) - (y[i] ?? 0); if (d) return d; } return 0; };
+const versions = [...new Set(epicData.map((e) => e.version).filter(Boolean))].sort(verCmp);
+const epicDataByNum = new Map(epicData.map((e) => [e.number, e]));
+for (const e of epicData) {
+  if (e.status === "done" || e.status === "backlog") continue;
+  const item = (text) => ({ number: e.number, title: e.title, url: e.url, kind: "version", assignees: byNumber.get(e.number)?.assignees ?? [], epic: e.number, canStart: true, waitsOn: [], unblocks: [], holdsUp: 0, items: [{ done: false, text }] });
+  if (!e.version) hitl.push(item(`No version: label it, e.g. \`gh issue edit ${e.number} --add-label version:${versions[0] ?? "v1"}\``));
+  for (const b of e.blockedBy.map((n) => epicDataByNum.get(n)).filter((b) => b && e.version && b.version && verCmp(b.version, e.version) > 0))
+    hitl.push(item(`Waits on #${b.number} (${b.version}), a later version than its own (${e.version}): move one of the two, or drop the dependency`));
+}
+
 const data = {
   generatedAt: new Date().toISOString(),
   repo: `${REPO.owner}/${REPO.name}`,
+  branch: suiteFiles.branch,
+  versions,
   epics: epicData,
   tickets,
   hitl,
   backlog,
   specs,
+  suites,
   titles: Object.fromEntries(issues.map((i) => [i.number, i.title])),
   urls: Object.fromEntries(issues.map((i) => [i.number, i.url])),
   epicStatus: EPIC_STATUS,
@@ -502,8 +617,25 @@ details.spec > .spec { border: 0; padding: 0; margin: 10px 0 0; }
 .chip .you-tag { flex: 0 0 auto; font-size: 10.5px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; padding: 0 5px; border-radius: 4px; background: #fff; color: var(--you); }
 .ep.needs-you { border-color: var(--you); box-shadow: 0 0 0 1.5px var(--you); }
 .ep.yours .ep-status { color: #fff; background: var(--you); }
-.ep.outside { border-style: dashed; border-top: 4px solid var(--c); }
-.ep.outside .ep-title span { font-weight: 650; }
+.ep.stub { --c: var(--blocked); border-style: dashed; border-top-width: 1px; padding: 8px 10px; opacity: .9; }
+.ep.stub .ep-title { font-weight: 500; font-size: 14px; }
+.ep.stub.later { border-color: var(--triage); }
+.ep.stub.later .ep-meta { color: var(--triage); font-weight: 600; }
+.ep .warn { color: var(--triage); font-weight: 700; }
+.rm-banner { background: var(--triage-soft); border: 1px solid var(--triage); border-radius: 10px; padding: 10px 14px; margin-bottom: 12px; font-size: 14px; }
+.rm-banner div + div { margin-top: 6px; }
+details.strip { background: var(--surface); border: 1px solid var(--border); border-left: 4px solid var(--c); border-radius: 8px; padding: 6px 12px; margin-bottom: 8px; }
+details.strip summary { cursor: pointer; display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; font-size: 14px; }
+details.strip summary .what { display: none; }
+details.strip[open] summary .what { display: inline; }
+details.strip .needs { color: var(--you); }
+.chips.row { flex-direction: row; flex-wrap: wrap; gap: 6px; margin: 8px 0 4px; }
+.chips.row .chip { max-width: 320px; }
+.rm svg.lines .link { stroke-linejoin: round; }
+.rm svg.lines .via { fill: var(--surface-2); stroke: var(--text); stroke-width: 2; opacity: .6; }
+.rm svg.lines .via.met { stroke: var(--muted); opacity: .5; }
+.rm.focus svg.lines g.hot .via { stroke: var(--link); opacity: 1; }
+.pill.version { color: var(--triage); background: var(--triage-soft); }
 details.ep.done-ep { border: 1px solid var(--done); border-left: 5px solid var(--done); background: var(--done-soft); padding: 6px 12px; }
 details.ep.done-ep > summary { cursor: pointer; list-style: none; display: flex; gap: 6px; align-items: baseline; font-weight: 600; color: var(--text); }
 details.ep.done-ep > summary::-webkit-details-marker { display: none; }
@@ -548,6 +680,17 @@ details.ep.done-ep > summary .ok { margin-left: auto; font-size: 12px; font-weig
 .pill.merge { color: var(--you); background: var(--you-soft); }
 .pill.manual { color: var(--you); background: transparent; border: 1px solid var(--you); padding-top: 0; padding-bottom: 0; }
 .pill.area { color: var(--muted); background: transparent; border: 1px solid var(--border); padding-top: 0; padding-bottom: 0; font-weight: 500; }
+.pill.suite, .pill.stale { color: var(--triage); background: var(--triage-soft); }
+.pill.fresh { color: var(--done); background: var(--done-soft); }
+.pill.never, .pill.unknown { color: var(--blocked); background: var(--blocked-soft); }
+.suite-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; margin: 10px 0; }
+.suite-card.stale { border-color: var(--triage); }
+.suite-card .top { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.suite-card .top .title { font-weight: 600; }
+.suite-card .about { color: var(--muted); margin: 6px 0; }
+.suite-card .facts { display: flex; gap: 14px; flex-wrap: wrap; font-size: 14px; color: var(--muted); }
+.suite-card .run { margin-top: 8px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.suite-card .run code { font-size: 12px; }
 label.check { display: inline-flex; gap: 6px; align-items: center; font-size: 14px; }
 </style>
 </head>
@@ -564,7 +707,13 @@ label.check { display: inline-flex; gap: 6px; align-items: center; font-size: 14
     <button role="tab" data-tab="specs" aria-selected="false">Specs to validate<span id="spec-count"></span></button>
     <button role="tab" data-tab="epic" aria-selected="false">Epic board</button>
     <button role="tab" data-tab="backlog" aria-selected="false">Backlog<span id="backlog-count"></span></button>
+    ${data.suites ? '<button role="tab" data-tab="suites" aria-selected="false">Test suites<span id="suites-count"></span></button>' : ""}
   </nav>
+
+  <section id="suites" hidden>
+    <p class="meta" style="margin-top:20px">The slow suites in <code>test-suites/</code> don't run on every PR: an epic that touches what a suite covers gets a <b>Run</b> ticket, and a suite is <b>stale</b> when commits to <code>${suiteFiles.branch.replace(/[<>&"]/g, "")}</code> touched what it covers since its last green run. File a run against it with the command on its card.</p>
+    <div id="suites-body"></div>
+  </section>
 
   <section id="actions" hidden>
     <div class="filters" style="margin-top:20px">
@@ -583,10 +732,13 @@ label.check { display: inline-flex; gap: 6px; align-items: center; font-size: 14
   <section id="roadmap">
     <h2>Roadmap</h2>
     <div class="filters">
+      <label for="rm-version">Version</label> <select id="rm-version"></select>
       <label class="check"><input type="checkbox" id="rm-tickets" checked> Show tickets inside planned epics</label>
       <label class="check"><input type="checkbox" id="rm-hide-done"> Hide done tickets</label>
     </div>
     <div class="legend" id="roadmap-legend" style="margin-bottom:12px"></div>
+    <div id="rm-banner"></div>
+    <div id="rm-outside"></div>
     <div class="rm-scroll"><div class="rm" id="rm"></div></div>
     <h2>Progress</h2>
     <div class="table-scroll"><table id="epic-table"></table></div>
@@ -628,7 +780,7 @@ $('when').textContent = new Date(DATA.generatedAt).toLocaleString();
 const tabs = [...document.querySelectorAll('nav.tabs button')];
 function showTab(name) {
   tabs.forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === name)));
-  ['actions', 'specs', 'roadmap', 'epic', 'backlog'].forEach((id) => { $(id).hidden = id !== name; });
+  ['actions', 'specs', 'roadmap', 'epic', 'backlog', 'suites'].forEach((id) => { $(id).hidden = id !== name; });
   try { localStorage.setItem('tracker-tab', name); } catch {}
   renderDiagrams();
 }
@@ -640,7 +792,7 @@ function card(t, extra) {
 }
 
 // ---- Action items (HITL, by assignee)
-const KIND = { task: 'Task', review: 'Review', brief: 'Epic brief', spec: 'Spec approval', merge: 'Merge the epic' };
+const KIND = { task: 'Task', review: 'Review', brief: 'Epic brief', spec: 'Spec approval', merge: 'Merge the epic', suite: 'Stale suite', version: 'Version' };
 function md(text) {
   return esc(text)
     .replace(/\`([^\`]+)\`/g, '<code>$1</code>')
@@ -659,7 +811,8 @@ function hitlCard(h) {
   const sub = [esc(epicName(h.epic))];
   if (h.unblocks.length) sub.push('unblocks ' + h.unblocks.map(ref).join(', '));
   if (!h.canStart) sub.push('waits on ' + h.waitsOn.map((w) => ref(w.number) + (w.human ? ' (person)' : ' (agent)')).join(', '));
-  return '<div class="hitl' + (h.canStart ? '' : ' waiting') + '"><div class="top"><span class="num">' + ref(h.number) + '</span>' +
+  const num = h.suite ? '<a href="' + h.url + '" target="_blank">test-suites/' + esc(h.suite) + '.md</a>' : ref(h.number);
+  return '<div class="hitl' + (h.canStart ? '' : ' waiting') + '"><div class="top"><span class="num">' + num + '</span>' +
     '<span class="title">' + esc(h.title) + '</span>' +
     (h.holdsUp ? '<span class="holds' + (h.holdsUp >= 5 ? ' high' : '') + '" title="Open issues and epics that wait on this, directly or down the chain">holds up ' + h.holdsUp + '</span>' : '') +
     '<span class="pill ' + h.kind + '">' + KIND[h.kind] + '</span>' +
@@ -754,6 +907,35 @@ function renderBacklog() {
 }
 renderBacklog();
 
+// ---- Test suites
+const SUITE_STATE = { working: 'Agent running it', queued: 'Run queued', blocked: 'Red: waits on its bugs', you: 'Your run', stale: 'Stale', fresh: 'Fresh', never: 'Never run', unknown: 'Last run unknown' };
+const SUITE_PILL = { working: 'working', queued: 'queued', blocked: 'blocked', you: 'you', stale: 'stale', fresh: 'fresh', never: 'never', unknown: 'unknown' };
+function suiteCard(s) {
+  const run = s.open[0];
+  const last = s.last ? 'last green run ' + ref(s.last.number) + (s.last.epic ? ' (' + esc(epicName(s.last.epic)) + ')' : '') + ' on ' + new Date(s.last.closedAt).toLocaleDateString() + (s.last.sha ? ' at <code>' + s.last.sha.slice(0, 7) + '</code>' : '') : 'no green run yet';
+  const since = s.since ? (s.since.touchedCount ? s.since.touchedCount + ' covered file(s) changed in ' + s.since.commits + ' commit(s) since' + (s.since.truncated ? ' (compare truncated)' : '') : s.since.commits + ' commit(s) since, none on what it covers') : (s.last && !s.last.sha ? 'the closing comment names no commit' : '');
+  return '<div class="suite-card ' + s.state + '"><div class="top"><a class="title" href="' + s.url + '" target="_blank">' + esc(s.name) + '</a>' +
+    '<span class="pill ' + SUITE_PILL[s.state] + '">' + SUITE_STATE[s.state] + '</span>' +
+    (run ? '<span class="meta">' + ref(run.number) + (run.epic ? ' in ' + esc(epicName(run.epic)) : ' against ' + esc(DATA.branch)) + (run.blockedBy.length ? ', blocked by ' + run.blockedBy.map(ref).join(', ') : '') + '</span>' : '') + '</div>' +
+    (s.about ? '<div class="about">' + md(s.about) + '</div>' : '') +
+    '<div class="facts"><span>takes ' + esc(s.takes || '?') + '</span><span>runs via ' + esc(s.runsVia) + '</span><span>covers ' + s.covers.map((c) => '<code>' + esc(c) + '</code>').join(' ') + '</span></div>' +
+    '<div class="facts" style="margin-top:6px"><span>' + last + '</span>' + (since ? '<span>' + since + '</span>' : '') + '</div>' +
+    (s.since && s.since.touched.length ? '<details><summary class="meta">Changed files it covers</summary><ul>' + s.since.touched.map((f) => '<li><code>' + esc(f) + '</code></li>').join('') + (s.since.touchedCount > s.since.touched.length ? '<li class="meta">and ' + (s.since.touchedCount - s.since.touched.length) + ' more</li>' : '') + '</ul></details>' : '') +
+    (!run ? '<div class="run"><span class="meta">File a run against ' + esc(DATA.branch) + ':</span> <code>' + esc(s.fileCmd) + '</code> <button class="copy" data-cmd="' + esc(s.fileCmd) + '">Copy</button></div>' : '') + '</div>';
+}
+function renderSuites() {
+  if (!DATA.suites) return;
+  const stale = DATA.suites.filter((s) => s.state === 'stale').length;
+  $('suites-count').innerHTML = stale ? '<span class="badge">' + stale + '</span>' : '';
+  const order = ['stale', 'blocked', 'you', 'working', 'queued', 'unknown', 'never', 'fresh'];
+  const list = [...DATA.suites].sort((a, b) => order.indexOf(a.state) - order.indexOf(b.state) || a.name.localeCompare(b.name));
+  $('suites-body').innerHTML = list.map(suiteCard).join('') || '<div class="empty">No suite files in <code>test-suites/</code> yet. Add one per slow suite (see its README).</div>';
+  document.querySelectorAll('#suites button.copy').forEach((b) => b.addEventListener('click', async () => {
+    try { await navigator.clipboard.writeText(b.dataset.cmd); b.textContent = 'Copied'; } catch { b.textContent = 'Select and copy it'; }
+  }));
+}
+renderSuites();
+
 // ---- Roadmap
 const EPIC_COLORS = { done: 'done', brief: 'you', spec: 'you', merge: 'you', held: 'blocked', waiting: 'blocked', planning: 'queued', building: 'working', ready: 'queued', backlog: 'backlog' };
 // A manual epic's colour and wording say it's the person's: nothing on it is the agent's turn.
@@ -763,14 +945,22 @@ const epicStatusText = (e) => (e.manual && DATA.manualStatus[e.status]) || DATA.
 const manualPill = (e) => e.manual ? ' <span class="pill manual" title="Planned and built by you; the agent loop never touches this epic or its tickets">manual</span>' : '';
 // The epic's area: a loop started with --area=<it> builds this epic and nothing outside its areas.
 const areaPill = (e) => e.area ? ' <span class="pill area" title="Area ' + esc(e.area) + ': npm run agents -- --area=' + esc(e.area.split(':')[0]) + ' runs a loop for this area only">' + esc(e.area) + '</span>' : '';
-$('epic-table').innerHTML = '<tr><th>Epic</th><th>Status</th><th>Tickets</th><th>Waits on</th></tr>' + DATA.epics.map((e) => {
-  const pct = e.total ? Math.round((e.done / e.total) * 100) : 0;
-  const counts = e.total ? Object.entries(e.counts).filter(([s, n]) => n && s !== 'done' && s !== 'dropped').map(([s, n]) => n + ' ' + DATA.ticketStatus[s].toLowerCase()).join(' · ') : '';
-  return '<tr><td>' + ref(e.number) + ' ' + esc(e.title) + areaPill(e) + manualPill(e) + '</td>' +
-    '<td><span class="pill ' + epicColor(e) + '">' + esc(epicStatusText(e)) + '</span></td>' +
-    '<td>' + (e.total ? e.done + ' / ' + e.total + ' done<div class="bar"><i style="width:' + pct + '%"></i></div><div class="meta">' + counts + '</div>' : '<span class="meta">not planned yet</span>') + '</td>' +
-    '<td>' + (e.openBlockers.map(ref).join(', ') || '<span class="meta">nothing</span>') + '</td></tr>';
-}).join('');
+// The epic's version (its version:* label); red-ish when it has none, since the roadmap can't place it.
+const versionPill = (e) => e.version ? ' <span class="pill area" title="Version ' + esc(e.version) + '">' + esc(e.version) + '</span>' : ' <span class="pill version" title="No version label: add version:v1 (or the right one) so the roadmap can place it">no version</span>';
+// Progress, every version at once, grouped: each version in order, then the epics still to label.
+{
+  const groups = DATA.versions.map((v) => [v, DATA.epics.filter((e) => e.version === v)]).concat(DATA.epics.some((e) => !e.version) ? [['No version', DATA.epics.filter((e) => !e.version)]] : []);
+  $('epic-table').innerHTML = '<tr><th>Epic</th><th>Status</th><th>Tickets</th><th>Waits on</th></tr>' + groups.map(([name, list]) =>
+    (groups.length > 1 ? '<tr><th colspan="4" class="group">' + esc(name) + ' <span class="meta">' + list.filter((e) => e.status === 'done').length + ' of ' + list.length + ' epics done</span></th></tr>' : '') +
+    list.map((e) => {
+      const pct = e.total ? Math.round((e.done / e.total) * 100) : 0;
+      const counts = e.total ? Object.entries(e.counts).filter(([s, n]) => n && s !== 'done' && s !== 'dropped').map(([s, n]) => n + ' ' + DATA.ticketStatus[s].toLowerCase()).join(' · ') : '';
+      return '<tr><td>' + ref(e.number) + ' ' + esc(e.title) + areaPill(e) + manualPill(e) + (e.version ? '' : versionPill(e)) + '</td>' +
+        '<td><span class="pill ' + epicColor(e) + '">' + esc(epicStatusText(e)) + '</span></td>' +
+        '<td>' + (e.total ? e.done + ' / ' + e.total + ' done<div class="bar"><i style="width:' + pct + '%"></i></div><div class="meta">' + counts + '</div>' : '<span class="meta">not planned yet</span>') + '</td>' +
+        '<td>' + (e.openBlockers.map((n) => ref(n) + (epicByNum[n] && e.version && epicByNum[n].version && verCmp(epicByNum[n].version, e.version) > 0 ? ' <span class="warn">' + esc(epicByNum[n].version) + '!</span>' : '')).join(', ') || '<span class="meta">nothing</span>') + '</td></tr>';
+    }).join('')).join('');
+}
 
 // ---- Diagrams (mermaid, drawn lazily when their tab is visible)
 const label = (s) => s.replace(/"/g, "'").replace(/[<>]/g, '').slice(0, 42) + (s.length > 42 ? '…' : '');
@@ -779,22 +969,43 @@ function classDefs() {
     ? 'classDef ' + s + ' fill:' + css('--you') + ',stroke:' + css('--you') + ',color:#fff,stroke-width:2px,font-weight:bold'
     : 'classDef ' + s + ' fill:' + css('--' + s + '-soft') + ',stroke:' + css('--' + s) + ',color:' + css('--text') + ',stroke-width:1.5px').join('\\n');
 }
-// Roadmap: epics in columns by build order, tickets listed inside planned
-// epics, arrows from an epic to the epics waiting on it.
+// ---- Roadmap
+// One version at a time: the picker holds every version, then Backlog (parked
+// epics and tickets, whatever their version) and No version (epics still to
+// label). Within a view, epics sit in columns by build order, left to right,
+// and an arrow runs from an epic to the epics waiting on it. A blocker outside
+// the view (another version) is a stub card in a first column, so the link is
+// visible without drawing that version.
 const LANE_ORDER = ['you', 'review', 'working', 'queued', 'triage', 'blocked', 'done', 'dropped', 'backlog']; // parked last
-const epicLevel = {};
-function levelOf(e) {
-  if (epicLevel[e.number] !== undefined) return epicLevel[e.number];
-  epicLevel[e.number] = 0;
-  const bs = e.blockedBy.map((b) => epicByNum[b]).filter(Boolean);
-  return (epicLevel[e.number] = bs.length ? 1 + Math.max(...bs.map(levelOf)) : 0);
+const isParked = (e) => e.status === 'backlog';
+const verParts = (v) => String(v).replace(/^v/i, '').split('.').map(Number);
+const verCmp = (a, b) => { const x = verParts(a), y = verParts(b); for (let i = 0; i < Math.max(x.length, y.length); i++) { const d = (x[i] ?? 0) - (y[i] ?? 0); if (d) return d; } return 0; };
+const laterVersion = (e, b) => e.version && b.version && verCmp(b.version, e.version) > 0; // b is of a later version than e
+const inView = (e, view) => view === 'backlog' ? isParked(e) : view === 'none' ? !e.version && !isParked(e) : e.version === view && !isParked(e);
+function viewOptions() {
+  const opts = DATA.versions.map((v) => [v, v]);
+  if (DATA.epics.some(isParked) || outsideTickets().some((t) => t.status === 'backlog')) opts.push(['backlog', 'Backlog']);
+  if (DATA.epics.some((e) => !e.version && !isParked(e))) opts.push(['none', 'No version']);
+  return opts;
 }
+// The lowest version with an epic still open; with no versions yet, the
+// unlabelled epics (what there is to fix), else the first entry.
+function defaultView() {
+  const opts = viewOptions().map(([k]) => k);
+  return DATA.versions.find((v) => DATA.epics.some((e) => e.version === v && !isParked(e) && e.status !== 'done'))
+    ?? (opts.includes('none') ? 'none' : opts[0] ?? 'none');
+}
+let view = defaultView();
+try { const saved = localStorage.getItem('tracker-version'); if (saved && viewOptions().some(([k]) => k === saved)) view = saved; } catch {}
+$('rm-version').innerHTML = viewOptions().map(([k, name]) => '<option value="' + k + '"' + (k === view ? ' selected' : '') + '>' + esc(name) + '</option>').join('');
+$('rm-version').addEventListener('change', () => { view = $('rm-version').value; try { localStorage.setItem('tracker-version', view); } catch {} renderRoadmap(); });
+
 // Ticket chips, your tickets first, coloured by who acts next.
 const isDone = (t) => t.status === 'done' || t.status === 'dropped';
-function chipsOf(ts, hideDone) {
+function chipsOf(ts, hideDone, row) {
   const shown = ts.filter((t) => !(hideDone && isDone(t)))
     .sort((a, b) => LANE_ORDER.indexOf(a.status) - LANE_ORDER.indexOf(b.status) || a.number - b.number);
-  return shown.length ? '<div class="chips">' + shown.map((t) => {
+  return shown.length ? '<div class="chips' + (row ? ' row' : '') + '">' + shown.map((t) => {
     const k = t.status === 'dropped' ? 'done' : t.status;
     const tip = '#' + t.number + ' ' + t.title + ' (' + DATA.ticketStatus[t.status] + (t.openBlockers.length ? '; waits on #' + t.openBlockers.join(', #') : '') + ')';
     const mine = k === 'you' || k === 'review' ? '<span class="you-tag">' + (k === 'review' ? 'Review' : 'You') + '</span>' : '';
@@ -807,8 +1018,8 @@ function chipsOf(ts, hideDone) {
 const RECENT_DAYS = 14;
 const outsideTickets = () => DATA.tickets.filter((t) => !t.epic &&
   (!isDone(t) || (t.closedAt && Date.now() - Date.parse(t.closedAt) < RECENT_DAYS * 86_400_000)));
-// Tickets in no epic, grouped by what they are, each group its own card at the
-// bottom of "Now": bugs and small changes each ship as their own PR to main.
+// Grouped by what they are, in a strip above the roadmap (the parked ones in
+// the Backlog view): bugs and small changes each ship as their own PR to main.
 const GROUPS = [
   ['bug', 'Bugs', 'Each reproduced and fixed on its own, as a PR to main.', (t) => t.what === 'bug'],
   ['change', 'Small changes', 'Each built from its brief, as a PR to main.', (t) => t.what === 'enhancement'],
@@ -818,48 +1029,95 @@ const GROUPS = [
   ['triage', 'Not sorted', 'Waiting for triage to say what each is and who acts.', (t) => !t.what],
 ];
 const groupOf = (t) => t.status === 'backlog' ? 'backlog' : (GROUPS.find(([, , , m]) => m(t)) ?? GROUPS.at(-1))[0];
-function outsideCards(withTickets, hideDone) {
+const stripOpen = new Set();
+function outsideStrip(hideDone) {
   const ts = outsideTickets();
-  return GROUPS.concat([['backlog', 'Backlog', 'Parked for later, of any kind: no agent touches them.', null]]).map(([key, name, what]) => {
+  const groups = view === 'backlog' ? [['backlog', 'Parked tickets', 'Parked for later, of any kind: no agent touches them.']] : GROUPS;
+  return groups.map(([key, name, what]) => {
     const g = ts.filter((t) => groupOf(t) === key);
     const open = g.filter((t) => !isDone(t));
     if (!open.length && (hideDone || !g.length)) return '';
     const mine = open.filter((t) => t.status === 'you' || t.status === 'review').length;
     const closed = g.length - open.length;
     const c = key === 'backlog' ? 'backlog' : key === 'triage' ? 'triage' : mine ? 'you' : open.some((t) => t.status === 'working') ? 'working' : open.length ? 'queued' : 'done';
-    return '<div class="ep outside' + (mine ? ' needs-you' : '') + '" id="ep-outside-' + key + '" style="--c:var(--' + c + ');--cs:var(--' + c + '-soft)">' +
-      '<div class="ep-title"><span>' + name + '</span><span class="meta">' + open.length + ' open</span></div>' +
-      '<div class="ep-meta">' + what + (mine ? ' · <b>' + mine + ' need you</b>' : '') + (closed ? ' · ' + closed + ' closed in the last ' + RECENT_DAYS + ' days' : '') + '</div>' +
-      (withTickets ? chipsOf(g, hideDone) : '') + '</div>';
+    return '<details class="strip" data-key="' + key + '"' + (stripOpen.has(key) || mine ? ' open' : '') + ' style="--c:var(--' + c + ')"><summary><b>' + name + '</b><span class="meta">' + open.length + ' open' +
+      (mine ? ' · <b class="needs">' + mine + ' need you</b>' : '') + (closed ? ' · ' + closed + ' closed in the last ' + RECENT_DAYS + ' days' : '') + '</span><span class="meta what">' + what + '</span></summary>' +
+      chipsOf(g, hideDone, true) + '</details>';
   }).join('');
 }
 // The open epics waiting on this one.
 const unblocks = (e) => DATA.epics.filter((x) => x.status !== 'done' && x.blockedBy.includes(e.number)).map((x) => x.number);
+// What the roadmap needs you to fix before the version makes sense: epics with
+// no version, and an epic that waits on a later version's epic.
+function banner() {
+  const lines = [];
+  const unlabelled = DATA.epics.filter((e) => !e.version && !isParked(e) && e.status !== 'done');
+  if (unlabelled.length) lines.push('<b>' + unlabelled.length + ' epic' + (unlabelled.length > 1 ? 's have' : ' has') + ' no version</b>: ' + unlabelled.map((e) => ref(e.number)).join(', ') +
+    '. Label each one, e.g. <code>gh issue edit ' + unlabelled[0].number + ' --add-label version:' + (DATA.versions[0] ?? 'v1') + '</code>' + (view !== 'none' ? ' (they are under <i>No version</i> in the picker)' : '') + '.');
+  const crossed = DATA.epics.filter((e) => e.status !== 'done').flatMap((e) => e.blockedBy.map((b) => epicByNum[b]).filter((b) => b && laterVersion(e, b)).map((b) => [e, b]));
+  if (crossed.length) lines.push('<b>' + crossed.length + ' epic' + (crossed.length > 1 ? 's wait' : ' waits') + ' on a later version</b>: ' + crossed.map(([e, b]) => ref(e.number) + ' (' + esc(e.version) + ') after ' + ref(b.number) + ' (' + esc(b.version) + ')').join('; ') +
+    '. Move one of the two to the other version, or drop the dependency: nothing in the earlier version can ship while it holds.');
+  return lines.length ? '<div class="rm-banner">' + lines.map((l) => '<div>' + l + '</div>').join('') + '</div>' : '';
+}
+function stubCard(b, later) {
+  const what = isParked(b) ? 'in the backlog' : b.status === 'done' ? 'done' : later ? 'later version' : b.version ? 'earlier version' : 'no version';
+  return '<div class="ep stub' + (later ? ' later' : '') + '" id="ep-' + b.number + '" title="' + esc('#' + b.number + ' ' + b.title + (b.version ? ' · ' + b.version : '')) + '">' +
+    '<div class="ep-title"><a class="n" href="' + b.url + '" target="_blank">#' + b.number + '</a><span>' + esc(b.title) + '</span></div>' +
+    '<div class="ep-meta">' + (b.version ? esc(b.version) + ' · ' : '') + what + '</div></div>';
+}
 function renderRoadmap() {
   const withTickets = $('rm-tickets').checked, hideDone = $('rm-hide-done').checked;
-  const cols = [[]];
-  for (const e of DATA.epics) (cols[levelOf(e)] ??= []).push(e);
-  const outside = outsideCards(withTickets, hideDone);
-  $('rm').innerHTML = '<svg class="lines" id="rm-lines"></svg>' + cols.map((list, i) => '<div class="rm-col"><div class="rm-step">' + (i === 0 ? 'Now' : 'Step ' + (i + 1)) + '</div>' + list.map((e) => {
+  $('rm-banner').innerHTML = banner();
+  $('rm-outside').innerHTML = outsideStrip(hideDone);
+  $('rm-outside').querySelectorAll('details.strip').forEach((d) => d.addEventListener('toggle', () => { if (d.open) stripOpen.add(d.dataset.key); else stripOpen.delete(d.dataset.key); drawRoadmapLines(); }));
+  const shown = DATA.epics.filter((e) => inView(e, view));
+  const set = new Set(shown.map((e) => e.number));
+  // Blockers outside the view become stubs in a first column; levels count from there.
+  const stubs = new Map();
+  for (const e of shown) for (const b of e.blockedBy) if (!set.has(b) && epicByNum[b]) stubs.set(b, epicByNum[b]);
+  const base = stubs.size ? 1 : 0;
+  const lvl = {};
+  const levelOf = (e) => {
+    if (lvl[e.number] !== undefined) return lvl[e.number];
+    lvl[e.number] = base;
+    const bs = e.blockedBy.filter((b) => set.has(b)).map((b) => epicByNum[b]);
+    return (lvl[e.number] = bs.length ? 1 + Math.max(...bs.map(levelOf)) : base);
+  };
+  const cols = [];
+  if (stubs.size) cols[0] = [...stubs.values()].sort((a, b) => a.number - b.number);
+  for (const e of shown) (cols[levelOf(e)] ??= []).push(e);
+  for (let i = 0; i < cols.length; i++) cols[i] ??= [];
+  // Fewer crossings: within a column, order epics by where their blockers sit in the column before.
+  const pos = new Map();
+  for (let i = 0; i < cols.length; i++) {
+    if (i > base) cols[i].sort((a, b) => bary(a) - bary(b) || a.number - b.number);
+    cols[i].forEach((e, k) => pos.set(e.number, k));
+    function bary(e) { const ps = e.blockedBy.filter((b) => pos.has(b)).map((b) => pos.get(b)); return ps.length ? ps.reduce((s, p) => s + p, 0) / ps.length : 1e6; }
+  }
+  const stepName = (i) => stubs.size && i === 0 ? 'From elsewhere' : view === 'backlog' ? (i === base ? 'Parked' : 'Parked · step ' + (i - base + 1)) : i === base ? 'Now' : 'Step ' + (i - base + 1);
+  $('rm').innerHTML = '<svg class="lines" id="rm-lines"></svg>' + cols.map((list, i) => '<div class="rm-col"><div class="rm-step">' + stepName(i) + '</div>' + list.map((e) => {
+    if (i === 0 && stubs.size) return stubCard(e, shown.some((x) => x.blockedBy.includes(e.number) && laterVersion(x, e)));
     const c = epicColor(e);
     const pct = e.total ? Math.round((e.done / e.total) * 100) : 0;
     const chips = withTickets ? chipsOf(DATA.tickets.filter((t) => t.epic === e.number), hideDone) : '';
+    const vPill = view === 'backlog' || view === 'none' ? versionPill(e) : '';
     // A done epic folds to one line; open it to see its tickets.
     if (e.status === 'done')
       return '<details class="ep done-ep" id="ep-' + e.number + '" style="--c:var(--done);--cs:var(--done-soft)"' + (openDone.has(e.number) ? ' open' : '') + '>' +
-        '<summary><a class="n" href="' + e.url + '" target="_blank">#' + e.number + '</a><span>' + esc(e.title) + areaPill(e) + '</span><span class="ok">✓ Done' + (e.total ? ' · ' + e.total + ' tickets' : '') + '</span></summary>' +
+        '<summary><a class="n" href="' + e.url + '" target="_blank">#' + e.number + '</a><span>' + esc(e.title) + areaPill(e) + vPill + '</span><span class="ok">✓ Done' + (e.total ? ' · ' + e.total + ' tickets' : '') + '</span></summary>' +
         chips + '</details>';
     // Outlined red when anything in it waits on you; its status is filled red only when the epic itself does (brief, spec, merge).
     const needsYou = c === 'you' || e.counts.you + e.counts.review > 0;
+    const after = e.openBlockers.map((n) => ref(n) + (epicByNum[n] && laterVersion(e, epicByNum[n]) ? ' <span class="warn" title="A later version blocks this epic: fix the version or the dependency">' + esc(epicByNum[n].version) + '!</span>' : ''));
     return '<div class="ep' + (needsYou ? ' needs-you' : '') + (c === 'you' ? ' yours' : '') + '" id="ep-' + e.number + '" style="--c:var(--' + c + ');--cs:var(--' + c + '-soft)">' +
-      '<div class="ep-title"><a class="n" href="' + e.url + '" target="_blank">#' + e.number + '</a><span>' + esc(e.title) + areaPill(e) + manualPill(e) + '</span></div>' +
+      '<div class="ep-title"><a class="n" href="' + e.url + '" target="_blank">#' + e.number + '</a><span>' + esc(e.title) + areaPill(e) + manualPill(e) + vPill + '</span></div>' +
       '<span class="ep-status">' + esc(epicStatusText(e)) + '</span>' +
       (e.total ? '<div class="ep-meta">' + e.done + ' of ' + e.total + ' tickets done' + (e.counts.you + e.counts.review ? ' · ' + (e.counts.you + e.counts.review) + ' need you' : '') + '</div><div class="bar"><i style="width:' + pct + '%"></i></div>' : '') +
-      (e.openBlockers.length ? '<div class="ep-meta">after ' + e.openBlockers.map(ref).join(', ') + '</div>' : '') +
+      (after.length ? '<div class="ep-meta">after ' + after.join(', ') + '</div>' : '') +
       (unblocks(e).length ? '<div class="ep-meta">then ' + unblocks(e).map(ref).join(', ') + '</div>' : '') +
       (e.total ? chips : '<div class="unplanned">Not planned yet: no tickets.</div>') + '</div>';
-  }).join('') + (i === 0 ? outside : '') + '</div>').join(''); // outside epics last in "Now", so the epics' rows stay level
-  $('rm').querySelectorAll('.ep[id^="ep-"]:not([id^="ep-outside"])').forEach((el) => {
+  }).join('') + '</div>').join('') || '<div class="empty" style="margin:8px">Nothing in this view.</div>';
+  $('rm').querySelectorAll('.ep[id^="ep-"]').forEach((el) => {
     const n = Number(el.id.slice(3));
     el.addEventListener('mouseenter', () => focusEpic(n));
     el.addEventListener('mouseleave', () => focusEpic(null));
@@ -872,45 +1130,57 @@ function renderRoadmap() {
   drawRoadmapLines();
 }
 const openDone = new Set();
+// Every link runs left to right, one column gap at a time. A link to the next
+// column is a curve across the gap. A link that skips columns is a bus: down a
+// lane in the gap, along a dots row under each skipped column (a dot marks it
+// passing through), and up the lane before its target. Nothing crosses a card.
 function drawRoadmapLines() {
   const rm = $('rm'), svg = $('rm-lines');
   if (!rm || !svg || $('roadmap').hidden) return;
   const box = rm.getBoundingClientRect();
-  svg.setAttribute('width', rm.scrollWidth);
-  svg.setAttribute('height', rm.scrollHeight);
   // Solid: the blocker is still open, so this is what holds the epic back now.
   // Dashed: the blocker is done. Each link runs from a dot on the blocker to an
   // arrow on the epic that waits for it, anchored at the cards' title rows.
   // Fixed-size arrowheads (not scaled by the line's width); a blue one for a highlighted link.
   const arrow = (id, cls) => '<marker id="' + id + '" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto"><path d="M0,0 L10,5 L0,10 z" class="' + cls + '"/></marker>';
   let paths = '<defs>' + arrow('arr', 'dot') + arrow('arr-met', 'dot met') + arrow('arr-hot', 'dot hot') + '</defs>';
-  // A link that skips a column runs along a lane in the gap above the cards, so
-  // it never crosses another epic's card; each such link gets its own lane.
-  const firstCard = rm.querySelector('.ep');
-  const laneTop = firstCard ? firstCard.getBoundingClientRect().top - box.top - 6 : 0;
-  let lane = 0;
+  const cols = [...rm.querySelectorAll('.rm-col')].map((c) => { const r = c.getBoundingClientRect(); return { left: r.left - box.left, right: r.right - box.left, bottom: r.bottom - box.top }; });
+  const colOf = (el) => { const x = el.getBoundingClientRect().left - box.left; return cols.findIndex((c) => x >= c.left - 1 && x < c.right + 1); };
+  const lanes = cols.map(() => 0), rows = cols.map(() => 0); // lanes per gap (before column i), dot rows per column
+  let bottom = 0;
   for (const e of DATA.epics) for (const b of e.blockedBy) {
     const from = document.getElementById('ep-' + b), to = document.getElementById('ep-' + e.number);
-    if (!from || !to) continue;
+    if (!from || !to || to.classList.contains('stub')) continue; // a stub only ever blocks: what blocks it isn't this view's
     const met = epicByNum[b]?.status === 'done';
     const f = from.getBoundingClientRect(), t = to.getBoundingClientRect();
     const x1 = f.right - box.left, y1 = f.top - box.top + 20, x2 = t.left - box.left - 2, y2 = t.top - box.top + 20;
-    const skips = epicByNum[b] && levelOf(e) - levelOf(epicByNum[b]) > 1;
-    let d;
-    if (skips) {
-      const ly = laneTop - 5 * (lane++ % 4), r = 12;
-      d = 'M' + x1 + ',' + y1 + ' H' + (x1 + 12) + ' Q' + (x1 + 12 + r) + ',' + y1 + ' ' + (x1 + 12 + r) + ',' + (y1 - r) +
-        ' V' + (ly + r) + ' Q' + (x1 + 12 + r) + ',' + ly + ' ' + (x1 + 12 + 2 * r) + ',' + ly +
-        ' H' + (x2 - 12 - 2 * r) + ' Q' + (x2 - 12 - r) + ',' + ly + ' ' + (x2 - 12 - r) + ',' + (ly + r) +
-        ' V' + (y2 - r) + ' Q' + (x2 - 12 - r) + ',' + y2 + ' ' + (x2 - 12) + ',' + y2 + ' H' + x2;
-    } else {
-      const dx = Math.max(32, (x2 - x1) / 2);
+    const cf = colOf(from), ct = colOf(to);
+    let d, dots = '';
+    if (cf < 0 || ct < 0 || ct - cf <= 1 || x2 <= x1) {
+      const dx = Math.max(32, Math.abs(x2 - x1) / 2);
       d = 'M' + x1 + ',' + y1 + ' C' + (x1 + dx) + ',' + y1 + ' ' + (x2 - dx) + ',' + y2 + ' ' + x2 + ',' + y2;
+    } else {
+      d = 'M' + x1 + ',' + y1;
+      let y = y1;
+      for (let c = cf + 1; c < ct; c++) {
+        const gx = cols[c].left - 52 + 7 * (lanes[c]++ % 6);          // a lane in the gap before column c
+        const dy = cols[c].bottom + 18 + 10 * (rows[c]++ % 8);         // the dots row under column c's cards
+        d += ' H' + gx + ' V' + dy + ' H' + cols[c].right;
+        dots += '<circle class="via' + (met ? ' met' : '') + '" cx="' + ((cols[c].left + cols[c].right) / 2) + '" cy="' + dy + '" r="3"/>';
+        bottom = Math.max(bottom, dy);
+        y = dy;
+      }
+      const gx = cols[ct].left - 52 + 7 * (lanes[ct]++ % 6);
+      d += ' H' + gx + ' V' + y2 + ' H' + x2;
     }
     paths += '<g data-from="' + b + '" data-to="' + e.number + '"><path class="halo" d="' + d + '"/>' +
       '<path class="link' + (met ? ' met' : '') + '" marker-end="url(#' + (met ? 'arr-met' : 'arr') + ')" d="' + d + '"/>' +
-      '<circle class="dot' + (met ? ' met' : '') + '" cx="' + x1 + '" cy="' + y1 + '" r="3.5"/></g>';
+      '<circle class="dot' + (met ? ' met' : '') + '" cx="' + x1 + '" cy="' + y1 + '" r="3.5"/>' + dots + '</g>';
   }
+  const cardsBottom = Math.max(0, ...cols.map((c) => c.bottom));
+  rm.style.paddingBottom = Math.max(16, bottom - cardsBottom + 24) + 'px'; // room for the dots rows
+  svg.setAttribute('width', rm.scrollWidth);
+  svg.setAttribute('height', Math.max(rm.scrollHeight, bottom + 24));
   svg.innerHTML = paths;
   if (focused !== null) focusEpic(focused);
 }
@@ -965,8 +1235,8 @@ const keyBox = (title, rows, how) => '<div class="key"><div class="key-title">' 
   (how ? '<div class="how">' + how + '</div>' : '') + '</div>';
 function legend(id, boxes) { $(id).innerHTML = '<div class="keys">' + boxes.join('') + '</div>'; }
 legend('roadmap-legend', [
-  keyBox('Epics', EPIC_KEY, 'Columns run left to right in build order. An arrow goes from an epic to the epics waiting on it: solid while it holds them back, dashed once it is done. Hover an epic to see only its links; each card also says <i>after</i> and <i>then</i> in words. <span class="pill manual">manual</span>: planned and built by you, outside the loop. <span class="pill area">mobile</span>: the area of the epic; <code>npm run agents -- --area=mobile</code> runs a loop on that area alone, so loops on other machines can take the other areas.'),
-  keyBox('Tickets', TICKET_KEY, 'Inside each epic, and in the cards at the bottom of Now for the tickets in no epic: bugs, small changes, to scope, waiting on the reporter, not sorted, backlog. Click a ticket to open it on GitHub.'),
+  keyBox('Epics', EPIC_KEY, 'One version at a time (the picker; Backlog and No version are entries of their own). Columns run left to right in build order. An arrow goes from an epic to the epics waiting on it: solid while it holds them back, dashed once it is done; a link that skips columns runs under the cards, with a dot where it passes a column. A dashed stub in the first column is a blocker from another version: amber when that version is later than this one, which you should fix. Hover an epic to see only its links; each card also says <i>after</i> and <i>then</i> in words. <span class="pill manual">manual</span>: planned and built by you, outside the loop. <span class="pill area">mobile</span>: the area of the epic; <code>npm run agents -- --area=mobile</code> runs a loop on that area alone, so loops on other machines can take the other areas.'),
+  keyBox('Tickets', TICKET_KEY, 'Inside each epic, and in the strip above the roadmap for the tickets in no epic: bugs, small changes, to scope, waiting on the reporter, not sorted (the parked ones under Backlog). Click a ticket to open it on GitHub.'),
 ]);
 ['rm-tickets', 'rm-hide-done'].forEach((id) => {
   try { const v = localStorage.getItem('tracker-' + id); if (v !== null) $(id).checked = v === '1'; } catch {}
@@ -1033,7 +1303,7 @@ setInterval(() => { if (Date.now() - loadedAt > 180_000 && Date.now() - lastInpu
 try { const y = sessionStorage.getItem('tracker-scroll'); if (y) { sessionStorage.removeItem('tracker-scroll'); requestAnimationFrame(() => scrollTo(0, Number(y))); } } catch {}
 
 let startTab = 'roadmap';
-try { const t = localStorage.getItem('tracker-tab'); if (['actions', 'specs', 'roadmap', 'epic', 'backlog'].includes(t)) startTab = t; } catch {}
+try { const t = localStorage.getItem('tracker-tab'); if (['actions', 'specs', 'roadmap', 'epic', 'backlog'].includes(t) || (t === 'suites' && DATA.suites)) startTab = t; } catch {}
 showTab(startTab);
 </script>
 </body>
