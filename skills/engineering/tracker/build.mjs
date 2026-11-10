@@ -978,9 +978,10 @@ function classDefs() {
 // visible without drawing that version.
 const LANE_ORDER = ['you', 'review', 'working', 'queued', 'triage', 'blocked', 'done', 'dropped', 'backlog']; // parked last
 const isParked = (e) => e.status === 'backlog';
-const verParts = (v) => String(v).replace(/^v/i, '').split('.').map(Number);
-const verCmp = (a, b) => { const x = verParts(a), y = verParts(b); for (let i = 0; i < Math.max(x.length, y.length); i++) { const d = (x[i] ?? 0) - (y[i] ?? 0); if (d) return d; } return 0; };
-const laterVersion = (e, b) => e.version && b.version && verCmp(b.version, e.version) > 0; // b is of a later version than e
+// Function declarations, not consts: the Progress table above calls verCmp while the page first renders.
+function verParts(v) { return String(v).replace(/^v/i, '').split('.').map(Number); }
+function verCmp(a, b) { const x = verParts(a), y = verParts(b); for (let i = 0; i < Math.max(x.length, y.length); i++) { const d = (x[i] ?? 0) - (y[i] ?? 0); if (d) return d; } return 0; }
+function laterVersion(e, b) { return e.version && b.version && verCmp(b.version, e.version) > 0; } // b is of a later version than e
 const inView = (e, view) => view === 'backlog' ? isParked(e) : view === 'none' ? !e.version && !isParked(e) : e.version === view && !isParked(e);
 function viewOptions() {
   const opts = DATA.versions.map((v) => [v, v]);
