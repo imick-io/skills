@@ -29,7 +29,7 @@
 // Without it, `plan` reports `installed: null`: the skill asks the person.
 
 import { execFileSync } from "node:child_process";
-import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync, copyFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, symlinkSync, writeFileSync, copyFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, relative } from "node:path";
 
@@ -73,6 +73,17 @@ const writeRecord = (version, layout) => {
   writeFileSync(RECORD, `# imick-skills\n\nThe release of [${SOURCE}](https://github.com/${SOURCE}) this project is on, kept by \`/update-imick-skills\` (and written by \`/setup-imick-skills\` on install). The skill reads it to pick the release notes to apply and the templates to merge from.\n\nVersion: ${version}\nLayout: ${layout}\nSource: ${SOURCE}\n`);
 };
 const skillsDir = [".claude/skills", ".agents/skills"].find((d) => existsSync(d));
+// In a symlinks repo the skills live in .agents/skills, and .claude/skills
+// holds a link to each. Installing for claude-code writes a plain folder in
+// .claude/skills, over the link: move it into .agents/skills and put the
+// link back, so the layout stays one.
+const relink = (name) => {
+  const link = join(".claude/skills", name), home = join(".agents/skills", name);
+  if (skillsDir !== ".claude/skills" || !existsSync(".agents/skills") || !existsSync(link) || lstatSync(link).isSymbolicLink()) return;
+  rmSync(home, { recursive: true, force: true });
+  renameSync(link, home);
+  symlinkSync(join("..", "..", ".agents", "skills", name), link);
+};
 const detectLayout = () => {
   if (!skillsDir) return "copies";
   const entries = readdirSync(skillsDir).map((n) => join(skillsDir, n));
@@ -312,6 +323,7 @@ const apply = (file) => {
   for (const name of toInstall) {
     if (p.layout === "copies" && skillsDir) { const l = join(skillsDir, name); if (existsSync(l) && lstatSync(l).isSymbolicLink()) rmSync(l); }
     const r = run("npx", ["-y", "skills@latest", "add", SOURCE, "--skill", name, "-a", agent, ...copyFlag, "-y"], { timeout: 600_000 });
+    if (r.ok && p.layout === "symlinks") relink(name);
     (r.ok ? done : manual).push(r.ok ? `skill ${name} installed` : `skill ${name}: install failed: ${r.err.slice(-300)}`);
   }
   if (p.layout === "copies" && existsSync(".agents") && !existsSync(".agents/skills/.keep")) {
