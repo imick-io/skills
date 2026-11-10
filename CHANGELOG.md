@@ -1,5 +1,11 @@
 # imick-skills
 
+## 1.20.1
+
+### Patch Changes
+
+- [#88](https://github.com/imick-io/skills/pull/88) [`d905f05`](https://github.com/imick-io/skills/commit/d905f05efdb563a709fcfe6bf3ba95ea1f45268a) Thanks [@imick-io](https://github.com/imick-io)! - **The tracker no longer renders empty.** Since 1.20.0, the page's script called the version comparison from the Progress table before defining it, so the first render threw `Cannot access 'verCmp' before initialization` and every tab stayed blank, locally and on Vercel. Existing setups: copy `skills/engineering/tracker/build.mjs` to `tracker/build.mjs` (`/update-imick-skills` does it), then rebuild the page or redeploy the hosted tracker.
+
 ## 1.20.0
 
 ### Minor Changes
