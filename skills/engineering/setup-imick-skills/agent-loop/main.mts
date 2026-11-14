@@ -589,6 +589,10 @@ function epicWorktree(epic: Epic): string {
 }
 
 const conflictTitle = (epic: Epic) => `Resolve conflicts between ${epic.branch} and main`;
+// The loop's own housekeeping in a milestone, never the epic's work: a
+// conflict ticket before the map is charted must not make the epic look
+// planned, nor, once closed, look complete.
+const isConflictTicket = (i: { title: string }) => i.title.startsWith("Resolve conflicts between ");
 const conflictOpen = (epic: Epic) =>
   ghJson<unknown[]>("issue", "list", "--state", "open", "--search", `in:title "${conflictTitle(epic)}"`, "--json", "number").length > 0;
 
@@ -1034,7 +1038,7 @@ function planJobs(): PlanJob[] {
     if (EPIC_GATE === "epic" && Number(gh("api", `repos/${repo}/issues/${e.number}`, "--jq", ".issue_dependencies_summary.blocked_by // 0")) > 0) continue;
     const epic = { number: e.number, title: e.title, branch, milestone, mode: modeOf(e.labels.map((l) => l.name)), manual: false, areas: areasOf(e.labels) }; // manual epics were skipped above
     const items = ghJson<Issue[]>("issue", "list", "--state", "all", "--milestone", milestone, "--json", "number,title,state,body,labels,comments", "--limit", "300")
-      .filter((i) => i.number !== e.number);
+      .filter((i) => i.number !== e.number && !isConflictTicket(i));
     const specs = items.filter((i) => i.state === "OPEN" && isSpec(i.labels.map((l) => l.name), i.body));
     const maps = items.filter((i) => has(i, LABEL.map));
     const openMap = maps.find((m) => m.state === "OPEN");
@@ -1177,9 +1181,12 @@ async function verifyEpic(e: { number: number; title: string; body: string; labe
   const branch = e.body.match(/`(epic\/[^`]+)`/)?.[1];
   const milestone = e.milestone?.title;
   if (!branch || !milestone || !tryGit(undefined, "ls-remote", "--exit-code", "--heads", "origin", branch)) return 0;
-  const items = ghJson<{ number: number; title: string; state: string; labels: { name: string }[] }[]>("issue", "list", "--state", "all", "--milestone", milestone, "--json", "number,title,state,labels", "--limit", "300")
-    .filter((i) => i.number !== e.number && !i.labels.some((l) => l.name === LABEL.backlog));
+  const items = ghJson<{ number: number; title: string; state: string; body: string; labels: { name: string }[] }[]>("issue", "list", "--state", "all", "--milestone", milestone, "--json", "number,title,state,body,labels", "--limit", "300")
+    .filter((i) => i.number !== e.number && !i.labels.some((l) => l.name === LABEL.backlog) && !isConflictTicket(i));
   if (!items.length || items.some((i) => i.state === "OPEN")) return 0; // not planned yet, or still building (backlog items don't count)
+  // Planned means charted or specified. A milestone holding only bugs is an
+  // epic nobody planned (its mockup got verified, #12), not one that is done.
+  if (!items.some((i) => i.labels.some((l) => l.name === LABEL.map) || isSpec(i.labels.map((l) => l.name), i.body))) return 0;
 
   let [pr] = ghJson<{ number: number; headRefOid: string }[]>("pr", "list", "--state", "open", "--head", branch, "--json", "number,headRefOid");
   if (!pr) {
