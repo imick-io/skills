@@ -2120,7 +2120,7 @@
     {
       "title": "Verify",
       "who": "Agent loop",
-      "body": "When a milestone has no open tickets, the loop opens the epic's PR and runs verify-epic in the running app: acceptance criteria, stories, API contracts, agreed screens. Failures become bug tickets, the loop fixes them, and verification runs again. Before the PR opens, a slow suite in test-suites/ that the epic's diff touches gets a Run ticket, run last on the epic branch.",
+      "body": "When a milestone has no open tickets, the loop opens the epic's PR and runs verify-epic in the running app: acceptance criteria, stories, API contracts, agreed screens. Failures become bug tickets, the loop fixes them, and verification runs again. A slow suite in test-suites/ that the epic's diff touches gets a Run ticket, run last on the epic branch, before the PR opens or, for a suite added later, before it merges.",
       "tags": [
         {
           "label": "ready-for-agent-debugging",
