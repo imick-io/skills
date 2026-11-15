@@ -1,5 +1,11 @@
 # imick-skills
 
+## 1.20.4
+
+### Patch Changes
+
+- [#97](https://github.com/imick-io/skills/pull/97) [`f2e87bf`](https://github.com/imick-io/skills/commit/f2e87bf2301c215faaba72cc6c371166d47b3b46) Thanks [@imick-io](https://github.com/imick-io)! - The agent loop now files missing "Run <suite>" tickets for an epic whose PR is already open, not only before the PR opens. A suite added to `test-suites/` after the PR opened, or a fix that touches files a suite covers with no run yet, used to be skipped and the epic could merge without it; now the PR waits for the run ([#96](https://github.com/imick-io/skills/issues/96)).
+
 ## 1.20.3
 
 ### Patch Changes
