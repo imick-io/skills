@@ -138,8 +138,8 @@
 import * as sandcastle from "@ai-hero/sandcastle";
 import { docker } from "@ai-hero/sandcastle/sandboxes/docker";
 import { isolatedDocker, sweepContainers } from "./isolated-docker.mts";
-import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { execFileSync, spawn } from "node:child_process";
+import { createWriteStream, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { hostname } from "node:os";
 import { setTimeout as sleep } from "node:timers/promises";
 import { z } from "zod";
@@ -351,6 +351,13 @@ const install =
   : existsSync("yarn.lock") ? `YARN_CACHE_FOLDER=${SANDBOX_CACHE}/yarn yarn install --immutable`
   : existsSync("package-lock.json") ? `npm ci --cache ${SANDBOX_CACHE}/npm`
   : `npm install --cache ${SANDBOX_CACHE}/npm`;
+// A `runs-via: host` suite installs on the host itself, for the host's
+// platform, from the host's own package caches.
+const hostInstall =
+  existsSync("pnpm-lock.yaml") ? "pnpm install --frozen-lockfile"
+  : existsSync("yarn.lock") ? "yarn install --immutable"
+  : existsSync("package-lock.json") ? "npm ci"
+  : "npm install";
 // A project whose tests need services (a database, a cache) starts them in
 // .sandcastle/sandbox-setup.sh, after the install. It writes their exports to
 // .sandcastle/sandbox-env, which the agents source instead of setting up their own.
@@ -891,12 +898,68 @@ async function settleSuite(t: Ticket, commits: number): Promise<boolean> {
   return true;
 }
 
+// A `runs-via: host` suite (test-suites/README.md) runs on the loop's own
+// machine, not in a sandbox or in GitHub Actions: it needs what a sandbox
+// lacks (an emulator, a device), and Actions minutes cost money, so its
+// workflow (`confirm-via`) only confirms a green host run, once. The loop runs
+// its command in a worktree of its own at the commit under test, one host
+// suite at a time (they share the emulator, ports and databases), before the
+// agent starts, and the agent reads the result from the prompt.
+const HOST_WORKTREE = `${WORKTREES}/host-suite`;
+let hostQueue: Promise<unknown> = Promise.resolve();
+// A suite's `takes` ("25m", "1h") in minutes; 30 when it says nothing usable.
+function takesMinutes(takes: string): number {
+  const m = takes.match(/(\d+)\s*(h|m)/);
+  return m ? Number(m[1]) * (m[2] === "h" ? 60 : 1) : 30;
+}
+// Three times `takes`, between 30 minutes and 4 hours: a slow run isn't cut
+// off, a hung one is.
+const hostLimitMinutes = (takes: string) => Math.min(Math.max(takesMinutes(takes) * 3, 30), 240);
+const NO_HOST_RUN = { HOST_EXIT: "", HOST_MINUTES: "", HOST_LOG: "", HOST_LOG_TAIL: "" };
+function runOnHost(t: Ticket, suite: Suite, sha: string): Promise<Record<string, string>> {
+  const job = hostQueue.then(async () => {
+    if (!existsSync(HOST_WORKTREE)) git(undefined, "worktree", "add", "--detach", HOST_WORKTREE, sha);
+    git(HOST_WORKTREE, "checkout", "--quiet", "--force", "--detach", sha);
+    tryGit(HOST_WORKTREE, "clean", "-ffdq", "-e", "node_modules");
+    const logPath = `.sandcastle/logs/host-suite-${t.number}-${sha.slice(0, 8)}.log`;
+    const out = createWriteStream(logPath);
+    const limit = hostLimitMinutes(suite.takes);
+    log(`#${t.number}: running ${suite.name} on the host at ${sha.slice(0, 8)} (up to ${limit} min), log in ${logPath}`);
+    const started = Date.now();
+    const code = await new Promise<number>((resolve) => {
+      const child = spawn("bash", ["-lc", `${hostInstall} && ${suite.command}`], {
+        cwd: HOST_WORKTREE, detached: true, stdio: ["ignore", "pipe", "pipe"],
+      });
+      child.stdout.pipe(out, { end: false });
+      child.stderr.pipe(out, { end: false });
+      const timer = setTimeout(() => {
+        out.write(`\n[host-suite] timed out after ${limit} min; killed\n`);
+        try { process.kill(-child.pid!, "SIGTERM"); } catch { /* already gone */ }
+      }, limit * 60_000);
+      child.on("close", (c) => { clearTimeout(timer); resolve(c ?? 1); });
+      child.on("error", (e) => { clearTimeout(timer); out.write(`\n[host-suite] ${e}\n`); resolve(1); });
+    });
+    await new Promise<void>((resolve) => out.end(resolve));
+    const minutes = Math.round((Date.now() - started) / 60_000);
+    log(`#${t.number}: ${suite.name} on the host exited ${code} after ${minutes} min`);
+    const tail = readFileSync(logPath, "utf8").split("\n").slice(-300).join("\n").slice(-40_000);
+    return { HOST_EXIT: String(code), HOST_MINUTES: String(minutes), HOST_LOG: logPath, HOST_LOG_TAIL: tail };
+  });
+  hostQueue = job.catch(() => {});
+  return job;
+}
+
 async function build(t: Ticket): Promise<number> {
+  // A Run ticket tests the branch it was cut from: the epic's, or main.
+  const base = t.epic ? t.epic.branch : "main";
+  const sha = t.kind === "suite" ? git(undefined, "rev-parse", `origin/${base}`) : "";
+  const suite = t.kind === "suite" ? suitesAt(`origin/${base}`).find((s) => t.title === `Run ${s.name}`) : undefined;
+  const hostArgs = suite?.runsVia === "host" ? await runOnHost(t, suite, sha) : NO_HOST_RUN;
   const box = await sandcastle.createSandbox({ branch: t.branch, sandbox: container(t.branch), hooks });
   try {
-    // A Run ticket tests the branch it was cut from: the epic's, or main.
-    const base = t.epic ? t.epic.branch : "main";
-    const suiteArgs = t.kind === "suite" ? { BASE: `origin/${base}`, REF: base, SHA: git(undefined, "rev-parse", `origin/${base}`), REPO: repo } : {};
+    const suiteArgs = t.kind === "suite"
+      ? { BASE: `origin/${base}`, REF: base, SHA: sha, REPO: repo, CONFIRM_VIA: suite?.confirmVia ?? "", ...hostArgs }
+      : {};
     await box.run({
       name: `#${t.number}`,
       maxIterations: 100,
@@ -1243,7 +1306,7 @@ async function check(epic: number, pr: { number: number; headRefOid: string }, v
 
 // The slow suites of test-suites/ (see its README) as the branch under test
 // defines them: a planner may have missed one, or added one on the branch.
-type Suite = { name: string; file: string; command: string; covers: string[]; takes: string; runsVia: string };
+type Suite = { name: string; file: string; command: string; covers: string[]; takes: string; runsVia: string; confirmVia: string };
 function suitesAt(ref: string): Suite[] {
   let files: string[];
   try {
@@ -1264,7 +1327,7 @@ function parseSuite(text: string, file: string): Suite | undefined {
     return block.split("\n").map((l) => unquote(l.replace(/^\s*-\s*/, ""))).filter(Boolean);
   };
   const name = field("name") || file.replace(/\.md$/, "");
-  return { name, file: `test-suites/${file}`, command: field("command"), covers: list("covers"), takes: field("takes"), runsVia: field("runs-via") || "sandbox" };
+  return { name, file: `test-suites/${file}`, command: field("command"), covers: list("covers"), takes: field("takes"), runsVia: field("runs-via") || "sandbox", confirmVia: field("confirm-via") };
 }
 
 // Before an epic's PR goes up: every suite whose `covers` the epic's diff

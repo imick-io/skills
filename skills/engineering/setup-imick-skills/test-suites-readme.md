@@ -17,7 +17,8 @@ covers:
   - packages/schema/**
   - packages/ui/**
 takes: 40m
-runs-via: workflow mobile-e2e.yml
+runs-via: host
+confirm-via: workflow mobile-e2e.yml
 ---
 Maestro flows on an Android 34 emulator: navigation, offline sync and the
 camera flows that unit tests can't see.
@@ -29,8 +30,10 @@ camera flows that unit tests can't see.
 - **takes**: how long a run takes, measured. For people and for the planner.
 - **runs-via**: who can run it.
   - `sandbox`: an agent runs `command` in its sandbox and reads the result.
+  - `host`: the agent loop runs `command` on its own machine, at the commit under test, one host suite at a time, and an agent reads the result. For suites that need an emulator, a device or hardware the sandbox lacks: running them here costs nothing, where each GitHub Actions run costs minutes. A host script on macOS should exit 0 only once it reaches its last line: the system bash (3.2) can hand an `EXIT` trap a 0 after a `set -u` failure, and the loop would read a red run as green.
   - `workflow <file>`: an agent starts that GitHub Actions workflow on the branch under test (`gh workflow run <file> --ref <branch>`) and waits for it. For suites that need an emulator, KVM or hardware the sandbox lacks. The workflow needs a `workflow_dispatch` trigger, and the loop's `GH_TOKEN` needs **Actions: read and write**.
   - `human`: a person runs it. The Run ticket is labelled `ready-for-human`.
+- **confirm-via** (optional): `workflow <file> [-f key=value…]`, run once after a green `host` or `sandbox` run, to confirm it in CI. Never after a red one: failures are reproduced and fixed locally, not by re-dispatching the workflow.
 
 ## A Run ticket
 
