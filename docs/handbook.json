@@ -2729,11 +2729,11 @@
           ],
           [
             "auto",
-            "Merged once verify-epic passes"
+            "Merged once verify-epic passes and CI is green; a red check becomes a ticket"
           ],
           [
             "auto",
-            "Merged once verify-epic passes"
+            "Merged once verify-epic passes and CI is green; a red check becomes a ticket"
           ]
         ]
       },
