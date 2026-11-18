@@ -983,6 +983,14 @@ function verParts(v) { return String(v).replace(/^v/i, '').split('.').map(Number
 function verCmp(a, b) { const x = verParts(a), y = verParts(b); for (let i = 0; i < Math.max(x.length, y.length); i++) { const d = (x[i] ?? 0) - (y[i] ?? 0); if (d) return d; } return 0; }
 function laterVersion(e, b) { return e.version && b.version && verCmp(b.version, e.version) > 0; } // b is of a later version than e
 const inView = (e, view) => view === 'backlog' ? isParked(e) : view === 'none' ? !e.version && !isParked(e) : e.version === view && !isParked(e);
+// Above viewOptions for the same reason: defaultView() below calls it while the page first renders.
+const isDone = (t) => t.status === 'done' || t.status === 'dropped';
+// Tickets with no epic: standalone bugs and small changes from triage, each
+// shipped as its own PR to main. Open and parked ones, and ones closed in the
+// last two weeks (they'd pile up forever otherwise).
+const RECENT_DAYS = 14;
+const outsideTickets = () => DATA.tickets.filter((t) => !t.epic &&
+  (!isDone(t) || (t.closedAt && Date.now() - Date.parse(t.closedAt) < RECENT_DAYS * 86_400_000)));
 function viewOptions() {
   const opts = DATA.versions.map((v) => [v, v]);
   if (DATA.epics.some(isParked) || outsideTickets().some((t) => t.status === 'backlog')) opts.push(['backlog', 'Backlog']);
@@ -1002,7 +1010,6 @@ $('rm-version').innerHTML = viewOptions().map(([k, name]) => '<option value="' +
 $('rm-version').addEventListener('change', () => { view = $('rm-version').value; try { localStorage.setItem('tracker-version', view); } catch {} renderRoadmap(); });
 
 // Ticket chips, your tickets first, coloured by who acts next.
-const isDone = (t) => t.status === 'done' || t.status === 'dropped';
 function chipsOf(ts, hideDone, row) {
   const shown = ts.filter((t) => !(hideDone && isDone(t)))
     .sort((a, b) => LANE_ORDER.indexOf(a.status) - LANE_ORDER.indexOf(b.status) || a.number - b.number);
@@ -1013,12 +1020,6 @@ function chipsOf(ts, hideDone, row) {
     return '<a class="chip ' + k + '" style="--k:var(--' + k + ');--ks:var(--' + k + '-soft)" href="' + t.url + '" target="_blank" title="' + esc(tip) + '">' + mine + '<span class="cn">#' + t.number + '</span><span class="ct">' + esc(t.title) + '</span></a>';
   }).join('') + '</div>' : '';
 }
-// Tickets with no epic: standalone bugs and small changes from triage, each
-// shipped as its own PR to main. Open and parked ones, and ones closed in the
-// last two weeks (they'd pile up forever otherwise).
-const RECENT_DAYS = 14;
-const outsideTickets = () => DATA.tickets.filter((t) => !t.epic &&
-  (!isDone(t) || (t.closedAt && Date.now() - Date.parse(t.closedAt) < RECENT_DAYS * 86_400_000)));
 // Grouped by what they are, in a strip above the roadmap (the parked ones in
 // the Backlog view): bugs and small changes each ship as their own PR to main.
 const GROUPS = [
