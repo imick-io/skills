@@ -1,5 +1,11 @@
 # imick-skills
 
+## 1.22.1
+
+### Patch Changes
+
+- [#104](https://github.com/imick-io/skills/pull/104) [`837cd0f`](https://github.com/imick-io/skills/commit/837cd0ff1635cd29dbea760126fb77ad046343c5) Thanks [@imick-io](https://github.com/imick-io)! - The tracker page loads again. Since v1.22.0 it stopped on load with `ReferenceError: Cannot access 'outsideTickets' before initialization`, so the roadmap never rendered. Copy the new `tracker/build.mjs` into your project to pick up the fix ([#103](https://github.com/imick-io/skills/issues/103)).
+
 ## 1.22.0
 
 ### Minor Changes
