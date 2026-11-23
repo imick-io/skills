@@ -164,6 +164,11 @@
       "source": "own"
     },
     {
+      "local_path": "skills/engineering/run-design-epic",
+      "local_name": "run-design-epic",
+      "source": "own"
+    },
+    {
       "local_path": "skills/engineering/run-epic",
       "local_name": "run-epic",
       "source": "own"
