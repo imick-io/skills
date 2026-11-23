@@ -55,6 +55,7 @@ My own skills plus the ones I use from other authors, such as [Matt Pocock](http
 | [`research`](skills/engineering/research/SKILL.md) | Matt Pocock | Investigate a question against high-trust primary sources and capture the findings as a Markdown file in the repo. |
 | [`retro`](skills/engineering/retro/SKILL.md) | Matt Pocock | Conduct a retrospective on a coding session. |
 | [`review-work`](skills/engineering/review-work/SKILL.md) | iMick | Refactor-only review pass over a recent commit. |
+| [`run-design-epic`](skills/engineering/run-design-epic/SKILL.md) | iMick | Build every ticket of one UX/UI epic inside this Claude Code session, like /run-epic, with design rounds on each ticket (screenshots, an independent design review, fixes) and a pause for approval on checkpoint tickets. |
 | [`run-epic`](skills/engineering/run-epic/SKILL.md) | iMick | Build every ticket of one epic inside this Claude Code session, the way the agent loop would (claim, branch, implement, review, land, next), one ticket at a time until the epic is built and its PR is open. |
 | [`run-ticket`](skills/engineering/run-ticket/SKILL.md) | iMick | Build one ticket inside this Claude Code session, the way the agent loop would (claim, branch, implement, review, land), without Docker or Sandcastle. |
 | [`scope-decomposer`](skills/engineering/scope-decomposer/SKILL.md) | iMick | Break a big idea, product, feature, existing project or broad issue into an initiative of epics on the issue tracker, each one ready for /brief and then /wayfinder. |

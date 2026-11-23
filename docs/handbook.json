@@ -3166,6 +3166,23 @@
       "url": "https://github.com/imick-io/skills/tree/main/skills/engineering/review-work"
     },
     {
+      "name": "run-design-epic",
+      "group": "build",
+      "summary": "Build every ticket of one UX/UI epic inside this Claude Code session, like /run-epic, with design rounds on each ticket (screenshots, an independent design review, fixes) and a pause for approval on checkpoint tickets.",
+      "description": "Build every ticket of one UX/UI epic inside this Claude Code session, like /run-epic, with design rounds on each ticket (screenshots, an independent design review, fixes) and a pause for approval on checkpoint tickets.",
+      "runs": [
+        "you"
+      ],
+      "uses": [
+        "run-epic"
+      ],
+      "next": [
+        "verify-epic"
+      ],
+      "source": "iMick",
+      "url": "https://github.com/imick-io/skills/tree/main/skills/engineering/run-design-epic"
+    },
+    {
       "name": "run-epic",
       "group": "build",
       "summary": "Build every ticket of one epic inside this Claude Code session, the way the agent loop would (claim, branch, implement, review, land, next), one ticket at a time until the epic is built and its PR is open.",
