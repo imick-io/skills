@@ -19,8 +19,8 @@ A screen is in scope when the ticket names it, or when the ticket's commits touc
 For every screen in scope, capture:
 
 - each **state** the seed data and the recipe can reach: loaded, empty, error, read-only, and each step of a multi-step flow;
-- **light and dark**;
-- **every viewport** the recipe lists.
+- **every viewport** the recipe lists, in the light theme;
+- the **dark theme at the narrowest viewport** (the phone), unless the recipe asks for dark at more. Record the skipped wide-dark pictures once in `missed`.
 
 A shared component with no screen of its own (a token, a button, a table) is captured on the project's component gallery if the recipe names one, else on two real screens that use it.
 
@@ -37,7 +37,7 @@ Write `{{DIR}}/shots.json`:
 }
 ```
 
-Done when every screen in scope has an entry for every state, theme and viewport, either in `shots` or in `missed` with the reason.
+Done when every screen in scope has an entry for every state, every viewport in light, and dark at the phone, either in `shots` or in `missed` with the reason.
 
 ## Before you finish
 
