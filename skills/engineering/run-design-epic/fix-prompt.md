@@ -16,7 +16,7 @@ The pictures are in `{{DIR}}` (`shots.json` maps each file to its screen, route,
 - Fix the cause, not the picture: when a finding is about a shared component, change the component so every screen gets it.
 - Build from the project's shared components and tokens, as the ticket and its epic require. Add no one-off styles.
 - Keep to the ticket's scope.
-- Follow the project's conventions for tests: update the ones your change reaches, and leave typecheck and the related tests green (`.sandcastle/implement-prompt.md` says which commands).
+- Follow the project's conventions for tests: update the ones your change reaches, and leave typecheck and the related tests green (`.sandcastle/implement-prompt.md` says which commands). Run only the tests your change reaches, including the slow browser specs for the pages you touched; never the whole slow suite: the code review runs it once for the ticket.
 - Commit on the branch, one commit per coherent fix, in the project's commit style.
 
 End with a short report: each finding and what you did about it, the commits you made, and what you ran.

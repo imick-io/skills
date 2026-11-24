@@ -38,7 +38,7 @@ Do `/run-epic`'s section 0, then:
    3. **Review.** Dispatch a **new** subagent with `design prompt review <ticket> 1`. It writes `review.json`. Never give it the builder's report.
    4. `design verdict <ticket> 1`: `pass: true` (no `must` finding) ends the rounds. A non-empty `unseen` means the reviewer skipped pictures: dispatch the review again, once.
 4. **Fix, then round 2, then round 3.** While the verdict is `pass: false` and the round is below 3: dispatch one subagent with `design prompt fix <ticket> <round>`, then run the next round (capture, review, verdict) the same way. Three rounds is the cap: `pass: false` after round 3 is a hand-back, `run-epic handback <ticket> "design review: <the open must findings, one line>"`, after `design publish <ticket>` so the findings are on the issue.
-5. **Code review.** `run-epic prompt review <ticket>`, one subagent, as there.
+5. **Code review.** `run-epic prompt review <ticket>`, one subagent, as there. This is where the project's slow suites (the whole browser suite) run, once for the ticket: the fix subagents run only the tests their change reaches.
 6. **Checkpoint.** `design checkpoint <ticket>` prints `true` for a ticket whose body has a `Design checkpoint` heading. Then: `design page <epic>`, open the page for the user, say in three lines what was built and what the reviewer still lists, and **wait for their answer**. Changes they ask for are one more fix: write them to the round's `review.json` as `must` findings, dispatch the fix prompt, capture again, and ask again. Land only on their yes.
 7. `design publish <ticket>`, then `run-epic land <ticket>`.
 8. One line for the final report: landed, in how many rounds, with how many `should` findings left; or handed back, and why.
