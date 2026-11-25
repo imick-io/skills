@@ -1,5 +1,11 @@
 # imick-skills
 
+## 1.25.0
+
+### Minor Changes
+
+- [#110](https://github.com/imick-io/skills/pull/110) [`2428ef7`](https://github.com/imick-io/skills/commit/2428ef75c20cb01e73ecadf977c1201e28760c53) Thanks [@imick-io](https://github.com/imick-io)! - `/run-design-epic` is faster. Rounds 2 and 3 are re-checks: they re-photograph only the pictures the last review named and the screens the fixes changed (every screen again when a fix reaches shared components), and the review page shows each screen's latest picture across rounds. And a project whose `docs/agents/design-capture.md` has a `Lanes` section (a second copy of the app's stack, with its own ports, database and queue) can run two tickets at once, paired so they don't collide; `design check` reports `lanes`. Without that section, a run is one ticket at a time, as before.
+
 ## 1.24.0
 
 ### Minor Changes
