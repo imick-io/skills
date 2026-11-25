@@ -4,7 +4,7 @@
 // what a round adds. Run from the repo root:
 //
 //   node <skill>/scripts/design.mjs check <epic>                  capture recipe, tools, checkpoints (JSON)
-//   node <skill>/scripts/design.mjs round <ticket> <k>            make round k's folder (JSON)
+//   node <skill>/scripts/design.mjs round <ticket> <k>            make round k's folder, note the commit it photographs (JSON)
 //   node <skill>/scripts/design.mjs prompt <capture|review|fix> <ticket> <k>   the round's prompt, filled in
 //   node <skill>/scripts/design.mjs captured <ticket> <k>         how many pictures, and is the worktree clean (JSON)
 //   node <skill>/scripts/design.mjs verdict <ticket> <k>          the reviewer's verdict (JSON)
@@ -13,7 +13,9 @@
 //   node <skill>/scripts/design.mjs page <epic>                   rebuild the review page, print its path
 //
 // Pictures and reviews live under .claude/design-runs/<epic>/<ticket>/round-<k>/,
-// on this machine only. JSON goes to stdout; a stop is a `## Heading` and a
+// on this machine only. Round 1 photographs every screen in scope; a later round
+// re-photographs only what changed since the round before, so a ticket's latest
+// picture of a screen may sit in an earlier round's folder. JSON goes to stdout; a stop is a `## Heading` and a
 // Markdown reason on stdout with exit code 1.
 
 import { execFileSync } from "node:child_process";
@@ -89,6 +91,16 @@ const rounds = (ticketDir) =>
   existsSync(ticketDir)
     ? readdirSync(ticketDir).map((d) => Number(d.match(/^round-(\d+)$/)?.[1])).filter(Boolean).sort((a, b) => a - b)
     : [];
+// Each picture's latest version across a ticket's rounds, oldest round first.
+const latestImages = (ticketDir) => {
+  const byFile = new Map();
+  for (const k of rounds(ticketDir)) {
+    const dir = join(ticketDir, `round-${k}`);
+    const meta = Object.fromEntries((readJson(join(dir, "shots.json"))?.shots ?? []).map((s) => [s.file, s]));
+    for (const f of images(dir)) byFile.set(f, { file: f, dir, meta: meta[f] });
+  }
+  return [...byFile.values()].sort((a, b) => a.file.localeCompare(b.file));
+};
 const counts = (review) => ({
   must: (review?.findings ?? []).filter((f) => f.severity === "must").length,
   should: (review?.findings ?? []).filter((f) => f.severity !== "must").length,
@@ -120,14 +132,12 @@ const buildPage = (epic) => {
     const dir = join(epicDir, n, `round-${k}`);
     const review = readJson(join(dir, "review.json"));
     const shots = readJson(join(dir, "shots.json"));
-    const meta = Object.fromEntries((shots?.shots ?? []).map((s) => [s.file, s]));
     const title = readJson(join(epicDir, n, "ticket.json"))?.title ?? "";
     const c = counts(review);
     const verdict = !review ? "not reviewed" : c.must ? `${c.must} must, ${c.should} should` : c.should ? `pass, ${c.should} should` : "pass";
-    const pics = images(dir).map((f) => {
-      const m = meta[f];
+    const pics = latestImages(join(epicDir, n)).map(({ file: f, dir: from, meta: m }) => {
       const cap = m ? [m.screen, m.state, m.viewport, m.theme].filter(Boolean).join(" · ") : f;
-      const src = relative(epicDir, join(dir, f)).split("\\").join("/");
+      const src = relative(epicDir, join(from, f)).split("\\").join("/");
       return `<figure><a href="${esc(src)}"><img loading="lazy" src="${esc(src)}" alt="${esc(cap)}"></a><figcaption>${esc(cap)}</figcaption></figure>`;
     }).join("");
     const list = (review?.findings ?? []).map((f) => `<li class="${f.severity === "must" ? "must" : "should"}"><b>${esc(f.severity === "must" ? "must" : "should")}</b> ${esc(f.screen)}: ${esc(f.issue)} <span>Fix: ${esc(f.fix)}</span></li>`).join("");
@@ -151,6 +161,36 @@ nav a{margin-right:12px;color:inherit}
   return file;
 };
 
+const firstScope = (path, base) => {
+  const changed = run("git", ["-C", path, "diff", "--name-only", `${base}...HEAD`]).out || "(no changed files found)";
+  return `A screen is in scope when the ticket names it, or when the ticket's commits touch it:\n\n\`\`\`\n${changed}\n\`\`\``;
+};
+
+// Round 2 and 3 re-photograph only what the fixes could have changed.
+const laterScope = (path, prev) => {
+  const from = readJson(join(prev, "round.json"))?.head;
+  const diff = from ? run("git", ["-C", path, "diff", "--name-only", `${from}..HEAD`]) : undefined;
+  const changed = !diff?.ok ? "(no record of the previous round's commit: treat every screen as changed)" : diff.out || "(no code changed since the previous round)";
+  const named = [...new Set((readJson(join(prev, "review.json"))?.findings ?? []).flatMap((f) => f.files ?? []))];
+  return [
+    `This is a re-check. The previous round photographed every screen in scope: \`${join(prev, "shots.json")}\` lists them, and they stand. Re-photograph only:`,
+    "",
+    "1. every picture a previous finding names, with the same file name, so the reviewer compares like with like:",
+    "",
+    named.length ? named.map((f) => `   - \`${f}\``).join("\n") : "   - (none named)",
+    "",
+    "2. every screen whose code changed since the previous round, in all of its states, viewports and themes as the previous round took them. The changes:",
+    "",
+    "```",
+    changed,
+    "```",
+    "",
+    "3. **every screen of the previous round** when a change reaches code that many screens share (the design system's components or tokens, a layout or the app's shell): a shared change can break a screen nobody touched.",
+    "",
+    "Use the previous round's plan, names and states for each picture you retake. A screen the previous round missed and the fixes now make reachable is in scope too.",
+  ].join("\n");
+};
+
 const commands = {
   check([n]) {
     if (!n) stop("Usage: check <epic>");
@@ -163,6 +203,7 @@ const commands = {
     json({
       epic: { number: epic.number, title: epic.title },
       captureDoc: existsSync(CAPTURE_DOC) ? CAPTURE_DOC : null,
+      lanes: existsSync(CAPTURE_DOC) && /^#{2,3}\s+Lanes\s*$/m.test(readFileSync(CAPTURE_DOC, "utf8")),
       designRefs: existsSync("docs/design") ? "docs/design" : null,
       tools: { agentBrowser: has("agent-browser"), maestro: has("maestro"), bootedSimulator: sim.ok && /\(Booted\)/.test(sim.out) },
       checkpoints: issues.filter((i) => i.number !== epic.number && CHECKPOINT.test(i.body)).map((i) => ({ number: i.number, title: i.title })),
@@ -176,6 +217,8 @@ const commands = {
     const t = ticketOf(n);
     const dir = roundDir(t, roundOf(k));
     mkdirSync(dir, { recursive: true });
+    const head = run("git", ["-C", wtPath(n), "rev-parse", "HEAD"]);
+    if (head.ok) writeFileSync(join(dir, "round.json"), JSON.stringify({ head: head.out }));
     if (!existsSync(join(RUNS, ".gitignore"))) writeFileSync(join(RUNS, ".gitignore"), "*\n");
     writeFileSync(join(RUNS, String(t.epic.number), String(t.number), "ticket.json"), JSON.stringify({ number: t.number, title: t.title }));
     json({ ticket: t.number, round: Number(k), dir, shots: join(dir, "shots.json"), review: join(dir, "review.json") });
@@ -191,18 +234,19 @@ const commands = {
     if (kind !== "review" && !existsSync(path)) stop(`No worktree for #${n}: \`run-epic prepare ${n}\` first.`);
     if (kind === "capture" && !existsSync(CAPTURE_DOC)) stop(`\`${CAPTURE_DOC}\` doesn't exist: the project has no capture recipe.`);
     const base = t.epic.branch ? `origin/${t.epic.branch}` : "origin/main";
-    const changed = kind === "capture" ? run("git", ["-C", path, "diff", "--name-only", `${base}...HEAD`]).out || "(no changed files found)" : "";
+    let scope = "";
+    if (kind === "capture") scope = round === 1 ? firstScope(path, base) : laterScope(path, roundDir(t, round - 1));
     let previous = "";
     if (kind === "review" && round > 1) {
       const prev = roundDir(t, round - 1);
-      previous = `4. The previous round's review, \`${join(prev, "review.json")}\`: check that each of its \`must\` findings is fixed in this round's pictures. One that is not stays a \`must\`.`;
+      previous = `4. The previous round's review, \`${join(prev, "review.json")}\`: check that each of its \`must\` findings is fixed in this round's pictures. One that is not stays a \`must\`. This round re-photographed only what changed since then (the fixes' screens and the pictures the findings named); the previous round's other pictures stand as reviewed. Judge every picture here in full, as in round 1: a fix that broke something else on its screen is a finding.`;
     }
     const review = kind === "fix" ? readJson(join(dir, "review.json")) : undefined;
     if (kind === "fix" && !review) stop(`Round ${round} has no review.json to fix from.`);
     const text = readFileSync(join(HERE, "..", `${kind}-prompt.md`), "utf8")
       .replaceAll("{{ISSUE}}", String(t.number)).replaceAll("{{TITLE}}", t.title).replaceAll("{{ROUND}}", String(round))
       .replaceAll("{{WORKTREE}}", path).replaceAll("{{BRANCH}}", t.branch).replaceAll("{{DIR}}", dir)
-      .replaceAll("{{CAPTURE_DOC}}", CAPTURE_DOC).replaceAll("{{CHANGED}}", changed)
+      .replaceAll("{{CAPTURE_DOC}}", CAPTURE_DOC).replaceAll("{{SCOPE}}", scope)
       .replaceAll("{{DESIGN_REFS}}", designRefs()).replaceAll("{{PREVIOUS}}", previous)
       .replaceAll("{{FINDINGS}}", findingsMd(review)).replaceAll("{{BODY}}", t.body);
     process.stdout.write(text + "\n");
@@ -246,9 +290,10 @@ const commands = {
     const shots = readJson(join(dir, "shots.json"));
     const c = counts(review);
     const page = buildPage(t.epic);
+    const pictures = latestImages(join(RUNS, String(t.epic.number), String(t.number))).length;
     const head = !review ? "The screens were not reviewed." : c.must ? `**${c.must} must-fix finding${c.must === 1 ? "" : "s"} still open** after round ${k}.` : `**Passed** in round ${k}${c.should ? `, with ${c.should} smaller finding${c.should === 1 ? "" : "s"} left` : ""}.`;
     const missed = (shots?.missed ?? []).length ? `\n\nNot photographed:\n${shots.missed.map((m) => `- ${m.screen}${m.state ? ` (${m.state})` : ""}: ${m.why}`).join("\n")}` : "";
-    const body = `${AI_NOTE}\n\n## Design review\n\n${head} ${images(dir).length} screenshots reviewed.${review?.summary ? `\n\n${review.summary}` : ""}\n\n${review ? findingsMd(review) : ""}${missed}\n\nThe pictures are on the machine that ran it: \`${relative(top, page)}\`.`;
+    const body = `${AI_NOTE}\n\n## Design review\n\n${head} ${pictures} screenshots reviewed.${review?.summary ? `\n\n${review.summary}` : ""}\n\n${review ? findingsMd(review) : ""}${missed}\n\nThe pictures are on the machine that ran it: \`${relative(top, page)}\`.`;
     gh("issue", "comment", String(n), "--body", body);
     json({ published: Number(n), round: k, ...c, page });
   },
