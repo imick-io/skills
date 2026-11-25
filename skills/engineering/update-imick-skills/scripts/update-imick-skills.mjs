@@ -117,6 +117,13 @@ const same = (a, b) => existsSync(a) && existsSync(b) && read(a) === read(b);
 // each workflow's top-level `on:` and `concurrency:`, and reports what to
 // change. The skill shows the edits and makes them only on a yes.
 const SKILL_WORKFLOWS = new Set(["epics.yml", "triage.yml", "token-checks.yml"]);
+// Jobs (two-space keys under `jobs:`) that run lint or a formatter and carry a
+// job-level `if:` limiting them to pull requests.
+const lintJobsPrOnly = (jobsBody) =>
+  [...jobsBody.matchAll(/^ {2}([\w-]+):[^\n]*\n((?:(?: {4}[^\n]*)?\n?)*)/gm)]
+    .filter(([, , body]) => /^ {4}if:[^\n]*github\.event_name\s*==\s*['"]pull_request['"]/m.test(body) && /\b(lint|biome|eslint|prettier|format)\b/.test(body))
+    .map(([, name]) => name);
+
 const ciCheck = () => {
   const dir = ".github/workflows";
   if (!existsSync(dir) || !existsSync(join(dir, "epics.yml"))) return null; // only for repos on the epic workflow
@@ -163,6 +170,10 @@ const ciCheck = () => {
         // Already done when a job runs on PRs only, as #62 suggests: a job-level `if:` (four spaces in),
         // not a step's (`- if:`), which leaves the rest of the job running on every push.
         const gated = /^ {4}if:[^\n]*github\.event_name\s*(==\s*['"]pull_request['"]|!=\s*['"]push['"])/m.test(text);
+        // A lint or format job gated to PRs: a commit pushed straight to main skips it,
+        // and the errors it brings then fail every later PR.
+        if (b.includes(main)) for (const j of lintJobsPrOnly(block("jobs")?.body ?? ""))
+          issues.push({ id: "lint-pr-only", fix: `drop the PR-only if: on job ${j}, so it runs on push: ${main} too`, why: `a commit pushed straight to ${main} skips it, and the lint errors it brings fail every later PR` });
         if (b.includes(main) && !deploys && !gated) issues.push({ id: "push-main-full", fix: caches ? "keep push: main, but gate the expensive jobs to PRs (if: github.event_name == 'pull_request') so only the cache-saving jobs run" : "drop push: main (no caches to keep warm)", why: "a merge re-runs what its PR just passed" });
       }
     }
