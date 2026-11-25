@@ -1,5 +1,11 @@
 # imick-skills
 
+## 1.25.1
+
+### Patch Changes
+
+- [#112](https://github.com/imick-io/skills/pull/112) [`b216d37`](https://github.com/imick-io/skills/commit/b216d371e9a8027811866b566ec39fa4b037fcd9) Thanks [@imick-io](https://github.com/imick-io)! - `/setup-imick-skills` and `/update-imick-skills` keep lint running on pushes to `main`. Gating the slow jobs to pull requests had also gated lint, so a commit pushed straight to `main` (a doc, a design board, a hotfix) skipped it, and its lint errors then failed every later PR. `/update-imick-skills` now flags such a job as `lint-pr-only`.
+
 ## 1.25.0
 
 ### Minor Changes
