@@ -24,7 +24,8 @@ Do `/run-epic`'s section 0, then:
    - `captureDoc: null`: the project has no capture recipe. Stop and write `docs/agents/design-capture.md` with the user (how to run the app from a worktree, sign in as a seeded person, and screenshot a route in each theme and viewport), prove it on one screen, then start again.
    - `tools`: what the recipe needs must be there (a booted simulator for a mobile epic). If not, ask the user to start it.
    - `checkpoints`: the tickets that will pause for approval.
-2. Add to the three-line plan: the run pauses at each checkpoint, and the review page is at `page`.
+   - `lanes`: `true` when the recipe has a `Lanes` section, a second copy of the app's whole stack (its own ports, database and queue) proven to run beside the first. Then the run may take two tickets at once (section 3).
+2. Add to the three-line plan: the run pauses at each checkpoint, the review page is at `page`, and whether tickets run two at a time.
 
 ## 1. One ticket, start to finish
 
@@ -37,7 +38,7 @@ Do `/run-epic`'s section 0, then:
    2. **Capture.** Dispatch one subagent with `design prompt capture <ticket> 1`. Then `design captured <ticket> 1`: `images: 0` means nothing could be photographed. Note "not captured" with the agent's reason for the final report, skip to step 5, and go on. A dirty worktree is listed in `worktreeDirty`: have the subagent clean it before continuing.
    3. **Review.** Dispatch a **new** subagent with `design prompt review <ticket> 1`. It writes `review.json`. Never give it the builder's report.
    4. `design verdict <ticket> 1`: `pass: true` (no `must` finding) ends the rounds. A non-empty `unseen` means the reviewer skipped pictures: dispatch the review again, once.
-4. **Fix, then round 2, then round 3.** While the verdict is `pass: false` and the round is below 3: dispatch one subagent with `design prompt fix <ticket> <round>`, then run the next round (capture, review, verdict) the same way. Three rounds is the cap: `pass: false` after round 3 is a hand-back, `run-epic handback <ticket> "design review: <the open must findings, one line>"`, after `design publish <ticket>` so the findings are on the issue.
+4. **Fix, then round 2, then round 3.** While the verdict is `pass: false` and the round is below 3: dispatch one subagent with `design prompt fix <ticket> <round>`, then run the next round (capture, review, verdict) the same way. A later round is a **re-check**: its capture prompt re-photographs only the pictures the findings named and the screens the fixes changed (every screen again when a fix reaches shared components), and its reviewer judges those in full, with the earlier round's other pictures standing. Three rounds is the cap: `pass: false` after round 3 is a hand-back, `run-epic handback <ticket> "design review: <the open must findings, one line>"`, after `design publish <ticket>` so the findings are on the issue.
 5. **Code review.** `run-epic prompt review <ticket>`, one subagent, as there. This is where the project's slow suites (the whole browser suite) run, once for the ticket: the fix subagents run only the tests their change reaches.
 6. **Checkpoint.** `design checkpoint <ticket>` prints `true` for a ticket whose body has a `Design checkpoint` heading. Then: `design page <epic>`, open the page for the user, say in three lines what was built and what the reviewer still lists, and **wait for their answer**. Changes they ask for are one more fix: write them to the round's `review.json` as `must` findings, dispatch the fix prompt, capture again, and ask again. Land only on their yes.
 7. `design publish <ticket>`, then `run-epic land <ticket>`.
@@ -47,6 +48,16 @@ Do `/run-epic`'s section 0, then:
 
 `run-epic finish <epic>`, as there. Then `design page <epic>` and give its path in the report.
 
+## 3. Two tickets at once
+
+Only when `design check` shows `lanes: true`. A ticket spends most of its hours waiting on captures, reviews and test runs; a second ticket in a second **lane** fills that time.
+
+- **Pick a pair that won't collide.** The second ticket must touch other screens and, as far as both bodies say, other shared components than the first. Skip down `frontier.ready` for one that fits; when none does, run one at a time.
+- **Name the lane in every prompt for the ticket:** put one line before each prompt you dispatch, build to keyboard check: "Use lane `<name>` from `docs/agents/design-capture.md`: its ports, database and queue, never the default ones, and stop only the processes you started, by PID." The default lane needs no line.
+- **Never more than two**, and each lane runs one step at a time: its own capture, fix or test run, never two in the same lane.
+- **Land one at a time.** When the second ticket's `land` exits 3 (a conflict with the first's work), dispatch one subagent in its worktree to merge the epic branch in, resolve, rerun the tests the conflict reached and commit; then `land` again. A second conflict is `/run-epic`'s rebuild (`prepare --retry`).
+- A lane freed by a landing takes the next ticket that fits beside the one still running.
+
 ## Rules
 
 `/run-epic`'s rules hold, with these changes:
@@ -55,4 +66,4 @@ Do `/run-epic`'s section 0, then:
 - **The run asks questions only at checkpoints.** Everything else is a hand-back.
 - **Capture and review change no code.** Only the build and fix subagents commit.
 - **Pictures stay on this machine**, under `.claude/design-runs/`, never committed. The issue gets the reviewer's findings as text.
-- **One app at a time.** Capture starts the project's app and stops it; never start a second ticket while one is being captured.
+- **One app per lane.** Capture starts the project's app and stops it. Without lanes, that means one ticket at a time, as `/run-epic` says; with lanes, two tickets, one in each (section 3).

@@ -10,11 +10,7 @@ Read `{{CAPTURE_DOC}}` in the worktree. It is this project's recipe: how to star
 
 ## What
 
-A screen is in scope when the ticket names it, or when the ticket's commits touch it:
-
-```
-{{CHANGED}}
-```
+{{SCOPE}}
 
 For every screen in scope, capture:
 
