@@ -42,7 +42,7 @@
       "id": "main",
       "title": "The flow, by who acts",
       "description": "Follow the arrows from the top. Each column is who acts: you in a Claude session, the agent loop running unattended, or a GitHub workflow. Dashed arrows are feedback.",
-      "rows": 12,
+      "rows": 14,
       "columns": {
         "youL": 118,
         "youR": 330,
@@ -113,9 +113,16 @@
             }
           ]
         },
-        "brief": {
+        "brand": {
           "col": "youL",
           "row": 3,
+          "lane": "you",
+          "cmd": "/brand",
+          "sub": "once: the look, as DESIGN.md"
+        },
+        "brief": {
+          "col": "youL",
+          "row": 4,
           "lane": "you",
           "cmd": "/brief",
           "sub": "your intent; pick the mode",
@@ -126,16 +133,29 @@
             }
           ]
         },
+        "design": {
+          "col": "youR",
+          "row": 5,
+          "lane": "you",
+          "cmd": "/product-design",
+          "sub": "the screens, agreed with you",
+          "pills": [
+            {
+              "role": "plan",
+              "label": "needs-design"
+            }
+          ]
+        },
         "way": {
           "col": "youL",
-          "row": 4,
+          "row": 6,
           "lane": "you",
           "cmd": "/wayfinder",
           "sub": "decisions, with you"
         },
         "auto": {
           "col": "loop",
-          "row": 4,
+          "row": 6,
           "lane": "loop",
           "title": "Plans the epic",
           "sub": "wayfinder + research \u2192 a spec",
@@ -148,14 +168,14 @@
         },
         "tickets": {
           "col": "youL",
-          "row": 5,
+          "row": 7,
           "lane": "you",
           "cmd": "/to-spec \u2192 /to-tickets",
           "sub": "tickets with their blockers"
         },
         "approve": {
           "col": "youR",
-          "row": 5,
+          "row": 7,
           "lane": "you",
           "title": "Approve the spec",
           "sub": "or comment what to change",
@@ -168,7 +188,7 @@
         },
         "build": {
           "col": "loop",
-          "row": 6,
+          "row": 8,
           "lane": "loop",
           "title": "Builds ready tickets",
           "sub": "implement \u00b7 debug \u00b7 review",
@@ -181,7 +201,7 @@
         },
         "stuck": {
           "col": "youR",
-          "row": 7,
+          "row": 9,
           "lane": "you",
           "title": "Answer what's stuck",
           "sub": "comment, relabel for agents",
@@ -194,28 +214,28 @@
         },
         "verify": {
           "col": "loop",
-          "row": 8,
+          "row": 10,
           "lane": "loop",
           "title": "Epic PR + verify-epic",
           "sub": "tested in the running app"
         },
         "gate": {
           "col": "gh",
-          "row": 9,
+          "row": 11,
           "lane": "gh",
           "title": "epic-gate turns green",
           "sub": "closed \u00b7 no mocks \u00b7 verified"
         },
         "merge": {
           "col": "youL",
-          "row": 10,
+          "row": 12,
           "lane": "you",
           "title": "Review & merge",
           "sub": "the epic PR to main"
         },
         "close": {
           "col": "gh",
-          "row": 11,
+          "row": 13,
           "lane": "gh",
           "title": "Closing chain",
           "sub": "epic \u2192 milestone \u2192 initiative"
@@ -299,6 +319,18 @@
               "scope.B"
             ],
             [
+              "brand.cx",
+              "brand.T"
+            ]
+          ]
+        },
+        {
+          "points": [
+            [
+              "brand.cx",
+              "brand.B"
+            ],
+            [
               "brief.cx",
               "brief.T"
             ]
@@ -318,7 +350,7 @@
           "label": "manual",
           "at": [
             "brief.cx",
-            "mid(brief.B,way.T)"
+            "way.T-22"
           ]
         },
         {
@@ -338,8 +370,66 @@
           ],
           "label": "autopilot",
           "at": [
-            "approve.cx",
+            458,
             "brief.cy"
+          ]
+        },
+        {
+          "points": [
+            [
+              "brief.R",
+              "brief.cy+16"
+            ],
+            [
+              "design.cx",
+              "brief.cy+16"
+            ],
+            [
+              "design.cx",
+              "design.T"
+            ]
+          ],
+          "label": "design first",
+          "at": [
+            "design.cx",
+            "mid(brief.cy+16,design.T)"
+          ]
+        },
+        {
+          "points": [
+            [
+              "design.cx-24",
+              "design.B"
+            ],
+            [
+              "design.cx-24",
+              "way.cy"
+            ],
+            [
+              "way.R",
+              "way.cy"
+            ]
+          ],
+          "label": "screens agreed",
+          "at": [
+            "design.cx",
+            "design.B+20"
+          ]
+        },
+        {
+          "points": [
+            [
+              "design.cx+24",
+              "design.B"
+            ],
+            [
+              "design.cx+24",
+              "auto.cy"
+            ],
+            [
+              "auto.L",
+              "auto.cy"
+            ]
           ]
         },
         {
@@ -549,7 +639,7 @@
     {
       "id": "fast",
       "title": "The fast track",
-      "description": "The same flow with fast mode on (`AGENTS_MODE=fast`, or the `fast` label on an epic). The loop takes the steps that waited on you: it approves its own spec, answers what's stuck, resolves conflicts and merges the verified epic. You come in only through the dashed arrows, when it asks.",
+      "description": "The same flow with fast mode on (`AGENTS_MODE=fast`, or the `fast` label on an epic). The loop takes the steps that waited on you: it approves its own spec, answers what's stuck, resolves conflicts and merges the verified epic. You come in only through the dashed arrows, when it asks. The look stays yours: `/brand`, and `/product-design` on each epic you chose to design first.",
       "note": "Below `AGENTS_THRESHOLD` (70 by default), it asks you instead of deciding. It always asks before spending money, handling real credentials or personal data, deleting or publishing anything.",
       "rows": 13,
       "columns": {
@@ -629,13 +719,6 @@
             }
           ]
         },
-        "conflict": {
-          "col": "loopL",
-          "row": 4,
-          "lane": "loop",
-          "title": "Resolves conflicts",
-          "sub": "main \u2194 epic branch, any time"
-        },
         "auto": {
           "col": "loopR",
           "row": 4,
@@ -646,6 +729,19 @@
             {
               "role": "plan",
               "label": "autopilot"
+            }
+          ]
+        },
+        "design": {
+          "col": "you",
+          "row": 4,
+          "lane": "you",
+          "cmd": "/product-design",
+          "sub": "epics you design first",
+          "pills": [
+            {
+              "role": "plan",
+              "label": "needs-design"
             }
           ]
         },
@@ -674,6 +770,13 @@
               "label": "spec-approved"
             }
           ]
+        },
+        "conflict": {
+          "col": "loopL",
+          "row": 6,
+          "lane": "loop",
+          "title": "Resolves conflicts",
+          "sub": "main \u2194 epic branch, any time"
         },
         "build": {
           "col": "loopR",
@@ -841,6 +944,35 @@
           "at": [
             "conflict.cx",
             "brief.cy"
+          ]
+        },
+        {
+          "points": [
+            [
+              "brief.cx",
+              "brief.B"
+            ],
+            [
+              "design.cx",
+              "design.T"
+            ]
+          ]
+        },
+        {
+          "points": [
+            [
+              "design.R",
+              "design.cy"
+            ],
+            [
+              "auto.L",
+              "design.cy"
+            ]
+          ],
+          "label": "screens agreed",
+          "at": [
+            "conflict.cx",
+            "design.cy"
           ]
         },
         {
@@ -1074,7 +1206,7 @@
     {
       "id": "supersonic",
       "title": "Supersonic",
-      "description": "Fast mode without the waiting, for throwaway MVPs (`AGENTS_MODE=supersonic`, or the `supersonic` label). `/scope-decomposer` writes every epic's brief in its one interview. Below the threshold, a call that can be undone is assumed instead of asked, and the spec is always approved. The assumptions reach you in one Slack digest a day; comment on an issue to change a call.",
+      "description": "Fast mode without the waiting, for throwaway MVPs (`AGENTS_MODE=supersonic`, or the `supersonic` label). `/scope-decomposer` writes every epic's brief in its one interview, and asks which epics' screens you design first. Below the threshold, a call that can be undone is assumed instead of asked, and the spec is always approved. The assumptions reach you in one Slack digest a day; comment on an issue to change a call.",
       "note": "It still stops and waits for money, credentials, personal data, deleting or publishing: those can't be undone. A wrong guess elsewhere costs rework, since your comment becomes a follow-up ticket. Fine for an MVP; not for production work.",
       "rows": 12,
       "columns": {
@@ -1148,13 +1280,6 @@
           "title": "Plans the epic",
           "sub": "wayfinder + research \u2192 a spec"
         },
-        "conflict": {
-          "col": "loopL",
-          "row": 4,
-          "lane": "loop",
-          "title": "Resolves conflicts",
-          "sub": "main \u2194 epic branch, any time"
-        },
         "approve": {
           "col": "loopR",
           "row": 4,
@@ -1167,6 +1292,26 @@
               "label": "spec-approved"
             }
           ]
+        },
+        "design": {
+          "col": "you",
+          "row": 4,
+          "lane": "you",
+          "cmd": "/product-design",
+          "sub": "epics you design first",
+          "pills": [
+            {
+              "role": "plan",
+              "label": "needs-design"
+            }
+          ]
+        },
+        "conflict": {
+          "col": "loopL",
+          "row": 5,
+          "lane": "loop",
+          "title": "Resolves conflicts",
+          "sub": "main \u2194 epic branch, any time"
         },
         "build": {
           "col": "loopR",
@@ -1326,11 +1471,11 @@
         {
           "points": [
             [
-              "scope.cx",
+              "scope.cx+30",
               "scope.B"
             ],
             [
-              "scope.cx",
+              "scope.cx+30",
               "auto.cy"
             ],
             [
@@ -1342,6 +1487,48 @@
           "at": [
             "conflict.cx",
             "auto.cy"
+          ]
+        },
+        {
+          "points": [
+            [
+              "scope.cx-30",
+              "scope.B"
+            ],
+            [
+              "design.cx-30",
+              "design.T"
+            ]
+          ],
+          "label": "design first",
+          "at": [
+            "scope.cx-30",
+            "mid(scope.B,design.T)"
+          ]
+        },
+        {
+          "points": [
+            [
+              "design.R",
+              "design.cy"
+            ],
+            [
+              500,
+              "design.cy"
+            ],
+            [
+              500,
+              "auto.cy+16"
+            ],
+            [
+              "auto.L",
+              "auto.cy+16"
+            ]
+          ],
+          "label": "screens agreed",
+          "at": [
+            372,
+            "design.cy"
           ]
         },
         {
@@ -2067,7 +2254,7 @@
     {
       "title": "Plan",
       "who": "You, or the loop",
-      "body": "Wayfinder charts the decisions an epic needs as tickets and resolves them: with you, one at a time, or alone on autopilot, ending in a spec for your approval. /product-design builds the real UI on mock data until you agree: first on a needs-design epic, where nothing is planned until then, and at any point on the others.",
+      "body": "Wayfinder charts the decisions an epic needs as tickets and resolves them: with you, one at a time, or alone on autopilot, ending in a spec for your approval. /product-design builds the real UI on mock data until you agree: first on a needs-design epic, where nothing is planned or built until then, and at any point on the others.",
       "tags": [
         {
           "cmd": "/wayfinder"
@@ -2108,7 +2295,7 @@
     {
       "title": "Build & fix",
       "who": "Agent loop",
-      "body": "The loop picks every ready, unblocked ticket, plans which can run in parallel, and works each in a Docker sandbox: tests first, then a code review. Epic tickets land on the epic branch and close; others arrive as PRs. A ticket it can't finish goes to a person.",
+      "body": "The loop picks every ready, unblocked ticket, plans which can run in parallel, and works each in a Docker sandbox: tests first, then a code review. With a DESIGN.md, a ticket that changes screens gets design rounds in between: an agent that didn't build them photographs and judges the screens, and must-fix findings are fixed, three rounds at most. Epic tickets land on the epic branch and close; others arrive as PRs. A ticket it can't finish goes to a person.",
       "tags": [
         {
           "label": "ready-for-agent",
@@ -2276,7 +2463,7 @@
       "name": "needs-design",
       "role": "plan",
       "kind": "Planning",
-      "means": "An epic whose screens you agree first; the loop plans nothing on it until then",
+      "means": "An epic whose screens you agree first; the loop plans and builds nothing on it until then",
       "setBy": "/brief, or /scope-decomposer on supersonic",
       "next": "/product-design, until you say \"we agree\""
     },
@@ -2634,7 +2821,7 @@
           ],
           [
             "you",
-            "You: nothing is planned until you agree"
+            "You: nothing is planned or built until you agree"
           ],
           [
             "you",
@@ -2806,7 +2993,7 @@
         "body": "For a new product, `/scope-decomposer` recommends building the whole first version on your machine (SQLite or Docker Postgres, local storage, a dev login, console email, test-mode payments). Cloud accounts, domains, secrets and deploys wait in one Go live epic, last and blocking nothing, so the loop never stalls on setup only you can do."
       }
     ],
-    "settings": "Set the mode in `.sandcastle/.env`: `AGENTS_MODE=fast` or `AGENTS_MODE=supersonic` for a whole project, or label one epic `fast` or `supersonic`. `AGENTS_THRESHOLD` (70 by default) is the confidence below which the loop asks (fast) or assumes (supersonic)."
+    "settings": "Set the mode in `.sandcastle/.env`: `AGENTS_MODE=fast` or `AGENTS_MODE=supersonic` for a whole project, or label one epic `fast` or `supersonic`. `AGENTS_THRESHOLD` (70 by default) is the confidence below which the loop asks (fast) or assumes (supersonic). `AGENTS_DESIGN_ROUNDS` (3 by default, 0 for off) is how many rounds of screenshot review and fixes a ticket that changes screens gets."
   },
   "groups": [
     {

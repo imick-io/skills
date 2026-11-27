@@ -69,7 +69,7 @@ It writes `docs/agents/*`, the workflows, `.sandcastle/` and the labels. Commit 
 
 A high-level interview, then a proposal of epics in build order. Push back until the cut feels right. It creates an **initiative** issue and the **epics** under it, each with its milestone (`NN: Initiative / Epic`), branch (`epic/NN-slug`), area, and blocking links. Every epic starts labelled `needs-briefing` + `ready-for-human`.
 
-**The stack and the look.** For a new product the interview asks the stack once (it recommends one; the answer becomes an ADR) and, when the product has screens, adds a **Design system** epic ahead of every epic that builds screens. Then run `/brand`: a few questions on who uses it and how it should feel, three radically different looks of one preview screen to react to, and your pick written as `DESIGN.md`. It also briefs the Design system epic, which puts the tokens, the shared components and a lint guard in code. Every screen after that is built from `DESIGN.md` and reviewed against it.
+**The stack and the look.** For a new product the interview asks the stack once (it recommends one; the answer becomes an ADR) and, when the product has screens, adds a **Design system** epic ahead of every epic that builds screens. Then run `/brand`: a few questions on who uses it and how it should feel, three radically different looks of one preview screen to react to, then the shell around every screen (navigation, a list, a detail and a form page), and your picks written as `DESIGN.md`. It also briefs the Design system epic, which puts the tokens, the shared components and a lint guard in code. Every screen after that is built from `DESIGN.md` and reviewed against it.
 
 Vague parts land in the initiative's **Not yet scoped** list; run `/scope-decomposer #<initiative>` again later to turn them into epics.
 
@@ -93,7 +93,7 @@ Brief every epic now, or just before each is planned; either works. To skip a br
 
 **Autopilot epics**: nothing to run. The loop (step 6) charts the map, decides on its own (your brief's lines as given, 75%+ answers directly, the rest after `dig` or marked *assumed*), and writes the spec.
 
-**The UI, first**: an epic you chose to design first carries `needs-design`, and the loop plans nothing on it until its screens are agreed. `/product-design #<epic>` builds the real screens on mock data with you; say "we agree" when it looks right: it writes a UI spec and production tickets, and removes the label. On any other epic it can run before, during or after the map.
+**The UI, first**: an epic you chose to design first carries `needs-design`, and the loop plans and builds nothing on it until its screens are agreed. `/product-design #<epic>` builds the real screens on mock data with you; say "we agree" when it looks right: it writes a UI spec and production tickets, and removes the label. On any other epic it can run before, during or after the map.
 
 ## 5. Approve autopilot specs
 
@@ -157,5 +157,7 @@ An epic's PR is ready when **`epic-gate`** is green: no open tickets, no `mocks/
 | Tickets time out installing dependencies, or take minutes to start | Docker Desktop's bind mounts are slow to write `node_modules` on a Mac | `AGENTS_SANDBOX=isolated` in `.sandcastle/.env`, then restart the loop ([Sandbox speed on a Mac](#sandbox-speed-on-a-mac)) |
 | The loop says "nothing ready" but tickets exist | They're assigned, blocked, or lack `ready-for-agent` | Unassign, close the blocker, or add the label |
 | An autopilot epic never gets planned | It still has `needs-briefing` or `needs-design`, lacks `autopilot`, or is blocked by another epic | Brief it, agree its design, add the label, or finish the blocker |
+| A UI ticket comes back `ready-for-human` with a "Design review" comment | Its screens still had must-fix findings after three rounds of review and fixes | Read the findings; comment what to do or fix it on the ticket's branch, then relabel it `ready-for-agent` |
+| Every UI ticket says its screens were "not reviewed" | The app doesn't start in the sandbox, so nothing could be photographed | Write `docs/agents/design-capture.md` (how to run the app, sign in as a seeded person and screenshot a route) and make `sandbox-setup.sh` start what the app needs; `AGENTS_DESIGN_ROUNDS=0` turns the rounds off |
 | An epic is paused | Merging `main` into its branch conflicts; an agent tries to resolve it first, in every mode | Wait for the agent, or, once it has asked you on the "Resolve conflicts" issue (`agent:asked`), resolve it on the epic branch |
 | `epic-gate` stays red | Its description says why | Close the tickets, remove `mocks/`, or wait for verification |

@@ -29,9 +29,11 @@ Run it once per product, right after `/scope-decomposer`. With a `DESIGN.md` alr
 
 4. **Iterate live.** Screenshot each look to check your work before showing it. The user picks one or mixes them ("the type from B on A's colours"); rebuild until they say the look is agreed. That call is theirs alone.
 
-5. **Write `DESIGN.md`** at the repo root, in the shape [DESIGN-FORMAT.md](DESIGN-FORMAT.md) gives. Check every text and background pair for WCAG AA contrast in each theme and fix the tokens before writing them down.
+5. **Agree the shell.** In the agreed look, build what sits around every screen, so no epic invents its own: the navigation, with where account and settings live, then one page of each kind the product has (a list, a detail, a form), named with the product's own nouns from the initiative. Show it at the phone viewport too. Rebuild until the user says the shell is agreed. A product with a single screen skips this step.
 
-6. **Point at it.** Add this section to the project's `CLAUDE.md` (or `AGENTS.md`):
+6. **Write `DESIGN.md`** at the repo root, in the shape [DESIGN-FORMAT.md](DESIGN-FORMAT.md) gives. Check every text and background pair for WCAG AA contrast in each theme and fix the tokens before writing them down.
+
+7. **Point at it.** Add this section to the project's `CLAUDE.md` (or `AGENTS.md`):
 
    ```markdown
    ### Design
@@ -39,10 +41,10 @@ Run it once per product, right after `/scope-decomposer`. With a `DESIGN.md` alr
    `DESIGN.md` is the product's look: tokens, type, components, do's and don'ts. Read it before building or reviewing anything people see.
    ```
 
-7. **Brief the Design system epic.** It is the epic that turns `DESIGN.md` into code, and it blocks every epic that builds screens. Write its Brief in `/brief`'s template:
-   - **Must have**: `DESIGN.md`'s tokens, exactly, in the theme file, in each theme; the shared components `DESIGN.md` lists; the preview screen kept as a dev-only route, the living reference; the lint guard in [LINT.md](LINT.md), running in CI.
+8. **Brief the Design system epic.** It is the epic that turns `DESIGN.md` into code, and it blocks every epic that builds screens. Write its Brief in `/brief`'s template:
+   - **Must have**: `DESIGN.md`'s tokens, exactly, in the theme file, in each theme; the shared components `DESIGN.md` lists; the shell as layout components every page is built inside; the preview screen kept as a dev-only route, the living reference; the lint guard in [LINT.md](LINT.md), running in CI; the **capture recipe**, `docs/agents/design-capture.md` (how to start the app from a fresh checkout with seeded data, sign in as a seeded person, and screenshot a route in each theme and viewport), proven on the preview route; and, when the project runs the agent loop, a `.sandcastle/sandbox-setup.sh` that starts what the app needs, so the loop's design critic can photograph screens in its sandbox.
    - **Must not**: a page styling its own one-off where a shared component exists.
 
    Then ask `/brief`'s mode question and set its labels as `/brief` does. With no such epic (a product that already has screens), say what one would hold and suggest `/scope-decomposer <initiative>` to add it.
 
-8. **Capture and hand off.** Keep the looks as the prototype skill says (a `prototype/brand` branch, out of main) and commit `DESIGN.md` and the pointer the way this project lands changes. Report the look in three lines, then the next step: `/brief` for the first epic, and `/product-design <epic>` for each epic labelled `needs-design`.
+9. **Capture and hand off.** Keep the looks as the prototype skill says (a `prototype/brand` branch, out of main) and commit `DESIGN.md` and the pointer the way this project lands changes. Report the look in three lines, then the next step: `/brief` for the first epic, and `/product-design <epic>` for each epic labelled `needs-design`.

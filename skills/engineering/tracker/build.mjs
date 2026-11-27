@@ -219,7 +219,7 @@ const MANUAL_STATUS = {
 const EPIC_STATUS = {
   done: "Done",
   brief: "Needs your brief",
-  design: "Needs your design (/product-design)",
+  design: "Needs design",
   spec: "Spec waits for your approval",
   held: "Planned; held until blockers finish",
   waiting: "Waiting on earlier epics",
@@ -248,11 +248,15 @@ const TICKET_STATUS = {
 
 const tickets = issues.filter(isTicket).map((i) => {
   const epic = epicOf(i);
+  // The loop builds nothing under a needs-design epic: a ticket it would
+  // otherwise take next waits for the design, like one with an open blocker.
+  const designHold = ticketStatus(i) === "queued" && !!epic && has(epic, "needs-design");
   return {
     number: i.number,
     title: i.title,
     url: i.url,
-    status: ticketStatus(i),
+    status: designHold ? "blocked" : ticketStatus(i),
+    designHold,
     human: has(i, "ready-for-human"),
     epic: epic?.number ?? null,
     what: ["bug", "enhancement", "needs-scoping", "needs-info", "wontfix"].find((w) => has(i, w)) ?? null,
@@ -492,6 +496,7 @@ const html = `<!doctype html>
   --text: #1c1c1a; --muted: #6b6b66; --link: #2c5fb3;
   --you: #c62a1f; --you-soft: #fdeceb;
   --review: #c62a1f; --review-soft: #fdeceb;
+  --design: #b3267a; --design-soft: #fbe8f3;
   --working: #2c5fb3; --working-soft: #e8effa;
   --queued: #7a3fb8; --queued-soft: #f3ecfb;
   --blocked: #7a7a73; --blocked-soft: #efefea;
@@ -505,6 +510,7 @@ const html = `<!doctype html>
     --text: #ecece8; --muted: #9b9b94; --link: #8db4f2;
     --you: #ff6b61; --you-soft: #3d1a17;
     --review: #ff6b61; --review-soft: #3d1a17;
+    --design: #f28cc5; --design-soft: #3a1a2c;
     --working: #8db4f2; --working-soft: #1b2638;
     --queued: #c99ae8; --queued-soft: #2f2238;
     --blocked: #9b9b94; --blocked-soft: #2a2a27;
@@ -617,6 +623,9 @@ details.spec > .spec { border: 0; padding: 0; margin: 10px 0 0; }
 .chip.you, .chip.review { background: var(--you); border-left-color: var(--you); color: #fff; font-weight: 600; }
 .chip.you .cn, .chip.review .cn { color: #fff; opacity: .85; }
 .chip .you-tag { flex: 0 0 auto; font-size: 10.5px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; padding: 0 5px; border-radius: 4px; background: #fff; color: var(--you); }
+/* Pink means design: the epic's screens are yours to agree before anything is planned or built on it. */
+.ep.designing { border-color: var(--design); box-shadow: 0 0 0 1.5px var(--design); }
+.ep.designing .ep-status { color: #fff; background: var(--design); }
 .ep.needs-you { border-color: var(--you); box-shadow: 0 0 0 1.5px var(--you); }
 .ep.yours .ep-status { color: #fff; background: var(--you); }
 .ep.stub { --c: var(--blocked); border-style: dashed; border-top-width: 1px; padding: 8px 10px; opacity: .9; }
@@ -678,7 +687,8 @@ details.ep.done-ep > summary .ok { margin-left: auto; font-size: 12px; font-weig
 @media (max-width: 600px) { .hitl .sub, .hitl ul, .hitl .noitems, .hitl details summary { margin-left: 0; } }
 .pill.task { color: var(--you); background: var(--you-soft); }
 .pill.backlog { color: var(--backlog); background: var(--backlog-soft); }
-.pill.brief, .pill.design, .pill.spec { color: var(--queued); background: var(--queued-soft); }
+.pill.brief, .pill.spec { color: var(--queued); background: var(--queued-soft); }
+.pill.design { color: var(--design); background: var(--design-soft); }
 .pill.merge { color: var(--you); background: var(--you-soft); }
 .pill.manual { color: var(--you); background: transparent; border: 1px solid var(--you); padding-top: 0; padding-bottom: 0; }
 .pill.area { color: var(--muted); background: transparent; border: 1px solid var(--border); padding-top: 0; padding-bottom: 0; font-weight: 500; }
@@ -939,7 +949,7 @@ function renderSuites() {
 renderSuites();
 
 // ---- Roadmap
-const EPIC_COLORS = { done: 'done', brief: 'you', design: 'you', spec: 'you', merge: 'you', held: 'blocked', waiting: 'blocked', planning: 'queued', building: 'working', ready: 'queued', backlog: 'backlog' };
+const EPIC_COLORS = { done: 'done', brief: 'you', design: 'design', spec: 'you', merge: 'you', held: 'blocked', waiting: 'blocked', planning: 'queued', building: 'working', ready: 'queued', backlog: 'backlog' };
 // A manual epic's colour and wording say it's the person's: nothing on it is the agent's turn.
 const MANUAL_COLORS = { planning: 'you', building: 'you', ready: 'you' };
 const epicColor = (e) => (e.manual && MANUAL_COLORS[e.status]) || EPIC_COLORS[e.status];
@@ -1017,7 +1027,7 @@ function chipsOf(ts, hideDone, row) {
     .sort((a, b) => LANE_ORDER.indexOf(a.status) - LANE_ORDER.indexOf(b.status) || a.number - b.number);
   return shown.length ? '<div class="chips' + (row ? ' row' : '') + '">' + shown.map((t) => {
     const k = t.status === 'dropped' ? 'done' : t.status;
-    const tip = '#' + t.number + ' ' + t.title + ' (' + DATA.ticketStatus[t.status] + (t.openBlockers.length ? '; waits on #' + t.openBlockers.join(', #') : '') + ')';
+    const tip = '#' + t.number + ' ' + t.title + ' (' + DATA.ticketStatus[t.status] + (t.openBlockers.length ? '; waits on #' + t.openBlockers.join(', #') : '') + (t.designHold ? '; waits for its epic to be designed' : '') + ')';
     const mine = k === 'you' || k === 'review' ? '<span class="you-tag">' + (k === 'review' ? 'Review' : 'You') + '</span>' : '';
     return '<a class="chip ' + k + '" style="--k:var(--' + k + ');--ks:var(--' + k + '-soft)" href="' + t.url + '" target="_blank" title="' + esc(tip) + '">' + mine + '<span class="cn">#' + t.number + '</span><span class="ct">' + esc(t.title) + '</span></a>';
   }).join('') + '</div>' : '';
@@ -1110,10 +1120,10 @@ function renderRoadmap() {
       return '<details class="ep done-ep" id="ep-' + e.number + '" style="--c:var(--done);--cs:var(--done-soft)"' + (openDone.has(e.number) ? ' open' : '') + '>' +
         '<summary><a class="n" href="' + e.url + '" target="_blank">#' + e.number + '</a><span>' + esc(e.title) + areaPill(e) + vPill + '</span><span class="ok">✓ Done' + (e.total ? ' · ' + e.total + ' tickets' : '') + '</span></summary>' +
         chips + '</details>';
-    // Outlined red when anything in it waits on you; its status is filled red only when the epic itself does (brief, spec, merge).
+    // Outlined red when anything in it waits on you; its status is filled red only when the epic itself does (brief, spec, merge). An epic to design is pink instead.
     const needsYou = c === 'you' || e.counts.you + e.counts.review > 0;
     const after = e.openBlockers.map((n) => ref(n) + (epicByNum[n] && laterVersion(e, epicByNum[n]) ? ' <span class="warn" title="A later version blocks this epic: fix the version or the dependency">' + esc(epicByNum[n].version) + '!</span>' : ''));
-    return '<div class="ep' + (needsYou ? ' needs-you' : '') + (c === 'you' ? ' yours' : '') + '" id="ep-' + e.number + '" style="--c:var(--' + c + ');--cs:var(--' + c + '-soft)">' +
+    return '<div class="ep' + (c === 'design' ? ' designing' : '') + (needsYou ? ' needs-you' : '') + (c === 'you' ? ' yours' : '') + '" id="ep-' + e.number + '" style="--c:var(--' + c + ');--cs:var(--' + c + '-soft)">' +
       '<div class="ep-title"><a class="n" href="' + e.url + '" target="_blank">#' + e.number + '</a><span>' + esc(e.title) + areaPill(e) + manualPill(e) + vPill + '</span></div>' +
       '<span class="ep-status">' + esc(epicStatusText(e)) + '</span>' +
       (e.total ? '<div class="ep-meta">' + e.done + ' of ' + e.total + ' tickets done' + (e.counts.you + e.counts.review ? ' · ' + (e.counts.you + e.counts.review) + ' need you' : '') + '</div><div class="bar"><i style="width:' + pct + '%"></i></div>' : '') +
@@ -1220,6 +1230,7 @@ function epicGraph(epicNum) {
 // Two keys, one for epics and one for tickets: what each colour asks of you.
 const EPIC_KEY = [
   ['you', 'Red', 'Needs you', 'its brief, its spec to approve, or its finished PR to merge. An epic outlined in red has a ticket waiting on you.'],
+  ['design', 'Pink', 'Needs design', 'its screens are yours to agree, in /product-design. Nothing under it is planned or built until then.'],
   ['working', 'Blue', 'Building', 'agents are building its tickets.'],
   ['queued', 'Purple', 'Planning', 'agents are planning it, or plan it next.'],
   ['blocked', 'Grey', 'Waiting', 'on earlier epics: it starts when they finish.'],
@@ -1230,7 +1241,7 @@ const TICKET_KEY = [
   ['working', 'Blue', 'Agent on it', 'an agent is building or fixing it now.'],
   ['queued', 'Purple', 'Agent next', 'queued; the loop takes it on its own.'],
   ['triage', 'Amber', 'Not sorted', 'waiting for triage to say what it is and who acts.'],
-  ['blocked', 'Grey', 'Waiting', 'on another ticket first. Hover it to see which.'],
+  ['blocked', 'Grey', 'Waiting', 'on another ticket first, or on its epic to be designed. Hover it to see which.'],
   ['done', 'Green', 'Done', 'closed, struck through.'],
   ['backlog', 'Grey', 'Backlog', 'parked for later; always last in a list.'],
 ];

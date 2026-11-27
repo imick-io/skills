@@ -153,7 +153,7 @@ else {
   group("agent:asked (a question the loop waits on; answer with a comment)", live.filter((i) => is(i, "agent:asked")));
   group("specs to approve (add spec-approved, or comment what to change)", live.filter((i) => spec(i) && is(i, "ready-for-human") && !is(i, "spec-approved")));
   group("epics to brief (/brief)", live.filter((i) => is(i, "epic") && is(i, "needs-briefing")));
-  group("epics to design (/product-design; the loop plans nothing on them until the design is agreed)", live.filter((i) => is(i, "epic") && is(i, "needs-design") && !is(i, "needs-briefing")));
+  group("epics to design (/product-design; the loop plans and builds nothing on them until the design is agreed)", live.filter((i) => is(i, "epic") && is(i, "needs-design") && !is(i, "needs-briefing")));
   group("ready-for-human (other)", live.filter((i) => is(i, "ready-for-human") && !spec(i) && !is(i, "needs-briefing") && !is(i, "needs-design") && !is(i, "agent:asked")));
   group("ready-for-review", live.filter((i) => is(i, "ready-for-review")));
   group("needs-scoping (/scope-decomposer)", live.filter((i) => is(i, "needs-scoping")));
