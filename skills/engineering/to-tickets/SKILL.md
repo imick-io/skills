@@ -51,7 +51,7 @@ When the repo has a `test-suites/` folder (read its `README.md`), it holds the s
 
 - title `Run <name>`, body: the suite file's path, its `command`, `takes` and `runs-via`, and "Runs last, on the finished epic branch; green closes it, red files bugs under this epic"
 - **blocked by every other ticket in the batch**, so it runs once the epic's code is complete
-- labelled `suite-run`, with `ready-for-agent` (or `ready-for-human` when `runs-via` is `human`)
+- labelled `suite-run`, with `ready-for-agent` (or `ready-for-human` and `human-step` when `runs-via` is `human`)
 
 A Run ticket doesn't count in the batch's shape; say it beside it ("+ 1 suite run: android-e2e, ~40 min"). Skip suites the slices don't reach, and say which you skipped and why in the quiz: the loop checks the epic's real diff before it opens the PR and adds a Run ticket you missed, so a wrong call here costs a run, not a bug on `main`.
 
@@ -76,7 +76,7 @@ Iterate until the user approves the breakdown.
 Publish the approved tickets. **How** depends on the tracker `/setup-imick-skills` configured; the tickets are the same either way, only the shape of the blocking edges changes:
 
 - **Local files** → write one file per ticket under `.scratch/<feature-slug>/issues/<NN>-<slug>.md`, numbered from `01` in dependency order (blockers first). Each file's "Blocked by" lists the numbers/titles it depends on. Use the per-ticket file template below: one ticket per file, never a single combined file.
-- **A real issue tracker (GitHub, Linear, …)** → publish one issue per ticket in dependency order (blockers first) so each ticket's blocking edges can reference real identifiers. Use the platform's native blocking / sub-issue relationship where it has one; otherwise set each ticket's "Blocked by" to the blocking issues. Apply the `ready-for-agent` triage label unless instructed otherwise; the tickets are agent-grabbable by construction. A Run ticket (step 3b) also gets `suite-run`, and is published last, blocked by every other ticket.
+- **A real issue tracker (GitHub, Linear, …)** → publish one issue per ticket in dependency order (blockers first) so each ticket's blocking edges can reference real identifiers. Use the platform's native blocking / sub-issue relationship where it has one; otherwise set each ticket's "Blocked by" to the blocking issues. Apply the `ready-for-agent` triage label unless instructed otherwise. A ticket only a person can do (a device session, an account to open, a key to create, a go-live run) is a **human step**: label it `ready-for-human` and `human-step` instead, and start its body with `**Needs you:** <the one decision or action, in a line>` and how long it takes, so the tracker shows it as their planned step, not as stuck work. For the others, the tickets are agent-grabbable by construction. A Run ticket (step 3b) also gets `suite-run`, and is published last, blocked by every other ticket.
 
 Work the **frontier**: any ticket whose blockers are all done. For a purely linear chain that means top to bottom.
 

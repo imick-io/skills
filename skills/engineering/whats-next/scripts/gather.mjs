@@ -154,7 +154,11 @@ else {
   group("specs to approve (add spec-approved, or comment what to change)", live.filter((i) => spec(i) && is(i, "ready-for-human") && !is(i, "spec-approved")));
   group("epics to brief (/brief)", live.filter((i) => is(i, "epic") && is(i, "needs-briefing")));
   group("epics to design (/product-design; the loop plans and builds nothing on them until the design is agreed)", live.filter((i) => is(i, "epic") && is(i, "needs-design") && !is(i, "needs-briefing")));
-  group("ready-for-human (other)", live.filter((i) => is(i, "ready-for-human") && !spec(i) && !is(i, "needs-briefing") && !is(i, "needs-design") && !is(i, "agent:asked")));
+  const yours = (i) => is(i, "ready-for-human") && !spec(i) && !is(i, "epic") && !is(i, "needs-briefing") && !is(i, "needs-design") && !is(i, "agent:asked");
+  const step = (i) => is(i, "human-step") || is(i, "suite-run") || is(i, "needs-scoping");
+  group("stuck (ready-for-human: an agent stopped and handed it over; its last comment opens with what it needs)", live.filter((i) => yours(i) && !step(i)));
+  group("your steps (ready-for-human + human-step: planned as yours from the start; nothing stopped on them unless they block something)", live.filter((i) => yours(i) && step(i)));
+  group("ready-for-human (epics)", live.filter((i) => is(i, "ready-for-human") && is(i, "epic") && !is(i, "needs-briefing") && !is(i, "needs-design") && !is(i, "agent:asked")));
   group("ready-for-review", live.filter((i) => is(i, "ready-for-review")));
   group("needs-scoping (/scope-decomposer)", live.filter((i) => is(i, "needs-scoping")));
   group("needs-triage (/triage)", live.filter((i) => is(i, "needs-triage")), 5);

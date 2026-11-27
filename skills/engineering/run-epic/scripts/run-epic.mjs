@@ -383,7 +383,7 @@ You are run by \`/run-epic\`: the agent loop's pipeline, inside a Claude Code se
     if (swap) argv.push("--remove-label", swap);
     if (!t.labels.includes(LABEL.human)) argv.push("--add-label", LABEL.human);
     gh(...argv);
-    gh("issue", "comment", String(n), "--body", `${AI_NOTE}\n\nHanded to a person by /run-epic: ${reason}\n\nThe branch \`${t.branch}\` keeps any work; \`/claim ${n}\` resumes it.`);
+    gh("issue", "comment", String(n), "--body", `${AI_NOTE}\n\n**Needs you:** ${reason}\n\nHanded to a person by /run-epic.\n\nThe branch \`${t.branch}\` keeps any work; \`/claim ${n}\` resumes it.`);
     run("git", ["worktree", "remove", "--force", wtPath(n)]);
     const tracker = syncTracker();
     const slack = await notify("alert", `#${n} ${t.title} handed to a person: ${reason} https://github.com/${repo}/issues/${n}`);

@@ -159,8 +159,9 @@ function step(n) {
     return agent(`resolve the conflicts between \`${branchOf(e)}\` and main, then close ${t(i)}`, `git merge origin/main\` on \`${branchOf(e)}`, undefined, true);
   }
   if (is(i, "ready-for-human")) {
+    if (is(i, "human-step")) return you(`do ${t(i)} (your step, planned as yours)`, link(n), gist(n));
     if (unblocks(e ?? i) && !e?.labels.some((l) => l.name === "manual")) return agent(`decide ${t(i)} on your behalf (${mode} mode)`, link(n), undefined, true);
-    return you(`do or decide ${t(i)} (ready-for-human)`, link(n), gist(n));
+    return you(`unstick ${t(i)}: an agent stopped on it (ready-for-human)`, link(n), gist(n));
   }
   if (is(i, "ready-for-review")) return you(`review ${t(i)}`, link(n));
   if (is(i, "needs-info")) return you(`answer the question on ${t(i)} (needs-info), or get the reporter to`, link(n), gist(n));

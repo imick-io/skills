@@ -38,6 +38,8 @@ Read the tracker doc, `docs/agents/triage-labels.md` for the label strings, and 
    | **Can't reproduce** | `needs-info` + `ready-for-human` (replacing `bug`) | the reporter if a collaborator, else the area's default person | What was tried (browser, accounts, variations) and specific questions for the reporter |
    | **Works as intended** | `wontfix` + `ready-for-human` (replacing `bug`) | the area's default person | Why, with evidence; a person confirms and closes it |
 
+   A comment that leaves the bug with a person (`ready-for-human`) starts with `**Needs you:** <the one decision or action, in a line>`: the tracker shows that line beside the ticket.
+
    **Fixed** means, by branch:
    - **`fix/` branch**: commit the regression test and the fix, push, and open a PR whose body says `Fixes #<n>` (call the Skill tool with "pr" for its shape). Merging the PR closes the issue.
    - **Epic branch**: commit there and push; there is no separate PR. The fix has landed, so close the issue with the comment, linking the commit.

@@ -20,7 +20,7 @@ When a line needs a closer look before you can rank it (a last log ending in an 
 Take the highest rungs first. A rung with nothing on it is skipped.
 
 1. **Broken**: setup missing (no `docs/agents/issue-tracker.md` → `/setup-imick-skills`); `.sandcastle/.env` or a required key missing; Docker down while the loop is meant to run; an epic stuck in `agent:planning` with no loop running (remove the label so the next pass retries); a last log ending in a failure or a usage limit.
-2. **The loop waits on you**: `agent:asked` (answer with a comment on the issue), specs to approve, `ready-for-human` items. Order them by what they block: an item that blocks open issues comes before one that blocks nothing.
+2. **The loop waits on you**: `agent:asked` (answer with a comment on the issue), specs to approve, then `ready-for-human` items: the **stuck** ones first (an agent stopped on them), then **your steps** (`human-step`: planned as yours, urgent only when they block something). Order them by what they block: an item that blocks open issues comes before one that blocks nothing.
 3. **Work the agents can't see**: uncommitted or unpushed changes the loop needs (skills, `.sandcastle/`, `docs/`, `GLOSSARY.md`, `tracker/`). Agents in the sandbox see only what's on the remote.
 4. **The loop is idle with work to do**: not running while the agent queue has tickets or an autopilot epic is unblocked → `npm run agents:awake` (or `-- --once` to watch one pass).
 5. **Review and merge**: `ready-for-review`, and open PRs, epic PRs first; failing checks before green ones.
