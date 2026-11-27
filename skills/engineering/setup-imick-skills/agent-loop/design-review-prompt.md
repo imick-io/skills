@@ -10,7 +10,7 @@ A screen is in scope when the ticket names it, or when the ticket's commits touc
 
 !`git diff --name-only {{BASE}}...{{BRANCH}}`
 
-Run the app as `docs/agents/design-capture.md` says when the project has one; otherwise from its dev script, with `source .sandcastle/sandbox-env` first when that file exists. Sign in as a seeded person and screenshot each screen in scope with `agent-browser` or Playwright, into a folder outside the repo (`/tmp/design-{{ISSUE}}`):
+Run the app as `docs/agents/design-capture.md` says when the project has one; otherwise from its dev script, with `source .sandcastle/sandbox-env` first when that file exists. Sign in as a seeded person and screenshot each screen in scope with `agent-browser` or Playwright, as PNG files into `{{DIR}}` (outside the repo; the loop keeps that folder for the person who reads your findings), named `<screen>.<state>.<viewport>.<theme>.png` in lowercase with dashes:
 
 - each state the seed data can reach: loaded, empty, error, read-only, each step of a multi-step flow,
 - desktop and phone width in the light theme,

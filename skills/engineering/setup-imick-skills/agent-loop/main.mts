@@ -244,6 +244,12 @@ const DESIGN_ROUNDS = Number(process.env.AGENTS_DESIGN_ROUNDS ?? 3);
 const DESIGN_FILES = (process.env.AGENTS_DESIGN_FILES ?? "*.tsx,*.jsx,*.vue,*.svelte,*.astro,*.css,*.scss")
   .split(",").map((g) => g.trim()).filter(Boolean);
 const NOT_SCREENS = ["*.test.*", "*.spec.*", "*.stories.*"];
+// Each round's screenshots are copied out of the sandbox to this folder, on
+// the loop's machine only (never committed), so you can see what the critic saw.
+const DESIGN_SHOTS = ".sandcastle/design";
+// Marks a design hand-back's comment. Fast mode's unblocking may send the
+// first one back to the agents; from the second on, the ticket waits for you.
+const DESIGN_HAND_BACK = "<!-- design-hand-back -->";
 const LIMIT_SLEEP_MINUTES = Number(process.env.AGENTS_LIMIT_SLEEP_MINUTES ?? 60);
 const MAX_PARALLEL = Number(process.env.AGENTS_MAX_PARALLEL ?? 3);
 // Where a sandbox on a branch runs. "bind" (the default) bind-mounts its
@@ -869,6 +875,16 @@ async function work(t: Ticket, epicPath?: string) {
     // The design critic's findings are on the issue; the work stays on the
     // branch, and a rebuild after the person's answer starts from it.
     gh("issue", "edit", String(t.number), "--remove-label", whoLabel(t), "--add-label", LABEL.human);
+    // Fast mode would answer a ready-for-human ticket and send it back to be
+    // built, three more rounds each time. It gets one such retry: a second
+    // design hand-back is asked of you, and waits for your comment.
+    const issue = ghJson<{ labels: { name: string }[]; comments: { body: string }[] }>("issue", "view", String(t.number), "--json", "labels,comments");
+    const handBacks = issue.comments.filter((c) => c.body.includes(DESIGN_HAND_BACK)).length;
+    if (handBacks > 1 && unblocks(t.epic ? t.epic.mode : modeOf(issue.labels.map((l) => l.name)))) {
+      try { gh("label", "create", LABEL.asked, "--color", "fbca04", "--force"); } catch { /* exists */ }
+      gh("issue", "edit", String(t.number), "--add-label", LABEL.asked);
+      await ask(`#${t.number} failed its design review again (${handBacks} hand-backs): the loop won't retry it by itself. Your call: ${issueUrl(t.number)}`);
+    }
     release(t, handBack);
     cleared(`build#${t.number}`);
     syncTracker();
@@ -993,6 +1009,26 @@ function designVerdict(stdout: string): DesignReview | undefined {
 const findingsMd = (findings: DesignReview["findings"]) =>
   findings.map((f, i) => `${i + 1}. **${f.severity}** · ${f.screen}\n   - What: ${f.issue}\n   - Fix: ${f.fix}`).join("\n");
 
+// The round's pictures, from the sandbox's /tmp to DESIGN_SHOTS on the host:
+// as one archive on stdout, which works whether or not the worktree is
+// mounted. Returns the host folder, or nothing when there were none; a failed
+// copy never holds the ticket up.
+async function keepPictures(box: sandcastle.Sandbox, t: Ticket, round: number): Promise<string | undefined> {
+  const from = `/tmp/design-${t.number}/round-${round}`;
+  const to = `${DESIGN_SHOTS}/${t.number}/round-${round}`;
+  try {
+    const out = await box.exec(`[ -d ${from} ] && tar -czf - -C ${from} . | base64 | tr -d '\\n'`);
+    if (out.exitCode !== 0 || !out.stdout.trim()) return undefined;
+    mkdirSync(to, { recursive: true });
+    if (!existsSync(`${DESIGN_SHOTS}/.gitignore`)) writeFileSync(`${DESIGN_SHOTS}/.gitignore`, "*\n");
+    execFileSync("tar", ["-xzf", "-", "-C", to], { input: Buffer.from(out.stdout.trim(), "base64"), stdio: ["pipe", "ignore", "pipe"] });
+    return to;
+  } catch (error) {
+    log(`#${t.number}: round ${round}'s pictures weren't copied out: ${String(error).slice(0, 200)}`);
+    return undefined;
+  }
+}
+
 function changesScreens(t: Ticket): boolean {
   if (DESIGN_ROUNDS < 1 || t.kind === "suite" || !tryGit(undefined, "cat-file", "-e", `${t.branch}:DESIGN.md`)) return false;
   const files = git(undefined, "diff", "--name-only", `${t.epic ? t.epic.branch : "origin/main"}...${t.branch}`).split("\n").filter(Boolean);
@@ -1013,13 +1049,15 @@ async function designRounds(box: sandcastle.Sandbox, t: Ticket): Promise<string 
       maxIterations: 1,
       agent: sandcastle.claudeCode(PLANNER), // judging pictures is the planner's kind of work; the fixes are the worker's
       promptFile: "./.sandcastle/design-review-prompt.md",
-      promptArgs: { ...args, ROUND: String(round), PREVIOUS: open.length ? findingsMd(open) : "None: this is the first round." },
+      promptArgs: { ...args, ROUND: String(round), DIR: `/tmp/design-${t.number}/round-${round}`, PREVIOUS: open.length ? findingsMd(open) : "None: this is the first round." },
     });
     const review = designVerdict(critic.stdout);
+    const kept = await keepPictures(box, t, round);
+    const pictures = kept ? `\n\nThe pictures are on the machine that ran the loop, in \`${kept}/\`.` : "";
     if (!review?.shots) {
       const why = review?.summary ?? "the design critic gave no verdict";
       if (open.length) {
-        comment(t.number, `## Design review\n\nRound ${round} couldn't photograph the screens (${why}), with these findings from round ${round - 1} unchecked:\n\n${findingsMd(open)}\n\nThe work is on \`${t.branch}\`. Relabel \`${whoLabel(t)}\` once you've looked.`);
+        comment(t.number, `## Design review\n\nRound ${round} couldn't photograph the screens (${why}), with these findings from round ${round - 1} unchecked:\n\n${findingsMd(open)}\n\nThe work is on \`${t.branch}\`. Relabel \`${whoLabel(t)}\` once you've looked.\n\n${DESIGN_HAND_BACK}`);
         return `design review: round ${round} not photographed, ${open.length} must-fix finding(s) unchecked`;
       }
       comment(t.number, `## Design review\n\nThe screens were **not reviewed**: ${why}. The ticket lands on its code review alone; the epic's verify step looks at its screens.`);
@@ -1029,12 +1067,12 @@ async function designRounds(box: sandcastle.Sandbox, t: Ticket): Promise<string 
     open = review.findings.filter((f) => f.severity === "must");
     const rest = review.findings.length - open.length;
     if (!open.length) {
-      comment(t.number, `## Design review\n\n**Passed** in round ${round}, on ${review.shots} screenshot(s)${rest ? `, with ${rest} smaller finding(s) left` : ""}. ${review.summary}${rest ? `\n\n${findingsMd(review.findings)}` : ""}`);
+      comment(t.number, `## Design review\n\n**Passed** in round ${round}, on ${review.shots} screenshot(s)${rest ? `, with ${rest} smaller finding(s) left` : ""}. ${review.summary}${rest ? `\n\n${findingsMd(review.findings)}` : ""}${pictures}`);
       log(`#${t.number}: design passed in round ${round}`);
       return undefined;
     }
     if (round === DESIGN_ROUNDS) {
-      comment(t.number, `## Design review\n\n**${open.length} must-fix finding(s) still open** after ${round} round(s), on ${review.shots} screenshot(s). ${review.summary}\n\n${findingsMd(review.findings)}\n\nThe work is on \`${t.branch}\`. Comment what to do (or fix it there), then relabel \`${whoLabel(t)}\`.`);
+      comment(t.number, `## Design review\n\n**${open.length} must-fix finding(s) still open** after ${round} round(s), on ${review.shots} screenshot(s). ${review.summary}\n\n${findingsMd(review.findings)}\n\nThe work is on \`${t.branch}\`. Comment what to do (or fix it there), then relabel \`${whoLabel(t)}\`.${pictures}\n\n${DESIGN_HAND_BACK}`);
       return `design review: ${open.length} must-fix finding(s) open after ${round} round(s)`;
     }
     log(`#${t.number}: design round ${round}: ${open.length} must, ${rest} should; fixing`);

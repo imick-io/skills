@@ -44,6 +44,9 @@ components:
 ## Layout
 <page width, grid, spacing rhythm, density, the phone viewport>
 
+## Shell and navigation
+<what the navigation holds and where account and settings live; the page kinds (list, detail, form) and what each is made of; how the shell folds on a phone>
+
 ## Elevation and depth
 <borders or shadows, and which surfaces float>
 
