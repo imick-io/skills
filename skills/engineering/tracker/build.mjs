@@ -248,11 +248,15 @@ const TICKET_STATUS = {
 
 const tickets = issues.filter(isTicket).map((i) => {
   const epic = epicOf(i);
+  // The loop builds nothing under a needs-design epic: a ticket it would
+  // otherwise take next waits for the design, like one with an open blocker.
+  const designHold = ticketStatus(i) === "queued" && !!epic && has(epic, "needs-design");
   return {
     number: i.number,
     title: i.title,
     url: i.url,
-    status: ticketStatus(i),
+    status: designHold ? "blocked" : ticketStatus(i),
+    designHold,
     human: has(i, "ready-for-human"),
     epic: epic?.number ?? null,
     what: ["bug", "enhancement", "needs-scoping", "needs-info", "wontfix"].find((w) => has(i, w)) ?? null,
@@ -1017,7 +1021,7 @@ function chipsOf(ts, hideDone, row) {
     .sort((a, b) => LANE_ORDER.indexOf(a.status) - LANE_ORDER.indexOf(b.status) || a.number - b.number);
   return shown.length ? '<div class="chips' + (row ? ' row' : '') + '">' + shown.map((t) => {
     const k = t.status === 'dropped' ? 'done' : t.status;
-    const tip = '#' + t.number + ' ' + t.title + ' (' + DATA.ticketStatus[t.status] + (t.openBlockers.length ? '; waits on #' + t.openBlockers.join(', #') : '') + ')';
+    const tip = '#' + t.number + ' ' + t.title + ' (' + DATA.ticketStatus[t.status] + (t.openBlockers.length ? '; waits on #' + t.openBlockers.join(', #') : '') + (t.designHold ? '; waits for its epic to be designed' : '') + ')';
     const mine = k === 'you' || k === 'review' ? '<span class="you-tag">' + (k === 'review' ? 'Review' : 'You') + '</span>' : '';
     return '<a class="chip ' + k + '" style="--k:var(--' + k + ');--ks:var(--' + k + '-soft)" href="' + t.url + '" target="_blank" title="' + esc(tip) + '">' + mine + '<span class="cn">#' + t.number + '</span><span class="ct">' + esc(t.title) + '</span></a>';
   }).join('') + '</div>' : '';
@@ -1110,7 +1114,7 @@ function renderRoadmap() {
       return '<details class="ep done-ep" id="ep-' + e.number + '" style="--c:var(--done);--cs:var(--done-soft)"' + (openDone.has(e.number) ? ' open' : '') + '>' +
         '<summary><a class="n" href="' + e.url + '" target="_blank">#' + e.number + '</a><span>' + esc(e.title) + areaPill(e) + vPill + '</span><span class="ok">✓ Done' + (e.total ? ' · ' + e.total + ' tickets' : '') + '</span></summary>' +
         chips + '</details>';
-    // Outlined red when anything in it waits on you; its status is filled red only when the epic itself does (brief, spec, merge).
+    // Outlined red when anything in it waits on you; its status is filled red only when the epic itself does (brief, design, spec, merge).
     const needsYou = c === 'you' || e.counts.you + e.counts.review > 0;
     const after = e.openBlockers.map((n) => ref(n) + (epicByNum[n] && laterVersion(e, epicByNum[n]) ? ' <span class="warn" title="A later version blocks this epic: fix the version or the dependency">' + esc(epicByNum[n].version) + '!</span>' : ''));
     return '<div class="ep' + (needsYou ? ' needs-you' : '') + (c === 'you' ? ' yours' : '') + '" id="ep-' + e.number + '" style="--c:var(--' + c + ');--cs:var(--' + c + '-soft)">' +
@@ -1219,7 +1223,7 @@ function epicGraph(epicNum) {
 }
 // Two keys, one for epics and one for tickets: what each colour asks of you.
 const EPIC_KEY = [
-  ['you', 'Red', 'Needs you', 'its brief, its spec to approve, or its finished PR to merge. An epic outlined in red has a ticket waiting on you.'],
+  ['you', 'Red', 'Needs you', 'its brief, its screens to design (/product-design; nothing under it is planned or built until then), its spec to approve, or its finished PR to merge. An epic outlined in red has a ticket waiting on you.'],
   ['working', 'Blue', 'Building', 'agents are building its tickets.'],
   ['queued', 'Purple', 'Planning', 'agents are planning it, or plan it next.'],
   ['blocked', 'Grey', 'Waiting', 'on earlier epics: it starts when they finish.'],
@@ -1230,7 +1234,7 @@ const TICKET_KEY = [
   ['working', 'Blue', 'Agent on it', 'an agent is building or fixing it now.'],
   ['queued', 'Purple', 'Agent next', 'queued; the loop takes it on its own.'],
   ['triage', 'Amber', 'Not sorted', 'waiting for triage to say what it is and who acts.'],
-  ['blocked', 'Grey', 'Waiting', 'on another ticket first. Hover it to see which.'],
+  ['blocked', 'Grey', 'Waiting', 'on another ticket first, or on its epic to be designed. Hover it to see which.'],
   ['done', 'Green', 'Done', 'closed, struck through.'],
   ['backlog', 'Grey', 'Backlog', 'parked for later; always last in a list.'],
 ];
