@@ -347,6 +347,7 @@ const LABEL = {
   manual: process.env.AGENTS_LABEL_MANUAL ?? "manual",
   briefing: "needs-briefing",
   design: "needs-design",
+  humanStep: "human-step",
   backlog: process.env.AGENTS_LABEL_BACKLOG ?? "backlog",
   suiteRun: "suite-run",
   triage: "needs-triage",
@@ -1131,7 +1132,7 @@ async function designRounds(box: sandcastle.Sandbox, t: Ticket): Promise<string 
       const why = review?.summary ?? "the design critic gave no verdict";
       if (open.length) {
         recordDesign(t, round, "handed back", { shots: 0, findings: open, summary: `Round ${round} couldn't photograph the screens (${why}); these findings from round ${round - 1} are unchecked.` });
-        comment(t.number, `## Design review\n\nRound ${round} couldn't photograph the screens (${why}), with these findings from round ${round - 1} unchecked:\n\n${findingsMd(open)}\n\nThe work is on \`${t.branch}\`. Relabel \`${whoLabel(t)}\` once you've looked.\n\n${DESIGN_HAND_BACK}`);
+        comment(t.number, `**Needs you:** look at this ticket's screens: ${open.length} must-fix design finding(s) were never re-checked.\n\n## Design review\n\nRound ${round} couldn't photograph the screens (${why}), with these findings from round ${round - 1} unchecked:\n\n${findingsMd(open)}\n\nThe work is on \`${t.branch}\`. Relabel \`${whoLabel(t)}\` once you've looked.\n\n${DESIGN_HAND_BACK}`);
         return `design review: round ${round} not photographed, ${open.length} must-fix finding(s) unchecked`;
       }
       recordDesign(t, round, "not reviewed", undefined, why);
@@ -1149,7 +1150,7 @@ async function designRounds(box: sandcastle.Sandbox, t: Ticket): Promise<string 
     }
     if (round === DESIGN_ROUNDS) {
       recordDesign(t, round, "handed back", review);
-      comment(t.number, `## Design review\n\n**${open.length} must-fix finding(s) still open** after ${round} round(s), on ${review.shots} screenshot(s). ${review.summary}\n\n${findingsMd(review.findings)}\n\nThe work is on \`${t.branch}\`. Comment what to do (or fix it there), then relabel \`${whoLabel(t)}\`.${pictures}\n\n${DESIGN_HAND_BACK}`);
+      comment(t.number, `**Needs you:** say what to do about ${open.length} must-fix design finding(s) still open after ${round} round(s).\n\n## Design review\n\n**${open.length} must-fix finding(s) still open** after ${round} round(s), on ${review.shots} screenshot(s). ${review.summary}\n\n${findingsMd(review.findings)}\n\nThe work is on \`${t.branch}\`. Comment what to do (or fix it there), then relabel \`${whoLabel(t)}\`.${pictures}\n\n${DESIGN_HAND_BACK}`);
       return `design review: ${open.length} must-fix finding(s) open after ${round} round(s)`;
     }
     recordDesign(t, round, "fixing", review);
@@ -1812,7 +1813,9 @@ const followSchema = z.object({ outcome: z.enum(["kept", "updated", "followup"])
 // with their own flow, and an epic waiting for its /brief.
 // A Run ticket handed to a person (a suite only they can run, or a run that
 // couldn't start) is theirs to run, not a question to answer.
-const NOT_UNBLOCKED = [LABEL.backlog, LABEL.manual, LABEL.epic, LABEL.spec, LABEL.map, LABEL.briefing, LABEL.unblocking, LABEL.suiteRun, "initiative", "needs-scoping"];
+// A `human-step` was written for a person from the start (a device session, an
+// account, a go-live run): there is no question in it for fast mode to answer.
+const NOT_UNBLOCKED = [LABEL.humanStep, LABEL.backlog, LABEL.manual, LABEL.epic, LABEL.spec, LABEL.map, LABEL.briefing, LABEL.unblocking, LABEL.suiteRun, "initiative", "needs-scoping"];
 const labelledEpics = () => [LABEL.fast, LABEL.supersonic].some((label) => {
   try {
     return ghJson<unknown[]>("issue", "list", "--state", "open", "--label", label, "--json", "number", "--limit", "1").length > 0;

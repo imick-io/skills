@@ -16,6 +16,7 @@ A triaged issue carries one **what** role and one **who** role; `needs-triage` m
 | `ready-for-agent-debugging` | who | `ready-for-agent-debugging` | An agent reproduces the bug next |
 | `ready-for-agent` | who | `ready-for-agent` | An agent builds it from the brief |
 | `ready-for-human` | who | `ready-for-human` | A person acts next |
+| `human-step` | who | `human-step` | Beside `ready-for-human`: a step planned for a person from the start (a device session, an account, a suite only they can run). Without it, `ready-for-human` on a ticket means an agent stopped and handed it over |
 | `ready-for-review` | who | `ready-for-review` | A fix PR waits for a person's review |
 | `needs-briefing` | (planning) | `needs-briefing` | An epic waiting for its `/brief` |
 | `needs-design` | (planning) | `needs-design` | An epic whose screens are agreed with a person first: nothing is planned or built on it until `/product-design` reaches "we agree" |

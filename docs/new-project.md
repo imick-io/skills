@@ -141,6 +141,7 @@ An epic's PR is ready when **`epic-gate`** is green: no open tickets, no `mocks/
 | `ready-for-human` assigned to you | You're the next step | Read the comment: answer, decide, or do the task |
 | `spec` + `ready-for-human` | An autopilot spec to review | Approve (`spec-approved`) or comment |
 | `needs-briefing` | Epics waiting for a brief | `/brief` |
+| `ready-for-human` + `human-step` | Your planned steps (a device session, an account, a suite only you can run): teal on the tracker | Do them when they're due; they turn red once they hold work up |
 | `needs-design` | Epics waiting for their screens to be agreed | `/product-design #<epic>` |
 | `ready-for-review` | A fix PR waiting | Review and merge |
 | A green `epic-gate` | An epic ready to ship | Review and merge |

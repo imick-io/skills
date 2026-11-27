@@ -2423,9 +2423,17 @@
       "name": "ready-for-human",
       "role": "human",
       "kind": "Who",
-      "means": "A person acts next",
+      "means": "A person acts next. On a ticket without human-step it means stuck: an agent stopped and handed it over",
       "setBy": "Any skill or the loop",
       "next": "The assignee acts; in fast mode the loop tries first"
+    },
+    {
+      "name": "human-step",
+      "role": "human",
+      "kind": "Who",
+      "means": "Beside ready-for-human: a step planned as yours from the start (a device session, an account, a suite only you can run). Teal on the tracker, red once work has stopped on it",
+      "setBy": "/to-tickets",
+      "next": "You, when it's due; the loop never tries it"
     },
     {
       "name": "ready-for-review",
