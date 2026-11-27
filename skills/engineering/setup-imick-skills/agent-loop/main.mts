@@ -43,7 +43,7 @@
 // /brief): chart and resolve their wayfinder map, write the spec for your
 // review, and cut tickets once you approve it. Other epics are planned by hand.
 // An epic labelled `needs-design` waits for /product-design: its screens are
-// agreed with you before anything is planned on it.
+// agreed with you before anything is planned or built on it.
 // An epic labelled `manual` is planned AND built by hand: the loop never
 // plans it, never queues or unblocks its tickets whatever they're labelled,
 // and never opens or verifies its PR.
@@ -65,7 +65,8 @@
 //      an epic branch off the epic branch, after `main` is merged into it;
 //      the others branch off `main`.
 //   4. Execute + review: one Docker sandbox per ticket, running /implement or
-//      /debug-and-fix, then a review pass. Each ticket is its own job: the
+//      /debug-and-fix, then design rounds when the ticket changes what people
+//      see (see DESIGN_ROUNDS), then a review pass. Each ticket is its own job: the
 //      pass doesn't wait for it, and the loop passes again as soon as one
 //      lands, so a free slot is refilled without waiting for a whole batch.
 //   5. Land: epic tickets merge into the epic branch and close; the others
@@ -233,6 +234,16 @@ const EPIC_GATE = process.env.AGENTS_EPIC_GATE === "ticket" ? "ticket" : "epic";
 const CHECK_STALE_MINUTES = 60;
 const VERIFY_SKIP = (process.env.AGENTS_VERIFY_SKIP ?? ".sandcastle/**,.claude/**,docs/**,*.md,tracker/**")
   .split(",").map((g) => g.trim()).filter(Boolean);
+// Design rounds, as in /run-design-epic: in a project with a DESIGN.md, a
+// ticket whose diff touches AGENTS_DESIGN_FILES is photographed and judged by
+// an agent that didn't build it, between its build and its code review. A
+// `must` finding sends it to a fix and another round, up to
+// AGENTS_DESIGN_ROUNDS (0 turns the rounds off); one still open after the last
+// round hands the ticket to a person, its work kept on its branch.
+const DESIGN_ROUNDS = Number(process.env.AGENTS_DESIGN_ROUNDS ?? 3);
+const DESIGN_FILES = (process.env.AGENTS_DESIGN_FILES ?? "*.tsx,*.jsx,*.vue,*.svelte,*.astro,*.css,*.scss")
+  .split(",").map((g) => g.trim()).filter(Boolean);
+const NOT_SCREENS = ["*.test.*", "*.spec.*", "*.stories.*"];
 const LIMIT_SLEEP_MINUTES = Number(process.env.AGENTS_LIMIT_SLEEP_MINUTES ?? 60);
 const MAX_PARALLEL = Number(process.env.AGENTS_MAX_PARALLEL ?? 3);
 // Where a sandbox on a branch runs. "bind" (the default) bind-mounts its
@@ -404,7 +415,7 @@ const container = (branch?: string, opts: { merges?: boolean } = {}) =>
 // Helpers
 // ---------------------------------------------------------------------------
 
-type Epic = { number: number; title: string; branch: string; milestone: string; mode: Mode; manual: boolean; areas: string[] };
+type Epic = { number: number; title: string; branch: string; milestone: string; mode: Mode; manual: boolean; design: boolean; areas: string[] };
 // A `suite` ticket runs one of test-suites/'s slow suites on the finished
 // branch instead of building: it's queued by its `ready-for-agent` label like
 // a build, and told apart by `suite-run`.
@@ -498,7 +509,7 @@ function epicFor(milestone?: string): Epic | undefined {
   const branch = epic?.body.match(/`(epic\/[^`]+)`/)?.[1];
   const labels = epic?.labels.map((l) => l.name) ?? [];
   const mode = modeOf(labels);
-  const found = epic && branch ? { number: epic.number, title: epic.title, branch, milestone, mode, manual: labels.includes(LABEL.manual), areas: areasOf(epic.labels) } : undefined;
+  const found = epic && branch ? { number: epic.number, title: epic.title, branch, milestone, mode, manual: labels.includes(LABEL.manual), design: labels.includes(LABEL.design), areas: areasOf(epic.labels) } : undefined;
   epicCache.set(milestone, found);
   return found;
 }
@@ -518,6 +529,7 @@ function readyTickets(): Ticket[] {
       const epic = epicFor(issue.milestone?.title);
       if (!inScope(issue.number, epic, issue.labels)) continue;
       if (epic?.manual) continue; // a hand-run epic: its tickets are never the loop's, whatever their labels
+      if (epic?.design) continue; // screens not agreed yet: nothing under it is built until /product-design takes the label off
       if (epic && EPIC_GATE === "epic" && epicBlocked(epic)) continue;
       const suite = kind === "build" && labels.includes(LABEL.suiteRun);
       tickets.push({
@@ -843,13 +855,23 @@ async function plan(ready: Ticket[], busy: Ticket[], free: number): Promise<Tick
 // One ticket, from build to landed (or handed back).
 async function work(t: Ticket, epicPath?: string) {
   let commits: number;
+  let handBack: string | undefined;
   try {
-    commits = await build(t);
+    ({ commits, handBack } = await build(t));
   } catch (error) {
     freeBranch(t.branch); // a sandbox that died leaves its worktree; the branch and its commits stay
     release(t, String(error).slice(0, 300));
     if (isLimit(String(error))) limitReason = String(error);
     else await strike(`build#${t.number}`, `Building #${t.number}`, String(error));
+    return;
+  }
+  if (handBack) {
+    // The design critic's findings are on the issue; the work stays on the
+    // branch, and a rebuild after the person's answer starts from it.
+    gh("issue", "edit", String(t.number), "--remove-label", whoLabel(t), "--add-label", LABEL.human);
+    release(t, handBack);
+    cleared(`build#${t.number}`);
+    syncTracker();
     return;
   }
   try {
@@ -953,7 +975,81 @@ function runOnHost(t: Ticket, suite: Suite, sha: string): Promise<Record<string,
   return job;
 }
 
-async function build(t: Ticket): Promise<number> {
+const designSchema = z.object({
+  shots: z.number(),
+  findings: z.array(z.object({ screen: z.string(), severity: z.enum(["must", "should"]), issue: z.string(), fix: z.string() })),
+  summary: z.string(),
+});
+type DesignReview = z.infer<typeof designSchema>;
+// The critic's last <design> tag, or nothing when it gave none that parses.
+function designVerdict(stdout: string): DesignReview | undefined {
+  const raw = [...stdout.matchAll(/<design>([\s\S]*?)<\/design>/g)].at(-1)?.[1].trim().replace(/^```(?:json)?\s*\n([\s\S]*?)\n\s*```$/, "$1");
+  try {
+    return designSchema.parse(JSON.parse(raw ?? ""));
+  } catch {
+    return undefined;
+  }
+}
+const findingsMd = (findings: DesignReview["findings"]) =>
+  findings.map((f, i) => `${i + 1}. **${f.severity}** · ${f.screen}\n   - What: ${f.issue}\n   - Fix: ${f.fix}`).join("\n");
+
+function changesScreens(t: Ticket): boolean {
+  if (DESIGN_ROUNDS < 1 || t.kind === "suite" || !tryGit(undefined, "cat-file", "-e", `${t.branch}:DESIGN.md`)) return false;
+  const files = git(undefined, "diff", "--name-only", `${t.epic ? t.epic.branch : "origin/main"}...${t.branch}`).split("\n").filter(Boolean);
+  return files.some((f) => DESIGN_FILES.some((g) => matchesGlob(f, g)) && !NOT_SCREENS.some((g) => matchesGlob(f, g)));
+}
+
+// The design rounds of one built ticket, in its sandbox. Returns why the
+// ticket goes to a person, or nothing when it goes on to the code review:
+// passed, or not photographed (the app wouldn't run in the sandbox), which is
+// said on the issue and left to verify-epic.
+async function designRounds(box: sandcastle.Sandbox, t: Ticket): Promise<string | undefined> {
+  if (!changesScreens(t)) return undefined;
+  const args = { ISSUE: String(t.number), TITLE: t.title, BRANCH: t.branch, BASE: t.epic ? `origin/${t.epic.branch}` : "origin/main" };
+  let open: DesignReview["findings"] = [];
+  for (let round = 1; round <= DESIGN_ROUNDS; round++) {
+    const critic = await box.run({
+      name: `#${t.number} design ${round}`,
+      maxIterations: 1,
+      agent: sandcastle.claudeCode(PLANNER), // judging pictures is the planner's kind of work; the fixes are the worker's
+      promptFile: "./.sandcastle/design-review-prompt.md",
+      promptArgs: { ...args, ROUND: String(round), PREVIOUS: open.length ? findingsMd(open) : "None: this is the first round." },
+    });
+    const review = designVerdict(critic.stdout);
+    if (!review?.shots) {
+      const why = review?.summary ?? "the design critic gave no verdict";
+      if (open.length) {
+        comment(t.number, `## Design review\n\nRound ${round} couldn't photograph the screens (${why}), with these findings from round ${round - 1} unchecked:\n\n${findingsMd(open)}\n\nThe work is on \`${t.branch}\`. Relabel \`${whoLabel(t)}\` once you've looked.`);
+        return `design review: round ${round} not photographed, ${open.length} must-fix finding(s) unchecked`;
+      }
+      comment(t.number, `## Design review\n\nThe screens were **not reviewed**: ${why}. The ticket lands on its code review alone; the epic's verify step looks at its screens.`);
+      log(`#${t.number}: design not reviewed: ${why.slice(0, 200)}`);
+      return undefined;
+    }
+    open = review.findings.filter((f) => f.severity === "must");
+    const rest = review.findings.length - open.length;
+    if (!open.length) {
+      comment(t.number, `## Design review\n\n**Passed** in round ${round}, on ${review.shots} screenshot(s)${rest ? `, with ${rest} smaller finding(s) left` : ""}. ${review.summary}${rest ? `\n\n${findingsMd(review.findings)}` : ""}`);
+      log(`#${t.number}: design passed in round ${round}`);
+      return undefined;
+    }
+    if (round === DESIGN_ROUNDS) {
+      comment(t.number, `## Design review\n\n**${open.length} must-fix finding(s) still open** after ${round} round(s), on ${review.shots} screenshot(s). ${review.summary}\n\n${findingsMd(review.findings)}\n\nThe work is on \`${t.branch}\`. Comment what to do (or fix it there), then relabel \`${whoLabel(t)}\`.`);
+      return `design review: ${open.length} must-fix finding(s) open after ${round} round(s)`;
+    }
+    log(`#${t.number}: design round ${round}: ${open.length} must, ${rest} should; fixing`);
+    await box.run({
+      name: `#${t.number} design fix ${round}`,
+      maxIterations: 20,
+      agent: sandcastle.claudeCode(WORKER),
+      promptFile: "./.sandcastle/design-fix-prompt.md",
+      promptArgs: { ...args, ROUND: String(round), FINDINGS: findingsMd(review.findings) },
+    });
+  }
+  return undefined;
+}
+
+async function build(t: Ticket): Promise<{ commits: number; handBack?: string }> {
   // A Run ticket tests the branch it was cut from: the epic's, or main.
   const base = t.epic ? t.epic.branch : "main";
   const sha = t.kind === "suite" ? git(undefined, "rev-parse", `origin/${base}`) : "";
@@ -971,7 +1067,9 @@ async function build(t: Ticket): Promise<number> {
       promptFile: t.kind === "bug" ? "./.sandcastle/bug-prompt.md" : t.kind === "suite" ? "./.sandcastle/suite-prompt.md" : "./.sandcastle/implement-prompt.md",
       promptArgs: { ISSUE: String(t.number), TITLE: t.title, BRANCH: t.branch, ...suiteArgs },
     });
-    if (t.kind === "suite" || !unlanded(t)) return unlanded(t); // a run has nothing to review
+    if (t.kind === "suite" || !unlanded(t)) return { commits: unlanded(t) }; // a run has nothing to review
+    const handBack = await designRounds(box, t);
+    if (handBack) return { commits: unlanded(t), handBack };
     await box.run({
       name: `#${t.number} review`,
       maxIterations: 1,
@@ -979,7 +1077,7 @@ async function build(t: Ticket): Promise<number> {
       promptFile: "./.sandcastle/review-prompt.md",
       promptArgs: { ISSUE: String(t.number), BRANCH: t.branch, BASE: t.epic ? `origin/${t.epic.branch}` : "origin/main" },
     });
-    return unlanded(t);
+    return { commits: unlanded(t) };
   } finally {
     await box.close();
   }
@@ -1104,7 +1202,7 @@ function planJobs(): PlanJob[] {
     const branch = e.body.match(/`(epic\/[^`]+)`/)?.[1];
     if (!milestone || !branch) continue;
     if (EPIC_GATE === "epic" && Number(gh("api", `repos/${repo}/issues/${e.number}`, "--jq", ".issue_dependencies_summary.blocked_by // 0")) > 0) continue;
-    const epic = { number: e.number, title: e.title, branch, milestone, mode: modeOf(e.labels.map((l) => l.name)), manual: false, areas: areasOf(e.labels) }; // manual epics were skipped above
+    const epic = { number: e.number, title: e.title, branch, milestone, mode: modeOf(e.labels.map((l) => l.name)), manual: false, design: false, areas: areasOf(e.labels) }; // manual and needs-design epics were skipped above
     const items = ghJson<Issue[]>("issue", "list", "--state", "all", "--milestone", milestone, "--json", "number,title,state,body,labels,comments", "--limit", "300")
       .filter((i) => i.number !== e.number && !isConflictTicket(i));
     const specs = items.filter((i) => i.state === "OPEN" && isSpec(i.labels.map((l) => l.name), i.body));
@@ -1959,6 +2057,7 @@ function scopeNotes(): string[] {
       else if (e.state !== "OPEN") notes.push(`epic #${n} is closed`);
       else if (labelled(e, LABEL.manual)) notes.push(`epic #${n} is \`${LABEL.manual}\`: the loop never touches it (/run-epic builds it in a session)`);
       else if (labelled(e, LABEL.backlog)) notes.push(`epic #${n} is in the backlog: nothing under it runs until the label goes`);
+      else if (labelled(e, LABEL.design)) notes.push(`epic #${n} is \`${LABEL.design}\`: nothing under it is planned or built until its screens are agreed (/product-design ${n})`);
     } catch { notes.push(`#${n} wasn't found`); }
   }
   for (const n of SCOPE_TICKETS ?? []) {
@@ -1972,6 +2071,7 @@ function scopeNotes(): string[] {
       else if (labelled(i, LABEL.backlog)) waits("is in the backlog");
       else if (i.assignees.length) waits(`is assigned to ${i.assignees.map((a) => `@${a.login}`).join(", ")}: unassign it to queue it`);
       else if (epic?.manual) waits(`is under \`${LABEL.manual}\` epic #${epic.number}: the loop never builds it (/run-ticket does)`);
+      else if (epic?.design) waits(`is under \`${LABEL.design}\` epic #${epic.number}: it's built once the screens are agreed (/product-design ${epic.number})`);
       else if (Number(gh("api", `repos/${repo}/issues/${n}`, "--jq", ".issue_dependencies_summary.blocked_by // 0")) > 0) waits("is blocked: it starts when its blockers close");
       else if (epic && EPIC_GATE === "epic" && epicBlocked(epic)) waits(`waits for epic #${epic.number}, which other epics block`);
     } catch { notes.push(`#${n} wasn't found`); }
