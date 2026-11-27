@@ -9,9 +9,9 @@
     {
       "name": "imick-skills",
       "source": "./",
-      "description": "iMick's agent skills: plan-work, do-work, review-work and code-quality reviews.",
+      "description": "iMick's agent skills: planning from idea to tickets, an agent loop that builds them, automatic issue triage, a tracker page, and code review.",
       "category": "engineering",
-      "keywords": ["engineering", "skills", "planning", "code-review"]
+      "keywords": ["engineering", "skills", "planning", "code-review", "triage", "agent-loop", "issue-tracker"]
     }
   ]
 }

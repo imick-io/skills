@@ -1,6 +1,6 @@
 # Skills
 
-My agent skills, straight from my `.claude/skills` directory.
+My agent skills: the ones I wrote and the ones I use from other authors, with the workflows and agent loop built on them.
 
 ## Documentation
 
@@ -162,9 +162,9 @@ Then it checks again. With nothing ready it sleeps (45 minutes by default); on a
 **Install** with `/setup-imick-skills` (Section F) in your project. By hand:
 
 1. `npx @ai-hero/sandcastle init --agent claude-code --sandbox docker --template blank --issue-tracker github-issues --create-label false --build-image false --install-template-deps false`
-2. Replace the scaffold's `main.mts`/`main.ts` and `prompt.md` with the files in [`setup-imick-skills/agent-loop/`](skills/engineering/setup-imick-skills/agent-loop/) (the loop, four prompts, a Dockerfile with a headless Chromium, and `.env.example`), all into `.sandcastle/`.
+2. Replace the scaffold's `main.mts`/`main.ts` and `prompt.md` with the files in [`setup-imick-skills/agent-loop/`](skills/engineering/setup-imick-skills/agent-loop/) (the loop `main.mts` and the `isolated-docker.mts` it imports, every `*-prompt.md`, a Dockerfile with a headless Chromium, and `.env.example`), all into `.sandcastle/`.
 3. `npm i -D @ai-hero/sandcastle zod` (Node 22.6 or later runs the loop's TypeScript itself; no `tsx`), and add the scripts `"agents": "node --env-file-if-exists=.sandcastle/.env .sandcastle/main.mts"`, `"agents:awake": "caffeinate -i npm run agents --"` (the trailing `--` lets npm pass flags like `--epic=12` through; pnpm and yarn don't need it) and `"agents:stop": "touch .sandcastle/STOP"`; add `STOP` to `.sandcastle/.gitignore`. `npm run agents:stop` lets a running loop finish its in-flight tickets and exit, so you can close the machine once its Slack message arrives.
-4. Commit the skills the loop calls into `.claude/skills/` (`implement`, `tdd`, `code-review`, `debug-and-fix`, `diagnosing-bugs` and what they use): agents see only the repo.
+4. Commit the skills the loop calls into `.claude/skills/` (`implement`, `tdd`, `code-review`, `debug-and-fix`, `diagnosing-bugs`, `verify-epic` and what they use; `/setup-imick-skills` lists the extra ones for autopilot planning, fast mode and triage inside the loop): agents see only the repo.
 5. Start Docker, then build the image: `npx sandcastle docker build-image`.
 
 **Secrets** go in `.sandcastle/.env` (gitignored): `cp .sandcastle/.env.example .sandcastle/.env`, then fill each from your clipboard so no line break or masking sneaks in:
@@ -172,7 +172,8 @@ Then it checks again. With nothing ready it sleeps (45 minutes by default); on a
 ```bash
 # Claude token (from `claude setup-token`, run in a regular terminal)
 sed -i '' "s|^CLAUDE_CODE_OAUTH_TOKEN=.*|CLAUDE_CODE_OAUTH_TOKEN=$(pbpaste | tr -d '[:space:]')|" .sandcastle/.env
-# A fine-grained GitHub token for this repo only: Issues read/write, Metadata read
+# A fine-grained GitHub token for this repo only: Issues read/write, Metadata read,
+# and for verify-epic: Commit statuses read/write, Deployments read, Pull requests read
 sed -i '' "s|^GH_TOKEN=.*|GH_TOKEN=$(pbpaste | tr -d '[:space:]')|" .sandcastle/.env
 ```
 

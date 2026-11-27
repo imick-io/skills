@@ -1,0 +1,66 @@
+name: Checks
+
+on:
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - run: npm ci
+
+      - run: npm run check-plugin-version
+
+      # Every script parses: the skills' .mjs helpers, the loop's .mts
+      # templates (Node strips their types), and the sync script.
+      - name: Scripts parse
+        run: |
+          set -euo pipefail
+          git ls-files '*.mjs' '*.mts' | while read -r f; do node --check "$f"; done
+          python3 -m py_compile skills/misc/update-from-upstream/scripts/sync.py
+
+      # SC2016: the workflows grep for literal backticks in single quotes, on purpose.
+      - name: Workflows lint
+        run: |
+          set -euo pipefail
+          bash <(curl -fsSL https://raw.githubusercontent.com/rhysd/actionlint/v1.7.7/scripts/download-actionlint.bash) 1.7.7
+          ./actionlint -ignore 'SC2016'
+
+      # The README tables, plugin.json's skill list, THIRD_PARTY_NOTICES.md and
+      # docs/handbook.json are generated from sources.json; a PR that changes a
+      # skill without regenerating them fails here.
+      - name: Generated files are current
+        run: |
+          set -euo pipefail
+          python3 skills/misc/update-from-upstream/scripts/sync.py regen
+          git diff --exit-code || { echo "::error::Generated files are stale: run 'python3 skills/misc/update-from-upstream/scripts/sync.py regen' and commit the result."; exit 1; }
+
+      # A change to a skill, a shared workflow or the setup templates needs a
+      # changeset (CLAUDE.md). The version PR consumes them, so it is exempt.
+      - name: Changeset present
+        if: github.head_ref != 'changeset-release/main'
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          changed=$(git diff --name-only "$BASE"...HEAD)
+          needs=$(grep -E '^(skills/|\.github/workflows/(triage|epics|token-checks)\.yml$)' <<< "$changed" || true)
+          [ -n "$needs" ] || { echo "No skill, shared workflow or template changed."; exit 0; }
+          added=$(git diff --name-only --diff-filter=A "$BASE"...HEAD -- '.changeset/*.md' | grep -v '^\.changeset/README\.md$' || true)
+          [ -n "$added" ] || { echo "::error::This PR changes skills or shared workflows but adds no changeset: run 'npx changeset'."; exit 1; }

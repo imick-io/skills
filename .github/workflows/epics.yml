@@ -31,6 +31,12 @@ jobs:
       REPO: ${{ github.repository }}
       EVENT: ${{ github.event_name }}
       EPIC_LABEL: ${{ inputs.epic-label }}
+      # Event text reaches the script as variables, never pasted into it: a
+      # milestone titled "User's profile" would otherwise break the quoting.
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+      STATUS_CONTEXT: ${{ github.event.context }}
+      STATUS_SHA: ${{ github.event.sha }}
+      MILESTONE_TITLE: ${{ github.event.issue.milestone.title }}
     steps:
       - name: Evaluate
         run: |
@@ -38,13 +44,13 @@ jobs:
           # Which PRs to evaluate depends on what happened.
           case "$EVENT" in
             pull_request)
-              prs='${{ github.event.pull_request.number }}' ;;
+              prs="$PR_NUMBER" ;;
             status)
-              [ '${{ github.event.context }}' = epic-gate ] && { echo "own status"; exit 0; }
-              prs=$(gh api "repos/$REPO/commits/${{ github.event.sha }}/pulls" --jq '[.[] | select(.state=="open") | .number] | join(" ")') ;;
+              [ "$STATUS_CONTEXT" = epic-gate ] && { echo "own status"; exit 0; }
+              prs=$(gh api "repos/$REPO/commits/$STATUS_SHA/pulls" --jq '[.[] | select(.state=="open") | .number] | join(" ")') ;;
             issues)
               # A ticket closed: re-check its epic's open PR.
-              milestone='${{ github.event.issue.milestone.title }}'
+              milestone="$MILESTONE_TITLE"
               body=$(gh issue list --repo "$REPO" --state all --label "$EPIC_LABEL" --milestone "$milestone" --json body --jq '.[0].body // ""')
               branch=$(grep -oE '`epic/[^`]+`' <<< "$body" | head -1 | tr -d '`' || true)
               [ -n "$branch" ] || { echo "no epic for milestone $milestone"; exit 0; }

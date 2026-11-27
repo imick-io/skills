@@ -327,6 +327,7 @@ const apply = (file) => {
   const done = [], manual = [];
   const agent = skillsDir === ".agents/skills" ? "*" : "claude-code";
   const copyFlag = p.layout === "copies" ? ["--copy"] : [];
+  const hadAgents = existsSync(".agents");
 
   // Skills.
   const chosen = (flag("--skills") ?? "").split(",").filter(Boolean);
@@ -337,9 +338,11 @@ const apply = (file) => {
     if (r.ok && p.layout === "symlinks") relink(name);
     (r.ok ? done : manual).push(r.ok ? `skill ${name} installed` : `skill ${name}: install failed: ${r.err.slice(-300)}`);
   }
-  if (p.layout === "copies" && existsSync(".agents") && !existsSync(".agents/skills/.keep")) {
+  if (p.layout === "copies" && !hadAgents && skillsDir === ".claude/skills" && existsSync(".agents/skills")) {
     // The CLI may have created the universal dir even with --copy; a copies repo doesn't keep it.
-    const stray = readdirSync(".agents/skills").every((n) => lstatSync(join(skillsDir, n)).isSymbolicLink() === false);
+    // Only one this run created, and only when .claude/skills holds a real copy of everything in it.
+    const copied = (n) => { const c = join(skillsDir, n); return existsSync(c) && !lstatSync(c).isSymbolicLink(); };
+    const stray = readdirSync(".agents").every((n) => n === "skills") && readdirSync(".agents/skills").every(copied);
     if (stray) rmSync(".agents", { recursive: true, force: true });
   }
 

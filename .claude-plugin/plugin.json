@@ -1,7 +1,7 @@
 {
   "name": "imick-skills",
   "version": "1.27.0",
-  "description": "iMick's agent skills, including Matt Pocock's engineering and productivity skills.",
+  "description": "iMick's agent skills: original ones, plus skills from Matt Pocock and Cursor.",
   "author": {
     "name": "iMick",
     "url": "https://github.com/imick-io"
