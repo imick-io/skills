@@ -10,7 +10,7 @@
 - **`/brand` settles the shell too.** After the look, you agree the navigation and one page of each kind (list, detail, form), so no epic invents its own; `DESIGN.md` gains a **Shell and navigation** section and the Design system epic builds it as layout components.
 - **The Design system epic makes the screens photographable.** Its must-haves now include the capture recipe (`docs/agents/design-capture.md`) and a `sandbox-setup.sh` that starts the app, which the loop's critic needs.
 - **`needs-design` holds building as well as planning.** The loop no longer builds tickets that already sit under an epic labelled `needs-design` (an epic planned before you chose to design it). Its `--dry-run` says why such a ticket waits.
-- **The tracker's roadmap shows the design hold.** A ticket the loop would take next shows as waiting (grey) while its epic is `needs-design`, with the reason on hover, and the roadmap's key names the design step.
+- **The tracker's roadmap shows the design hold.** An epic labelled `needs-design` has a colour of its own, pink, and reads "Needs design". A ticket the loop would take next shows as waiting (grey) while its epic is `needs-design`, with the reason on hover.
 - The three flowcharts on the handbook page show `/brand` and `/product-design`.
 
 **Existing setups.** Run `/update-imick-skills`: it copies the tracker's `build.mjs`, the loop's `main.mts`, the trimmed `review-prompt.md` and the two new prompts, `design-review-prompt.md` and `design-fix-prompt.md`, into `.sandcastle/`. Then:
