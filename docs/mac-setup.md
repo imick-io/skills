@@ -60,7 +60,7 @@ The loop runs per project (see [Agent loop](../README.md#agent-loop)). On this M
 
 1. Create a GitHub account for the Mac (e.g. `imick-bot`) and invite it as a **collaborator** on each project the Mac works on, nothing else.
 2. On the Mac, log `gh` in **as the bot**: `gh auth login`. The loop pushes branches and opens PRs with this login, so its work is clearly the bot's.
-3. Each project's `.sandcastle/.env` gets the **bot's** fine-grained `GH_TOKEN` (that repo only: Issues read/write, Metadata read) and a Claude token made for this Mac (`claude setup-token`, run in a regular terminal, stored with the clipboard commands from the README).
+3. Each project's `.sandcastle/.env` gets the **bot's** fine-grained `GH_TOKEN` (that repo only: Issues read/write, Metadata read, and for `verify-epic` Commit statuses read/write, Deployments read, Pull requests read) and a Claude token made for this Mac (`claude setup-token`, run in a regular terminal, stored with the clipboard commands from the README).
 
 **Docker Desktop**: install it, then **Settings → General → Start Docker Desktop when you sign in: on**. Give it enough memory for parallel agents (**Resources**: 8 GB or more if the Mac has it).
 
