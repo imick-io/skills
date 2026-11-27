@@ -40,7 +40,7 @@ The human can opt out (the product already runs somewhere, or hosting is the poi
 
 A new product starts with two calls every later epic inherits. Left unasked, the first epic's agent makes them by accident.
 
-- **The stack.** Ask once what the product is built on: the language and framework of each app, the database, auth, the UI library, where it will be hosted. Lead with a recommended stack for this product's shape, so the user can accept it in a word. Record it as an ADR (the domain-modeling skill's format) and in the initiative's **Stack** line; every brief carries it under **Already decided**.
+- **The stack.** Ask once what the product is built on: the language and framework of each app, the database, auth, the UI library, where it will be hosted. Recommend a stack from the idea itself, never from what the user usually builds with: for each choice, the one that fits this product's shape, its reason in a line, and the strongest alternative with what would tip the call. The user knows their habits; the recommendation is there to make them think. Record it as an ADR (the domain-modeling skill's format) and in the initiative's **Stack** line; every brief carries it under **Already decided**.
 - **The look.** A product with screens gets a **Design system** epic: `DESIGN.md`'s tokens, the shared components and the lint guard, in code. It comes right after the epic that makes the app run, and blocks every epic that builds screens. In every mode it is published with `needs-briefing`: `/brand` chooses the look with the user and writes its Brief.
 
 An existing product with screens and no `DESIGN.md` gets the same Design system epic, blocking the new epics that build screens.

@@ -43,7 +43,7 @@ Commit `.claude/skills/`. Update them later with `npx skills@latest update -p`, 
 | B. Triage labels | Keep the defaults |
 | C. Domain docs | Single-context (unless it's a monorepo) |
 | D. Team and areas | The apps and parts, who owns each (`area:app:dashboard` …), each person's GitHub handle; "single area" for a one-person project |
-| E. Automatic triage | Yes if others will file issues; pin `v2` |
+| E. Automatic triage | Yes if others will file issues; pin `v1` |
 | F. Agent loop | Yes |
 | G. Epic PRs | Yes; say where previews live (Vercel → `github-deployments`, Coolify → a URL pattern, none → `local`); confirm making `epic-gate` a required check |
 

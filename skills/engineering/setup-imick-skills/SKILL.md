@@ -86,7 +86,7 @@ On **yes**, ask where it runs:
 
 **GitHub Actions** chosen: ask one more question:
 
-> Pin a released version (`v2`, recommended), or follow `main` (every change to the skills repo applies immediately)?
+> Pin a released version (`v1`, recommended), or follow `main` (every change to the skills repo applies immediately)?
 
 Then, besides the files in step 4:
 

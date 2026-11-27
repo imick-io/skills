@@ -222,13 +222,13 @@ The shared [`epics.yml`](.github/workflows/epics.yml) workflow (installed by `/s
 
 Versions follow [semver](https://semver.org) and are managed with [Changesets](https://github.com/changesets/changesets); see [CHANGELOG.md](CHANGELOG.md) for what changed in each release.
 
-Projects pin the shared workflows and the triage skill to a **major tag** (`@v2`), so a change here reaches them only once it's released. A test repo can follow `@main` to try changes first.
+Projects pin the shared workflows and the triage skill to a **major tag** (`@v1`), so a change here reaches them only once it's released. A test repo can follow `@main` to try changes first.
 
 1. Every change lands through a pull request with a changeset describing it (`npx changeset`): **patch** for fixes, **minor** for new skills or behaviour, **major** for anything that breaks an existing setup.
 2. The release workflow collects pending changesets into a **"chore: version skills"** pull request that bumps the version and writes the changelog.
-3. Merging it releases: the workflow tags `vX.Y.Z`, publishes a GitHub Release, and moves `v2` to it. Projects on `@v2` pick it up on their next run.
+3. Merging it releases: the workflow tags `vX.Y.Z`, publishes a GitHub Release, and moves `v1` to it. Projects on `@v1` pick it up on their next run.
 
-A **major** release (`v3.0.0`) starts a new `v3` tag and leaves `v2` where it was. Move each project when it's ready: change `@v2` to `@v3` in its `.github/workflows/triage.yml`, or re-run `/setup-imick-skills`.
+A **major** release (`v2.0.0`) starts a new `v2` tag and leaves `v1` where it was. Move each project when it's ready: change `@v1` to `@v2` in its `.github/workflows/triage.yml`, or re-run `/setup-imick-skills`.
 
 ## License
 
