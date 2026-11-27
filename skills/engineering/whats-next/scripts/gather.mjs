@@ -153,7 +153,8 @@ else {
   group("agent:asked (a question the loop waits on; answer with a comment)", live.filter((i) => is(i, "agent:asked")));
   group("specs to approve (add spec-approved, or comment what to change)", live.filter((i) => spec(i) && is(i, "ready-for-human") && !is(i, "spec-approved")));
   group("epics to brief (/brief)", live.filter((i) => is(i, "epic") && is(i, "needs-briefing")));
-  group("ready-for-human (other)", live.filter((i) => is(i, "ready-for-human") && !spec(i) && !is(i, "needs-briefing") && !is(i, "agent:asked")));
+  group("epics to design (/product-design; the loop plans nothing on them until the design is agreed)", live.filter((i) => is(i, "epic") && is(i, "needs-design") && !is(i, "needs-briefing")));
+  group("ready-for-human (other)", live.filter((i) => is(i, "ready-for-human") && !spec(i) && !is(i, "needs-briefing") && !is(i, "needs-design") && !is(i, "agent:asked")));
   group("ready-for-review", live.filter((i) => is(i, "ready-for-review")));
   group("needs-scoping (/scope-decomposer)", live.filter((i) => is(i, "needs-scoping")));
   group("needs-triage (/triage)", live.filter((i) => is(i, "needs-triage")), 5);
@@ -166,7 +167,7 @@ else {
   if (epics.length) {
     gh.push(`- open epics, in build order: ${epics.length}`);
     for (const e of epics.slice(0, 8)) {
-      const mode = is(e, "autopilot") ? "autopilot" : is(e, "needs-briefing") ? "needs brief" : "manual";
+      const mode = (is(e, "autopilot") ? "autopilot" : is(e, "needs-briefing") ? "needs brief" : "manual") + (is(e, "needs-design") ? ", needs design" : "");
       gh.push(line(e, ` [${mode}${is(e, "agent:planning") ? ", planning" : ""}]`));
     }
   }

@@ -36,6 +36,15 @@ The exception is a product whose core **is** the integration (a Stripe Connect m
 
 The human can opt out (the product already runs somewhere, or hosting is the point); record it in the initiative's Destination.
 
+## A new product: stack and look
+
+A new product starts with two calls every later epic inherits. Left unasked, the first epic's agent makes them by accident.
+
+- **The stack.** Ask once what the product is built on: the language and framework of each app, the database, auth, the UI library, where it will be hosted. Lead with a recommended stack for this product's shape, so the user can accept it in a word. Record it as an ADR (the domain-modeling skill's format) and in the initiative's **Stack** line; every brief carries it under **Already decided**.
+- **The look.** A product with screens gets a **Design system** epic: `DESIGN.md`'s tokens, the shared components and the lint guard, in code. It comes right after the epic that makes the app run, and blocks every epic that builds screens. In every mode it is published with `needs-briefing`: `/brand` chooses the look with the user and writes its Brief.
+
+An existing product with screens and no `DESIGN.md` gets the same Design system epic, blocking the new epics that build screens.
+
 ## Supersonic: one interview
 
 When the project's loop runs supersonic (`AGENTS_MODE=supersonic` in `.sandcastle/.env`), or the user asks for it, this interview also **briefs every epic**, so no `/brief` session follows and the loop starts planning straight away. Say so at the start of the interview.
@@ -43,6 +52,8 @@ When the project's loop runs supersonic (`AGENTS_MODE=supersonic` in `.sandcastl
 Don't run `/brief`'s interview once per epic. By the time the epics pass the four tests, the interview has covered most of what a brief holds: who it's for, the must-haves, the no-gos, the calls already made. **Draft** each epic's Brief from that, in `/brief`'s template (`.claude/skills/brief/SKILL.md`, step 4), ask only what a draft is missing, and apply `/brief`'s scope check (a must-have that doesn't fit its epic is a new epic). Show the drafts with the proposal; with many epics, confirm them three or four at a time, in build order. End with `/brief`'s last question: "Anything else you already know you want or don't want, on any epic?"
 
 An epic the user wants to brief later, or can't yet, is published the usual way (`needs-briefing`); the others don't wait for it.
+
+Ask once, for the whole set, which epics' screens the user wants to **design first**, recommending every epic that adds a new screen or flow. Those carry `needs-design`: `/product-design` builds the real screens with the user, and the loop plans nothing on that epic until they agree. Supersonic assumes many calls; what the product looks like is not one of them.
 
 An epic the user will plan **and build** by hand (with other tools or models) gets the `manual` label instead of a brief and `autopilot`: the loop never plans it, never queues or unblocks its tickets, and never opens its PR. Ask once, for the whole set, whether any epic is theirs to run that way.
 
@@ -52,16 +63,16 @@ The input is an idea in prose, an issue (often labelled `needs-scoping` by triag
 
 1. **Survey the code.** If the repo already has an app, dispatch a subagent to map what exists in the areas the idea touches, using the domain glossary. Epics cover only what's missing, named with the code's terms. Wait for its report before step 2.
 
-2. **Interview.** Call the Skill tool twice, for "grilling" and "domain-modeling". Grill **breadth-first and high-level**: the initiative's destination, the whole product surface, the boundaries between parts, which area owns each part, what comes first, and what is ruled out. For a new product, ask once whether v1 is **local first** (see above), recommending yes, and which services, if any, are the core integration. Ask once which **version** the initiative is for (`v1`, `v1.1`, `v2`…; the tracker's roadmap shows one version at a time): the next one when existing epics already carry a `version:*` label, `v1` for a first product. Every epic gets it; an epic the user names as later work gets its own. Stop at boundaries; a question about how one part works belongs to that epic's map. Done when every part of the idea is either an epic that passes the four tests, a Not-yet-scoped entry, or out of scope.
+2. **Interview.** Call the Skill tool twice, for "grilling" and "domain-modeling". Grill **breadth-first and high-level**: the initiative's destination, the whole product surface, the boundaries between parts, which area owns each part, what comes first, and what is ruled out. For a new product, ask once whether v1 is **local first** (see above), recommending yes, and which services, if any, are the core integration; then settle its **stack** and whether it has screens (see "A new product: stack and look"). Ask once which **version** the initiative is for (`v1`, `v1.1`, `v2`…; the tracker's roadmap shows one version at a time): the next one when existing epics already carry a `version:*` label, `v1` for a first product. Every epic gets it; an epic the user names as later work gets its own. Stop at boundaries; a question about how one part works belongs to that epic's map. Done when every part of the idea is either an epic that passes the four tests, a Not-yet-scoped entry, or out of scope.
 
 3. **Propose** the decomposition in one message: the initiative's destination, saying whether v1 is local first; the epics in build order, each with destination, area, what it covers, its blockers, and any human-only step it needs; Not yet scoped (Go live, until the human decides to go live); Out of scope. On a local-first initiative, a product epic blocked by infrastructure or needing a human-only step is a decomposition error: move that work to Go live or to a local stand-in before proposing. Revise with the user until they confirm.
 
 4. **Publish**, in this order:
    1. The **initiative**. From an existing issue, keep its text, append the sections below, and swap any triage labels (`needs-scoping`, `ready-for-human`) for `initiative`. Label it with every area its epics use, and assign the owner the user named.
-   2. Each **epic**, in build order: its milestone (next free repo-wide number), the issue (labels `epic`, `needs-briefing` and `ready-for-human` + its area + its version as `version:<v>` (`gh label create version:<v> --color 0e8a16 --force` the first time), in its milestone, assigned to the area's default person, linked under the initiative). On **supersonic**, a briefed epic carries its `## Brief` after the Destination and the labels `epic`, `autopilot` + its area (plus `supersonic` when the project isn't supersonic as a whole), without `needs-briefing` or `ready-for-human`. An epic the user runs by hand carries `epic`, `manual`, `needs-briefing`, `ready-for-human` + its area, and its body says so under the Destination; its tickets, when cut, get `ready-for-human`.
+   2. Each **epic**, in build order: its milestone (next free repo-wide number), the issue (labels `epic`, `needs-briefing` and `ready-for-human` + its area + its version as `version:<v>` (`gh label create version:<v> --color 0e8a16 --force` the first time), in its milestone, assigned to the area's default person, linked under the initiative). On **supersonic**, a briefed epic carries its `## Brief` after the Destination and the labels `epic`, `autopilot` + its area (plus `supersonic` when the project isn't supersonic as a whole), without `needs-briefing` or `ready-for-human`; one designed first adds `needs-design` (`gh label create needs-design --color 5319e7 --force` the first time) and keeps `ready-for-human`. An epic the user runs by hand carries `epic`, `manual`, `needs-briefing`, `ready-for-human` + its area, and its body says so under the Destination; its tickets, when cut, get `ready-for-human`.
    3. Blocking edges between epics, in a second pass once every epic has an id.
 
-5. **Hand off.** Report what was created, by name with links. On supersonic: "The agent loop plans the briefed epics in build order, starting with <first epic nothing blocks>; you'll hear from it only for what can't be undone, and in its daily digest." Otherwise every epic waits for its brief: "Next, run `/brief` to brief the epics, starting with <first epic nothing blocks> (<milestone title>); each brief ends by choosing manual or autopilot planning."
+5. **Hand off.** Report what was created, by name with links. When a Design system epic was created, the first step is `/brand`: it chooses the look and briefs that epic. Name the epics labelled `needs-design`: each waits for `/product-design`. On supersonic: "The agent loop plans the briefed epics in build order, starting with <first epic nothing blocks>; you'll hear from it only for what can't be undone, and in its daily digest." Otherwise every epic waits for its brief: "Next, run `/brief` to brief the epics, starting with <first epic nothing blocks> (<milestone title>); each brief ends by choosing manual or autopilot planning."
 
 ## Bodies
 
@@ -73,6 +84,8 @@ Initiative:
 <what exists when the whole initiative is done>
 
 **V1:** local first: runs on the developer's machine; hosting and accounts wait for Go live. <or: not local first, and why>
+
+**Stack:** <one line> (<its ADR, linked>)
 
 ## Not yet scoped
 

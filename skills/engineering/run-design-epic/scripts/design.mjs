@@ -112,6 +112,7 @@ const findingsMd = (review) =>
 
 const designRefs = () => {
   const refs = [];
+  if (existsSync("DESIGN.md")) refs.push("`DESIGN.md`, the product's look (tokens, type, components, do's and don'ts)");
   if (existsSync("docs/design")) refs.push("the boards in `docs/design/` (open the files that cover this ticket's screens)");
   refs.push("every reference the ticket links (boards by ID, Mobbin links)", "the epic's body (its rules and direction)");
   return refs.join("; ");

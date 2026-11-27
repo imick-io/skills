@@ -22,14 +22,14 @@ The input is an epic (issue or local path) or a plain description. A description
 1. **Load the epic**: its Destination, Notes and Design section; its map's Decisions so far and its spec, if they exist; `GLOSSARY.md`; the area and owner in `docs/agents/team.md`. The tracker operations are in the tracker doc; if none has been provided, tell the user to run `/setup-imick-skills`.
 2. **Find the phase** in the Design section. No section yet means explore, from scratch. `agreed` or later means the work has moved to tickets: say so and stop unless the user asks to reopen the design.
 3. **Check out the epic branch** named in the epic's body. If it doesn't exist yet, create it from the default branch and tell the user.
-4. **Learn the UI stack**: the routing convention, the design system and component library, how data is fetched, and how the app is run (the `run` skill covers launching).
+4. **Learn the UI stack**: the routing convention, the design system and component library, how data is fetched, and how the app is run (the `run` skill covers launching). The product's look is `DESIGN.md`: with none, and no design system in the code, tell the user `/brand` comes first, and go on only if they choose to design on the stock theme.
 
 ## Explore
 
 Build the mockup **at the feature's real route**, in the app's own stack. It is throwaway in quality, never in location: the productionize pass upgrades it in place.
 
 - **Mock data** lives only in a `mocks/` folder next to the feature, typed in the shape the real API will have, each file headed `// MOCK: replaced by the real API before the epic merges`. Nothing else in the feature invents data.
-- **Design system first.** Compose from the project's components and tokens. You are free to go beyond them when the product calls for it; every time you do, flag it to the user as `New: <what>, not in the design system` so it is approved consciously, and add it to the Design section's **New** list.
+- **Design system first.** Compose from `DESIGN.md` and the project's components and tokens. You are free to go beyond them when the product calls for it; every time you do, flag it to the user as `New: <what>, not in the design system` so it is approved consciously, and add it to the Design section's **New** list.
 - **Open questions get variants.** When the user can't yet say what they want ("calendar grid or list?"), call the Skill tool with "prototype" to build variants, let the user pick, then build the pick into the mockup.
 
 Iterate with the user live: run the dev server, open the route in the browser, and screenshot after each change to check your work before showing it. The user reacts, you edit, the page reloads. Keep going until the user says the design is agreed; that call is theirs alone.

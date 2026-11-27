@@ -4,7 +4,7 @@ The user has said the design is agreed. Turn the mockup into a spec and producti
 
 1. **Freeze the reference.** Screenshot every agreed screen and every state you built. Commit them to the branch `design/NN-<slug>` (the epic's number and slug; for a plain description, `design/<slug>`), a branch that never merges: create it as an orphan holding only the screenshots, using a separate worktree so the epic branch's checkout is untouched, and push it. These screenshots are the acceptance bar every ticket is checked against, so they must outlast the mockup code.
 
-2. **Mark it agreed.** Update the Design section: `**Phase:** agreed`, an **Agreed screenshots** line linking the `design/NN-<slug>` branch, and **Next:** "Writing the UI spec and tickets."
+2. **Mark it agreed.** Update the Design section: `**Phase:** agreed`, an **Agreed screenshots** line linking the `design/NN-<slug>` branch, and **Next:** "Writing the UI spec and tickets." Remove the epic's `needs-design` label, and `ready-for-human` with it: planning can start.
 
 3. **Write the UI spec.** Read the `to-spec` skill's SKILL.md and follow it. Its input is this design: the agreed behaviours from the conversation (rules, interactions, what happens on save, on error, on leaving with unsaved edits), the mockup's routes and the screenshots. Title it `UI spec: <epic>`, label it `spec` (removing the `ready-for-agent` that `to-spec` applies: specs are never built directly), publish it under the epic in its milestone, and link the map's spec when one exists. It stays a separate issue so neither spec grows toward the tracker's size limit.
 

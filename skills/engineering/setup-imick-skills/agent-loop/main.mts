@@ -42,6 +42,8 @@
 // Planning only touches epics labelled `autopilot` (chosen at the end of their
 // /brief): chart and resolve their wayfinder map, write the spec for your
 // review, and cut tickets once you approve it. Other epics are planned by hand.
+// An epic labelled `needs-design` waits for /product-design: its screens are
+// agreed with you before anything is planned on it.
 // An epic labelled `manual` is planned AND built by hand: the loop never
 // plans it, never queues or unblocks its tickets whatever they're labelled,
 // and never opens or verifies its PR.
@@ -321,6 +323,7 @@ const LABEL = {
   autopilot: "autopilot",
   manual: process.env.AGENTS_LABEL_MANUAL ?? "manual",
   briefing: "needs-briefing",
+  design: "needs-design",
   backlog: process.env.AGENTS_LABEL_BACKLOG ?? "backlog",
   suiteRun: "suite-run",
   triage: "needs-triage",
@@ -1089,13 +1092,14 @@ type PlanJob = { epic: Epic; kind: "chart" | "work" | "revise" | "tickets"; map?
 const has = (i: Issue, label: string) => i.labels.some((l) => l.name === label);
 
 // What each autopilot epic needs next. Epics without the `autopilot` label,
-// or still waiting for their brief, are planned by hand and never touched.
+// or still waiting for their brief or their design, are planned by hand and
+// never touched.
 function planJobs(): PlanJob[] {
   const epics = ghJson<Issue[]>("issue", "list", "--state", "open", "--label", LABEL.epic, "--label", LABEL.autopilot, "--json", "number,title,state,body,labels", "--limit", "100");
   const jobs: PlanJob[] = [];
   for (const e of epics) {
     if (!epicInScope(listedEpic(e))) continue;
-    if (has(e, LABEL.planning) || has(e, LABEL.briefing) || has(e, LABEL.backlog) || has(e, LABEL.manual)) continue; // another loop is on it, no brief yet, parked, or hand-run
+    if (has(e, LABEL.planning) || has(e, LABEL.briefing) || has(e, LABEL.design) || has(e, LABEL.backlog) || has(e, LABEL.manual)) continue; // another loop is on it, no brief yet, no agreed design yet, parked, or hand-run
     const milestone = ghJson<{ milestone: { title: string } | null }>("issue", "view", String(e.number), "--json", "milestone").milestone?.title;
     const branch = e.body.match(/`(epic\/[^`]+)`/)?.[1];
     if (!milestone || !branch) continue;

@@ -8,8 +8,10 @@ Commands run in the project's folder unless said otherwise. `/something` means t
 
 ```text
 1. Create the repo, install the skills, run /setup-imick-skills         (once, ~20 min)
-2. /scope-decomposer "<your idea>"            → initiative + epics          (you + agent)
-3. /brief                                      → per epic: intent + manual or autopilot
+2. /scope-decomposer "<your idea>"            → the stack, initiative + epics  (you + agent)
+   /brand                                     → the look, as DESIGN.md       (once, you + agent)
+3. /brief                                      → per epic: intent, design first or not, manual or autopilot
+   /product-design <epic>                     → epics labelled needs-design: agree the screens first
 4. Manual epics: /wayfinder <epic>             Autopilot epics: the loop plans them
 5. Approve specs (label spec-approved)         → tickets
 6. npm run agents                              → agents build, fix, verify
@@ -27,7 +29,7 @@ Commands run in the project's folder unless said otherwise. `/something` means t
 ```bash
 npx skills@latest add imick-io/skills --agent claude-code --copy -y --skill \
   setup-imick-skills ask-imick triage scope-decomposer brief wayfinder dig research grilling \
-  domain-modeling codebase-design prototype product-design to-spec to-tickets implement tdd \
+  domain-modeling codebase-design prototype brand product-design to-spec to-tickets implement tdd \
   code-review debug-and-fix diagnosing-bugs verify-epic
 ```
 
@@ -41,7 +43,7 @@ Commit `.claude/skills/`. Update them later with `npx skills@latest update -p`, 
 | B. Triage labels | Keep the defaults |
 | C. Domain docs | Single-context (unless it's a monorepo) |
 | D. Team and areas | The apps and parts, who owns each (`area:app:dashboard` …), each person's GitHub handle; "single area" for a one-person project |
-| E. Automatic triage | Yes if others will file issues; pin `v1` |
+| E. Automatic triage | Yes if others will file issues; pin `v2` |
 | F. Agent loop | Yes |
 | G. Epic PRs | Yes; say where previews live (Vercel → `github-deployments`, Coolify → a URL pattern, none → `local`); confirm making `epic-gate` a required check |
 
@@ -67,6 +69,8 @@ It writes `docs/agents/*`, the workflows, `.sandcastle/` and the labels. Commit 
 
 A high-level interview, then a proposal of epics in build order. Push back until the cut feels right. It creates an **initiative** issue and the **epics** under it, each with its milestone (`NN: Initiative / Epic`), branch (`epic/NN-slug`), area, and blocking links. Every epic starts labelled `needs-briefing` + `ready-for-human`.
 
+**The stack and the look.** For a new product the interview asks the stack once (it recommends one; the answer becomes an ADR) and, when the product has screens, adds a **Design system** epic ahead of every epic that builds screens. Then run `/brand`: a few questions on who uses it and how it should feel, three radically different looks of one preview screen to react to, and your pick written as `DESIGN.md`. It also briefs the Design system epic, which puts the tokens, the shared components and a lint guard in code. Every screen after that is built from `DESIGN.md` and reviewed against it.
+
 Vague parts land in the initiative's **Not yet scoped** list; run `/scope-decomposer #<initiative>` again later to turn them into epics.
 
 ## 3. Brief each epic
@@ -89,7 +93,7 @@ Brief every epic now, or just before each is planned; either works. To skip a br
 
 **Autopilot epics**: nothing to run. The loop (step 6) charts the map, decides on its own (your brief's lines as given, 75%+ answers directly, the rest after `dig` or marked *assumed*), and writes the spec.
 
-**The UI, either way**: `/product-design #<epic>` builds the real screens on mock data with you, before, during or after the map. Say "we agree" when it looks right: it writes a UI spec and production tickets.
+**The UI, first**: an epic you chose to design first carries `needs-design`, and the loop plans nothing on it until its screens are agreed. `/product-design #<epic>` builds the real screens on mock data with you; say "we agree" when it looks right: it writes a UI spec and production tickets, and removes the label. On any other epic it can run before, during or after the map.
 
 ## 5. Approve autopilot specs
 
@@ -137,6 +141,7 @@ An epic's PR is ready when **`epic-gate`** is green: no open tickets, no `mocks/
 | `ready-for-human` assigned to you | You're the next step | Read the comment: answer, decide, or do the task |
 | `spec` + `ready-for-human` | An autopilot spec to review | Approve (`spec-approved`) or comment |
 | `needs-briefing` | Epics waiting for a brief | `/brief` |
+| `needs-design` | Epics waiting for their screens to be agreed | `/product-design #<epic>` |
 | `ready-for-review` | A fix PR waiting | Review and merge |
 | A green `epic-gate` | An epic ready to ship | Review and merge |
 | `#triage-alerts` in Slack | A failed run, a stuck issue, or a token expiring | Follow the message |
@@ -151,6 +156,6 @@ An epic's PR is ready when **`epic-gate`** is green: no open tickets, no `mocks/
 | `npm run agents` fails at once | Docker isn't running, or `.sandcastle/.env` incomplete | Start Docker Desktop; fill the `.env` |
 | Tickets time out installing dependencies, or take minutes to start | Docker Desktop's bind mounts are slow to write `node_modules` on a Mac | `AGENTS_SANDBOX=isolated` in `.sandcastle/.env`, then restart the loop ([Sandbox speed on a Mac](#sandbox-speed-on-a-mac)) |
 | The loop says "nothing ready" but tickets exist | They're assigned, blocked, or lack `ready-for-agent` | Unassign, close the blocker, or add the label |
-| An autopilot epic never gets planned | It still has `needs-briefing`, lacks `autopilot`, or is blocked by another epic | Brief it, add the label, or finish the blocker |
+| An autopilot epic never gets planned | It still has `needs-briefing` or `needs-design`, lacks `autopilot`, or is blocked by another epic | Brief it, agree its design, add the label, or finish the blocker |
 | An epic is paused | Merging `main` into its branch conflicts; an agent tries to resolve it first, in every mode | Wait for the agent, or, once it has asked you on the "Resolve conflicts" issue (`agent:asked`), resolve it on the epic branch |
 | `epic-gate` stays red | Its description says why | Close the tickets, remove `mocks/`, or wait for verification |
