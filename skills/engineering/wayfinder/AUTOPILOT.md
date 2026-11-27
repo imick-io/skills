@@ -6,7 +6,7 @@ Autopilot is a property of the **epic**: its `autopilot` label, usually set at t
 
 ## Chart
 
-As in "Chart the map", but without the grilling: take the destination, Notes, Out of scope and **Brief** from the epic as given, every Brief line as a decision already made at 100% (an epic is required; without one, ask for the destination and stop there), survey the code with a subagent, and map the frontier yourself. Create the map (its Notes link the Brief), its tickets, and their blocking edges. A question the Brief already answers is no ticket: record it in Decisions so far as "From the brief". Then carry on working through it in the same session.
+As in "Chart the map", but without the grilling: take the destination, Notes, Out of scope, **Brief** and **Design** section from the epic as given, every Brief line and every agreed screen (the Design section's screenshots and its UI spec) as a decision already made at 100% (an epic is required; without one, ask for the destination and stop there), survey the code with a subagent, and map the frontier yourself. Create the map (its Notes link the Brief), its tickets, and their blocking edges. A question the Brief already answers is no ticket: record it in Decisions so far as "From the brief". Then carry on working through it in the same session.
 
 ## Work through the map
 
@@ -19,7 +19,7 @@ A subagent resolves a ticket by type:
   2. Below: dig into the question: read the `dig` skill (`.claude/skills/dig/SKILL.md`, or wherever skills live here) and follow it, then re-score with what it found.
   3. Still below: decide anyway on the best answer, marked **assumed**.
 - **Research**: as in the main skill.
-- **Prototype**: build the prototype (call the Skill tool with "prototype"), judge it against the destination yourself, and decide, marked **assumed**.
+- **Prototype**: build the prototype (call the Skill tool with "prototype"), judge it against the destination (and `DESIGN.md`, for a UI prototype) yourself, and decide, marked **assumed**.
 - **Task**: work that needs the human (an account, access, data only they have) can't be done here. On a **local-first** epic (its Brief or initiative says so), first look for a local stand-in behind a seam (SQLite or Docker Postgres, local disk, a dev login, console email, a mocked or test-mode payment): when one serves the destination, decide to use it and close the task, recording the real service as a Go-live item in the map's Notes. Only a core integration the Brief names stays a human task. Otherwise, label it `ready-for-human`, assign the epic's owner, and treat everything it blocks as blocked.
 
 Record each resolution as in the main skill, with the confidence on the first line of the resolution comment:

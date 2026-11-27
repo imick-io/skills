@@ -36,6 +36,7 @@ My own skills plus the ones I use from other authors, such as [Matt Pocock](http
 | Skill | Source | What it does |
 | --- | --- | --- |
 | [`ask-imick`](skills/engineering/ask-imick/SKILL.md) | Matt Pocock | Ask which skill or flow fits your situation. |
+| [`brand`](skills/engineering/brand/SKILL.md) | iMick | Choose a product's look with the user, from a few radically different looks on one preview screen to the DESIGN.md every screen is built and reviewed against. |
 | [`brief`](skills/engineering/brief/SKILL.md) | iMick | Brief an epic before it's planned - a short, high-level grill-with-docs session that captures what you already have in mind, then choose whether wayfinder runs on it manually or on autopilot. |
 | [`claim`](skills/engineering/claim/SKILL.md) | iMick | Claim a ticket to build it yourself - the next available one, or a given number - and set up its branch the way the agent loop would, then say what to do next. |
 | [`code-review`](skills/engineering/code-review/SKILL.md) | Matt Pocock | Review the changes since a fixed point (commit, branch, tag, or merge-base) along two axes: Standards (does the code follow this repo's documented coding standards?) and Spec (does the code match what the originating issue/spec asked for?). |

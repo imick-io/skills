@@ -203,6 +203,7 @@ function epicStep(e) {
     return agent(`verify epic PR #${pr.number} (${t(e)})`, `/verify-epic ${pr.number}`, undefined, true);
   }
   if (is(e, "needs-briefing")) return you(`brief ${t(e)}`, `/brief ${n}`);
+  if (is(e, "needs-design")) return you(`design ${t(e)}: nothing is planned on it until its screens are agreed`, `/product-design ${n}`);
   if (is(e, "agent:planning") && !running) return agent(`clear the stuck \`agent:planning\` label on ${t(e)}: no loop is running`, `gh issue edit ${n} --remove-label agent:planning`);
   if (is(e, "agent:planning")) return { progress: "the loop is planning it" };
   const items = inMilestone(e);

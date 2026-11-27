@@ -22,6 +22,7 @@ Read the tracker doc, `docs/agents/triage-labels.md`, `docs/agents/preview.md` a
    - the closed tickets in the milestone, with their acceptance criteria,
    - the spec and the UI spec (issues in the milestone with the spec template),
    - the agreed screenshots: the epic's Design section links them on the `design/NN-<slug>` branch,
+   - `DESIGN.md`, the product's look, when the project has one,
    - the API contracts in the spec's Implementation Decisions.
 
    Mark the PR's head commit pending: `gh api repos/{owner}/{repo}/statuses/<sha> -f state=pending -f context=verify-epic -f description="Verifying"`.
@@ -38,7 +39,7 @@ Read the tracker doc, `docs/agents/triage-labels.md`, `docs/agents/preview.md` a
    2. **Each ticket's acceptance criteria**, one by one.
    3. **The spec's user stories** not already covered by a ticket's criteria.
    4. **The API contracts**: call each endpoint the spec describes, check status codes and response shapes.
-   5. **The screens** against the agreed screenshots: same layout, content and states, judged by looking at both, not pixel by pixel.
+   5. **The screens** against the agreed screenshots: same layout, content and states, judged by looking at both, not pixel by pixel. With no agreed screenshots, judge each screen the epic changed against `DESIGN.md` as a design critic: hierarchy, layout, the shared components used everywhere, designed states, copy, each theme, the phone viewport. What a customer would notice is a **fail**. With neither, the screens get one **unsure**: "no agreed design: a person looks at the screens".
 
    A verdict is **pass**, **fail** (the behaviour is clearly wrong or missing, and you can show it), or **unsure** (you can't tell: a visual difference that might be intended, an ambiguous criterion, a missing test account).
 

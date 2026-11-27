@@ -2020,10 +2020,13 @@
     {
       "title": "Scope",
       "who": "You + agent",
-      "body": "A big idea, yours or a needs-scoping issue, becomes an initiative with epics. Each epic has one destination, one owner area, its own milestone (NN: Initiative / Epic) and branch (epic/NN-slug), and blocking links to the epics it waits on. New products default to a local-first v1. Every epic carries the initiative's version (version:v1, v1.1, v2\u2026), which the tracker's roadmap shows one at a time.",
+      "body": "A big idea, yours or a needs-scoping issue, becomes an initiative with epics. Each epic has one destination, one owner area, its own milestone (NN: Initiative / Epic) and branch (epic/NN-slug), and blocking links to the epics it waits on. New products default to a local-first v1. Every epic carries the initiative's version (version:v1, v1.1, v2\u2026), which the tracker's roadmap shows one at a time. A new product also gets its stack chosen once, recorded as an ADR, and a Design system epic ahead of every epic that builds screens. /brand then chooses the look with you, on three looks of one preview screen, and writes it as DESIGN.md.",
       "tags": [
         {
           "cmd": "/scope-decomposer"
+        },
+        {
+          "cmd": "/brand"
         },
         {
           "label": "initiative",
@@ -2042,13 +2045,17 @@
     {
       "title": "Brief",
       "who": "You + agent",
-      "body": "A short, high-level interview per epic captures your must-haves, no-gos and calls already made, saved in the epic's Brief. It ends with your choice: manual or autopilot (and fast, if you want it).",
+      "body": "A short, high-level interview per epic captures your must-haves, no-gos and calls already made, saved in the epic's Brief. When the epic changes what people see, it asks whether to design the screens with you first (needs-design). It ends with your choice: manual or autopilot (and fast, if you want it).",
       "tags": [
         {
           "cmd": "/brief"
         },
         {
           "label": "needs-briefing",
+          "role": "plan"
+        },
+        {
+          "label": "needs-design",
           "role": "plan"
         },
         {
@@ -2060,7 +2067,7 @@
     {
       "title": "Plan",
       "who": "You, or the loop",
-      "body": "Wayfinder charts the decisions an epic needs as tickets and resolves them: with you, one at a time, or alone on autopilot, ending in a spec for your approval. /product-design builds the real UI on mock data until you agree.",
+      "body": "Wayfinder charts the decisions an epic needs as tickets and resolves them: with you, one at a time, or alone on autopilot, ending in a spec for your approval. /product-design builds the real UI on mock data until you agree: first on a needs-design epic, where nothing is planned until then, and at any point on the others.",
       "tags": [
         {
           "cmd": "/wayfinder"
@@ -2264,6 +2271,14 @@
       "means": "An epic waiting for its brief",
       "setBy": "/scope-decomposer",
       "next": "/brief"
+    },
+    {
+      "name": "needs-design",
+      "role": "plan",
+      "kind": "Planning",
+      "means": "An epic whose screens you agree first; the loop plans nothing on it until then",
+      "setBy": "/brief, or /scope-decomposer on supersonic",
+      "next": "/product-design, until you say \"we agree\""
     },
     {
       "name": "autopilot",
@@ -2611,6 +2626,27 @@
         ]
       },
       {
+        "moment": "The screens of an epic you chose to design first",
+        "cells": [
+          [
+            "you",
+            "You, with an agent in /product-design"
+          ],
+          [
+            "you",
+            "You: nothing is planned until you agree"
+          ],
+          [
+            "you",
+            "Same as autopilot"
+          ],
+          [
+            "you",
+            "Same as autopilot: the look is never assumed"
+          ]
+        ]
+      },
+      {
         "moment": "Each planning decision",
         "cells": [
           [
@@ -2828,9 +2864,10 @@
         "domain-modeling"
       ],
       "next": [
+        "brand",
         "brief"
       ],
-      "summary": "Breaks a big idea into an initiative of epics on the tracker, each with a milestone, a branch and its blockers. New products default to a local-first v1 with a Go-live epic last."
+      "summary": "Breaks a big idea into an initiative of epics on the tracker, each with a milestone, a branch and its blockers. New products default to a local-first v1 with a Go-live epic last. A new product also gets its stack chosen and a Design system epic."
     },
     "brief": {
       "group": "plan",
@@ -2839,9 +2876,10 @@
         "domain-modeling"
       ],
       "next": [
+        "product-design",
         "wayfinder"
       ],
-      "summary": "A short, high-level interview per epic that captures what you already want, then sets manual or autopilot."
+      "summary": "A short, high-level interview per epic that captures what you already want, asks whether its screens are designed with you first, then sets manual or autopilot."
     },
     "wayfinder": {
       "group": "plan",
@@ -2860,6 +2898,18 @@
       "loop": true,
       "summary": "Plans an epic as a map of decision tickets and resolves them until the way is clear. On autopilot the loop decides alone and writes a spec for approval."
     },
+    "brand": {
+      "group": "plan",
+      "uses": [
+        "grilling",
+        "prototype"
+      ],
+      "next": [
+        "brief",
+        "product-design"
+      ],
+      "summary": "Chooses a product's look with you, once: three radically different looks of one preview screen, then your pick written as DESIGN.md, the tokens, type and components every screen is built from and reviewed against."
+    },
     "product-design": {
       "group": "plan",
       "uses": [
@@ -2868,6 +2918,7 @@
         "to-tickets"
       ],
       "next": [
+        "wayfinder",
         "to-tickets"
       ]
     },
@@ -3178,6 +3229,10 @@
     }
   ],
   "settings": [
+    {
+      "file": "DESIGN.md",
+      "says": "The product's look, written by /brand"
+    },
     {
       "file": "docs/agents/issue-tracker.md",
       "says": "Where issues live"

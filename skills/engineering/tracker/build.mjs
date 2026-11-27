@@ -188,6 +188,7 @@ function epicStatus(e) {
   if (!e.open) return "done";
   if (has(e, "backlog")) return "backlog";
   if (has(e, "needs-briefing")) return "brief";
+  if (has(e, "needs-design")) return "design";
   const plans = planningOf(e);
   const spec = plans.find((p) => has(p, "spec") && p.open);
   if (spec && !has(spec, "spec-approved")) return "spec";
@@ -218,6 +219,7 @@ const MANUAL_STATUS = {
 const EPIC_STATUS = {
   done: "Done",
   brief: "Needs your brief",
+  design: "Needs your design (/product-design)",
   spec: "Spec waits for your approval",
   held: "Planned; held until blockers finish",
   waiting: "Waiting on earlier epics",
@@ -293,7 +295,7 @@ function checklist(body) {
 function hitlKind(i) {
   if (has(i, "ready-for-review")) return "review";
   if (has(i, "spec")) return "spec";
-  if (has(i, "epic")) return "brief";
+  if (has(i, "epic")) return has(i, "needs-design") && !has(i, "needs-briefing") ? "design" : "brief";
   return "task";
 }
 // Every open issue that waits on this one, directly or down the chain.
@@ -676,7 +678,7 @@ details.ep.done-ep > summary .ok { margin-left: auto; font-size: 12px; font-weig
 @media (max-width: 600px) { .hitl .sub, .hitl ul, .hitl .noitems, .hitl details summary { margin-left: 0; } }
 .pill.task { color: var(--you); background: var(--you-soft); }
 .pill.backlog { color: var(--backlog); background: var(--backlog-soft); }
-.pill.brief, .pill.spec { color: var(--queued); background: var(--queued-soft); }
+.pill.brief, .pill.design, .pill.spec { color: var(--queued); background: var(--queued-soft); }
 .pill.merge { color: var(--you); background: var(--you-soft); }
 .pill.manual { color: var(--you); background: transparent; border: 1px solid var(--you); padding-top: 0; padding-bottom: 0; }
 .pill.area { color: var(--muted); background: transparent; border: 1px solid var(--border); padding-top: 0; padding-bottom: 0; font-weight: 500; }
@@ -792,7 +794,7 @@ function card(t, extra) {
 }
 
 // ---- Action items (HITL, by assignee)
-const KIND = { task: 'Task', review: 'Review', brief: 'Epic brief', spec: 'Spec approval', merge: 'Merge the epic', suite: 'Stale suite', version: 'Version' };
+const KIND = { task: 'Task', review: 'Review', brief: 'Epic brief', design: 'Epic design', spec: 'Spec approval', merge: 'Merge the epic', suite: 'Stale suite', version: 'Version' };
 function md(text) {
   return esc(text)
     .replace(/\`([^\`]+)\`/g, '<code>$1</code>')
@@ -937,7 +939,7 @@ function renderSuites() {
 renderSuites();
 
 // ---- Roadmap
-const EPIC_COLORS = { done: 'done', brief: 'you', spec: 'you', merge: 'you', held: 'blocked', waiting: 'blocked', planning: 'queued', building: 'working', ready: 'queued', backlog: 'backlog' };
+const EPIC_COLORS = { done: 'done', brief: 'you', design: 'you', spec: 'you', merge: 'you', held: 'blocked', waiting: 'blocked', planning: 'queued', building: 'working', ready: 'queued', backlog: 'backlog' };
 // A manual epic's colour and wording say it's the person's: nothing on it is the agent's turn.
 const MANUAL_COLORS = { planning: 'you', building: 'you', ready: 'you' };
 const epicColor = (e) => (e.manual && MANUAL_COLORS[e.status]) || EPIC_COLORS[e.status];

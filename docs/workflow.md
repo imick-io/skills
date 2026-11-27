@@ -14,14 +14,16 @@ flowchart TD
   Idea[Your idea] --> SD
   NS --> SD["/scope-decomposer"]
   SD --> E["Initiative + epics<br/>milestone and branch each"]
-  E --> B["/brief: your intent, then manual or autopilot"]
+  E -->|new product| BR["/brand: the look, written as DESIGN.md"]
+  BR --> B
+  E --> B["/brief: your intent, design first or not, then manual or autopilot"]
   B -->|manual| W["/wayfinder: decisions with you"]
   B -->|autopilot| WA[["Loop: wayfinder on autopilot"]]
   WA --> SR{"You approve the spec"}
   SR -->|spec-approved| SP
-  E -. any time .-> PD["/product-design: real UI on mock data"]
+  B -->|needs-design| PD["/product-design: real UI on mock data"]
   W --> SP["/to-spec, then /to-tickets"]
-  PD -->|we agree| SP
+  PD -->|"we agree: planning starts"| SP
   SP --> RA
   RA --> L[[Agent loop]]
   RB --> L
@@ -39,10 +41,11 @@ flowchart TD
 | Step | Who | How |
 | --- | --- | --- |
 | Classify new issues | Workflow | Automatic triage on every new issue |
-| Break a big idea into epics | You + agent | `/scope-decomposer` |
-| Say what you have in mind for an epic; pick manual or autopilot | You + agent | `/brief` |
+| Break a big idea into epics; choose a new product's stack | You + agent | `/scope-decomposer` |
+| Choose the product's look | You + agent | `/brand`, once: three looks on a preview screen, then `DESIGN.md` |
+| Say what you have in mind for an epic; design its screens first or not; pick manual or autopilot | You + agent | `/brief` |
 | Make the decisions an epic needs | You + agent, or agents alone on autopilot | `/wayfinder <epic>` (`/dig Q<n>` for hard questions), or the loop for `autopilot` epics |
-| Agree on the UI | You + agent | `/product-design <epic>` |
+| Agree on the UI | You + agent | `/product-design <epic>`: before anything is planned on a `needs-design` epic, at any point on the others |
 | Turn decisions into tickets | Agent | `/to-spec`, then `/to-tickets` |
 | Build tickets, fix bugs | Agents | The agent loop (`npm run agents`) on your laptop or the always-on Mac; or you, on one ticket: [Building a ticket yourself](build-a-ticket-yourself.md) |
 | Test the finished epic | Agent | `verify-epic`, run by the loop |
@@ -55,11 +58,11 @@ You decide; agents do the legwork; workflows keep the tracker tidy. Nothing reac
 
 **1. Intake.** Anyone files an issue. [Automatic triage](../README.md#automatic-triage) labels it with what it is and who acts next, and comments its reasoning: a small `enhancement` goes to agents (`ready-for-agent`, with a brief), a `bug` to agents (`ready-for-agent-debugging`), anything big to `needs-scoping`, anything unclear back to the reporter (`needs-info`). An issue that bundles several asks, such as a client's email pasted as is, is split first into one issue per ask, each triaged on its own; the original keeps a summary and the `split` label. You can always re-run or override it with `/triage #n`.
 
-**2. Scope.** A big idea, yours or a `needs-scoping` issue, goes through `/scope-decomposer`: a high-level interview, then an **initiative** issue with **epics** under it. Each epic has one destination, one area (and so one owner), its own milestone (`NN: Initiative / Epic`) and branch (`epic/NN-slug`), and blocking links to the epics it waits on. Parts too vague to bound stay in the initiative's "Not yet scoped" list until a later run.
+**2. Scope.** A big idea, yours or a `needs-scoping` issue, goes through `/scope-decomposer`: a high-level interview, then an **initiative** issue with **epics** under it. Each epic has one destination, one area (and so one owner), its own milestone (`NN: Initiative / Epic`) and branch (`epic/NN-slug`), and blocking links to the epics it waits on. Parts too vague to bound stay in the initiative's "Not yet scoped" list until a later run. For a new product it also asks the **stack** once (recorded as an ADR) and, when the product has screens, adds a **Design system** epic ahead of every epic that builds screens. `/brand` then chooses the look with you, on three radically different looks of one preview screen, and writes it as `DESIGN.md`: the tokens, type and components every screen is built from and reviewed against.
 
-**3. Brief.** Every new epic waits for a `/brief` (`needs-briefing` + `ready-for-human`): a short, high-level grilling session where you say what you already have in mind, saved in the epic's Brief section, the glossary and ADRs. A must-have that's really its own epic becomes one through `/scope-decomposer`. The brief ends with your choice: **autopilot** (the `autopilot` label: the agent loop plans it), **manual** (the `manual` label: you plan and build it, with whatever tools you like; the loop never touches it or its tickets), or neither (you plan it with `/wayfinder`, the loop builds its tickets).
+**3. Brief.** Every new epic waits for a `/brief` (`needs-briefing` + `ready-for-human`): a short, high-level grilling session where you say what you already have in mind, saved in the epic's Brief section, the glossary and ADRs. A must-have that's really its own epic becomes one through `/scope-decomposer`. When the epic changes what people see, the brief asks whether to **design it first** (the `needs-design` label). It ends with your choice: **autopilot** (the `autopilot` label: the agent loop plans it), **manual** (the `manual` label: you plan and build it, with whatever tools you like; the loop never touches it or its tickets), or neither (you plan it with `/wayfinder`, the loop builds its tickets).
 
-**4. Plan.** For each epic, in build order: `/wayfinder <epic>` charts the decisions it needs and works through them with you, one at a time (`/dig` researches a question you can't settle on instinct). `/product-design <epic>` can run at any point to build the real UI on mock data until you say "we agree". Both leave their decisions on the tracker. On an `autopilot` epic the agent loop runs wayfinder alone: the Brief's lines are your decisions, confident answers are taken directly, uncertain ones after `dig`, the rest marked *assumed*. You then review just the spec, which lists every decision the agent took, least confident first, and approve it with the `spec-approved` label.
+**4. Plan.** For each epic, in build order: `/wayfinder <epic>` charts the decisions it needs and works through them with you, one at a time (`/dig` researches a question you can't settle on instinct). `/product-design <epic>` builds the real UI on mock data until you say "we agree": on a `needs-design` epic that comes first, and the loop plans nothing on the epic until then; on any other epic it can run at any point. Both leave their decisions on the tracker. On an `autopilot` epic the agent loop runs wayfinder alone: the Brief's lines are your decisions, confident answers are taken directly, uncertain ones after `dig`, the rest marked *assumed*. You then review just the spec, which lists every decision the agent took, least confident first, and approve it with the `spec-approved` label.
 
 **5. Tickets.** Once the way is clear, `/to-spec` writes the spec and `/to-tickets` cuts it into tickets labelled `ready-for-agent`, each in the epic's milestone, with its blockers. `/product-design` does the same for the agreed UI.
 
@@ -71,7 +74,7 @@ You decide; agents do the legwork; workflows keep the tracker tidy. Nothing reac
 
 **7. Bugs.** Bugs from triage or from verification are `ready-for-agent-debugging`. The loop runs `debug-and-fix`: reproduce (in a browser for UI bugs), find the cause, fix with a regression test when the diagnosis is clean, otherwise leave the diagnosis for a person. Run it by hand with `/debug-and-fix #n`.
 
-**8. Verify and ship.** When an epic's milestone has no open tickets, the loop opens the epic's PR to `main` and runs `verify-epic` in the running app: acceptance criteria, user stories, API contracts, agreed screens. Failures become bug tickets under the epic, the loop fixes them, and verification runs again. `epic-gate` turns green when nothing is open, no `mocks/` folder is left and verification passed. **You review and merge** (in fast mode, the loop merges once verification passes). The epic closes, then its milestone, then the initiative when it was the last epic (unless parked areas remain).
+**8. Verify and ship.** When an epic's milestone has no open tickets, the loop opens the epic's PR to `main` and runs `verify-epic` in the running app: acceptance criteria, user stories, API contracts, and the screens against the agreed screenshots (or against `DESIGN.md` when the epic had none). Failures become bug tickets under the epic, the loop fixes them, and verification runs again. `epic-gate` turns green when nothing is open, no `mocks/` folder is left and verification passed. **You review and merge** (in fast mode, the loop merges once verification passes). The epic closes, then its milestone, then the initiative when it was the last epic (unless parked areas remain).
 
 **9. Upkeep.** `/update-from-upstream` brings in the latest from the skill authors this repo follows, keeping your customizations. Changes to the skills go through PRs with a changeset, and merging the "version skills" PR releases them ([Releasing](../README.md#releasing)).
 
@@ -88,6 +91,7 @@ You decide; agents do the legwork; workflows keep the tracker tidy. Nothing reac
 | `ready-for-review` | A fix PR waits | Review the linked PR |
 | `initiative` / `epic` | Planning issues from `/scope-decomposer` | |
 | `needs-briefing` | An epic waiting for its brief | `/brief` |
+| `needs-design` | An epic whose screens you agree first; the loop plans nothing on it until then | `/product-design` |
 | `autopilot` | An epic the agent loop plans by itself | The agent loop |
 | `manual` | An epic you plan and build yourself; the loop never plans it, queues its tickets or opens its PR | You |
 | `fast` | An epic the loop unblocks by itself (fast mode for one epic) | The agent loop |
@@ -117,6 +121,7 @@ Written by `/setup-imick-skills`, all editable by hand:
 
 | File | Says |
 | --- | --- |
+| `DESIGN.md` | The product's look: tokens, type, components, do's and don'ts (written by `/brand`) |
 | `docs/agents/issue-tracker.md` | Where issues live and how skills use them |
 | `docs/agents/triage-labels.md` | The label strings |
 | `docs/agents/team.md` | Areas, owners, people |
